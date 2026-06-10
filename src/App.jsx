@@ -734,6 +734,35 @@ useEffect(() => {
       prev.map((s) => (s.id === stationId ? { ...s, ...patch } : s))
     )
   }
+  const deleteSelectedStation = () => {
+  if (!selectedStation) return
+
+  const ok = window.confirm(
+    `"${selectedStation.name || '선택된 지점'}"을(를) 삭제할까요?`
+  )
+
+  if (!ok) return
+
+  setStations((prev) => {
+    const currentIndex = prev.findIndex(
+      (s) => s.id === selectedStation.id
+    )
+
+    const next = prev.filter(
+      (s) => s.id !== selectedStation.id
+    )
+
+    const fallback =
+      next[currentIndex] ||
+      next[currentIndex - 1] ||
+      next[0] ||
+      null
+
+    setSelectedId(fallback ? fallback.id : '')
+
+    return next
+  })
+}
 
   const updateSelectedSections = (nextSections) => {
     setStations((prev) =>
@@ -1016,6 +1045,13 @@ useEffect(() => {
         >
           + 지점 추가
         </button>
+        <button
+  className="btn danger"
+  onClick={deleteSelectedStation}
+  disabled={!selectedStation}
+>
+  - 지점 삭제
+</button>
       </header>
 
       <section className="card">
