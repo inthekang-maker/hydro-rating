@@ -739,17 +739,25 @@ export default function App() {
   const legendRef = useRef(null)
 
   const [curveTableOpen, setCurveTableOpen] = useState(true)
-  const [chartZoom, setChartZoom] = useState(1)
+  const [chartZoomX, setChartZoomX] = useState(1)
+  const [chartZoomY, setChartZoomY] = useState(1)
 
-  const chartZoomMin = 1
+  const chartZoomMin = 0.5
   const chartZoomMax = 3
   const chartZoomStep = 0.25
-  const chartZoomPercent = Math.max(100, Math.round(chartZoom * 100))
+  const chartZoomXPercent = Math.max(100, Math.round(chartZoomX * 100))
+  const chartZoomYHeight = Math.max(320, Math.round(780 * chartZoomY))
 
-  const changeChartZoom = (nextZoom) => {
+  const changeChartZoomX = (nextZoom) => {
     const value = Number(nextZoom)
     if (!Number.isFinite(value)) return
-    setChartZoom(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
+    setChartZoomX(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
+  }
+
+  const changeChartZoomY = (nextZoom) => {
+    const value = Number(nextZoom)
+    if (!Number.isFinite(value)) return
+    setChartZoomY(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
   }
 
   useEffect(() => {
@@ -1531,50 +1539,107 @@ export default function App() {
         <div
           className="chart-wrapper"
           ref={chartWrapperRef}
-          style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
+          style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
         >
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '10px',
-              flexWrap: 'wrap'
+              display: 'grid',
+              gridTemplateColumns: '1fr',
+              gap: '10px',
+              marginBottom: '10px'
             }}
           >
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => changeChartZoom(chartZoom - chartZoomStep)}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap'
+              }}
             >
-              -
-            </button>
-            <input
-              type="range"
-              min={chartZoomMin}
-              max={chartZoomMax}
-              step={chartZoomStep}
-              value={chartZoom}
-              onChange={(e) => changeChartZoom(e.target.value)}
-              aria-label="그래프 확대/축소"
-              style={{ flex: '1 1 220px', minWidth: '180px' }}
-            />
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => changeChartZoom(chartZoom + chartZoomStep)}
+              <span className="muted" style={{ minWidth: '44px' }}>
+                가로
+              </span>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomX(chartZoomX - chartZoomStep)}
+              >
+                -
+              </button>
+              <input
+                type="range"
+                min={chartZoomMin}
+                max={chartZoomMax}
+                step={chartZoomStep}
+                value={chartZoomX}
+                onChange={(e) => changeChartZoomX(e.target.value)}
+                aria-label="그래프 가로 확대/축소"
+                style={{ flex: '1 1 220px', minWidth: '180px' }}
+              />
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomX(chartZoomX + chartZoomStep)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomX(1)}
+              >
+                기본
+              </button>
+              <span className="muted">{chartZoomX.toFixed(2)}x</span>
+            </div>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexWrap: 'wrap'
+              }}
             >
-              +
-            </button>
-            <button
-              type="button"
-              className="btn secondary"
-              onClick={() => changeChartZoom(1)}
-            >
-              기본
-            </button>
-            <span className="muted">{chartZoom.toFixed(2)}x</span>
+              <span className="muted" style={{ minWidth: '44px' }}>
+                세로
+              </span>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomY(chartZoomY - chartZoomStep)}
+              >
+                -
+              </button>
+              <input
+                type="range"
+                min={chartZoomMin}
+                max={chartZoomMax}
+                step={chartZoomStep}
+                value={chartZoomY}
+                onChange={(e) => changeChartZoomY(e.target.value)}
+                aria-label="그래프 세로 확대/축소"
+                style={{ flex: '1 1 220px', minWidth: '180px' }}
+              />
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomY(chartZoomY + chartZoomStep)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => changeChartZoomY(1)}
+              >
+                기본
+              </button>
+              <span className="muted">{chartZoomY.toFixed(2)}x</span>
+            </div>
           </div>
+
           <div
             className="chart-legend"
             ref={legendRef}
@@ -1603,9 +1668,9 @@ export default function App() {
           <div
             className="chart-box"
             style={{
-              width: `${chartZoomPercent}%`,
+              width: `${chartZoomXPercent}%`,
               minWidth: '100%',
-              height: '780px'
+              height: `${chartZoomYHeight}px`
             }}
           >
             <Scatter data={chartData} options={chartOptions} />
