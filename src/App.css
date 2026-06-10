@@ -118,14 +118,18 @@ select {
   margin-top: 12px;
 }
 
+.table-wrap.small {
+  overflow-x: auto;
+}
+
 .table-wrap.small table {
-  min-width: 520px;
+  min-width: 0;
+  width: auto;
 }
 
 table.spreadsheet {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1200px;
   table-layout: fixed;
 }
 
@@ -137,6 +141,9 @@ table.spreadsheet td {
   vertical-align: middle;
   font-size: 13px;
   background: white;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 table.spreadsheet th {
@@ -208,6 +215,8 @@ table.spreadsheet td {
 
 .chart-wrapper {
   position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .chart-legend {
@@ -220,6 +229,7 @@ table.spreadsheet td {
   padding: 10px 12px;
   cursor: move;
   user-select: none;
+  touch-action: none;
 }
 
 .chart-legend:active {
@@ -262,4 +272,30 @@ table.spreadsheet td {
 .chart-box {
   height: 780px;
   padding-top: 10px;
+  min-width: 1100px;
+}
+
+/* 수위별 환산유량표 전용: 열너비를 내용에 맞게 좁게 */
+.flow-table {
+  width: auto !important;
+  min-width: 0 !important;
+  table-layout: auto !important;
+  display: inline-table;
+}
+
+.flow-table th,
+.flow-table td {
+  width: 1%;
+  white-space: nowrap;
+  padding: 4px 8px;
+}
+
+.flow-table th:first-child,
+.flow-table td:first-child {
+  min-width: 72px;
+}
+
+.flow-table th:last-child,
+.flow-table td:last-child {
+  min-width: 96px;
 }
