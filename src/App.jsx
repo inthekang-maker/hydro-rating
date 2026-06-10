@@ -342,6 +342,23 @@ function SpreadsheetGrid({
   const [selection, setSelection] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const tableRef = useRef(null)
+  const isCompactTable =
+    title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
+  const tableClassName = [
+    'spreadsheet',
+    title.includes('2. 곡선식 입력')
+      ? 'compact-table curve-table'
+      : title.includes('3. 측정성과 입력')
+        ? 'compact-table measurement-table'
+        : title.includes('4. 수위별 환산유량표')
+          ? 'flow-table'
+          : ''
+  ]
+    .filter(Boolean)
+    .join(' ')
+  const tableStyle = isCompactTable
+    ? { tableLayout: 'auto', width: 'auto', minWidth: '0', display: 'inline-table' }
+    : { tableLayout: 'auto', width: 'max-content', minWidth: '100%' }
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -563,7 +580,7 @@ function SpreadsheetGrid({
       </div>
 
       <div className="table-wrap" ref={tableRef}>
-        <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
+        <table className={tableClassName} style={tableStyle}>
           <thead>
             <tr>
               {columns.map((col) => (
@@ -584,7 +601,7 @@ function SpreadsheetGrid({
                   >
                     <input
                       className="cell-input"
-                      style={{ minWidth: '78px' }}
+                      style={{ minWidth: isCompactTable ? '0' : '78px' }}
                       data-cell={`${rowIndex}-${colIndex}`}
                       type={col.type || 'text'}
                       value={row[col.key] ?? ''}
@@ -1368,7 +1385,7 @@ export default function App() {
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
               <div className="table-wrap small">
-                <table className="spreadsheet" style={tableAutoStyle}>
+                <table className="spreadsheet flow-table" style={tableAutoStyle}>
                   <thead>
                     <tr>
                       <th>수위(m)</th>
@@ -1392,7 +1409,7 @@ export default function App() {
       <section className="card">
         <h2>5. 상대오차 계산</h2>
         <div className="table-wrap">
-          <table className="spreadsheet" style={tableAutoStyle}>
+          <table className="spreadsheet flow-table" style={tableAutoStyle}>
             <thead>
               <tr>
                 <th>측정일시</th>

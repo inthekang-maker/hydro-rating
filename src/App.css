@@ -118,15 +118,7 @@ select {
   margin-top: 12px;
 }
 
-.table-wrap.small {
-  overflow-x: auto;
-}
-
-.table-wrap.small table {
-  min-width: 0;
-  width: auto;
-}
-
+/* 기본 테이블은 4, 5처럼 일반 표 형태 유지 */
 table.spreadsheet {
   width: 100%;
   border-collapse: collapse;
@@ -215,6 +207,9 @@ table.spreadsheet td {
 
 .chart-wrapper {
   position: relative;
+}
+
+.chart-scroll {
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -270,32 +265,127 @@ table.spreadsheet td {
 }
 
 .chart-box {
+  width: 100%;
   height: 780px;
   padding-top: 10px;
-  min-width: 1100px;
 }
 
-/* 수위별 환산유량표 전용: 열너비를 내용에 맞게 좁게 */
-.flow-table {
+/* =========================================
+   2. 곡선식 입력 / 3. 측정성과 입력 전용
+   열 너비를 좁게, 내용에 맞게 자동 축소
+   ========================================= */
+.compact-table {
   width: auto !important;
   min-width: 0 !important;
   table-layout: auto !important;
   display: inline-table;
 }
 
-.flow-table th,
-.flow-table td {
-  width: 1%;
+.compact-table th,
+.compact-table td {
   white-space: nowrap;
   padding: 4px 8px;
 }
 
-.flow-table th:first-child,
-.flow-table td:first-child {
-  min-width: 72px;
+.compact-table .cell-input {
+  height: 34px;
+  padding: 0 6px;
+  font-size: 12px;
 }
 
-.flow-table th:last-child,
-.flow-table td:last-child {
-  min-width: 96px;
+/* 2. 곡선식 입력: 대체로 더 촘촘하게 */
+.curve-table th:nth-child(1),
+.curve-table td:nth-child(1) {
+  min-width: 92px;
+}
+
+.curve-table th:nth-child(2),
+.curve-table td:nth-child(2),
+.curve-table th:nth-child(3),
+.curve-table td:nth-child(3),
+.curve-table th:nth-child(4),
+.curve-table td:nth-child(4),
+.curve-table th:nth-child(5),
+.curve-table td:nth-child(5),
+.curve-table th:nth-child(6),
+.curve-table td:nth-child(6) {
+  min-width: 82px;
+}
+
+.curve-table th:nth-child(7),
+.curve-table td:nth-child(7),
+.curve-table th:nth-child(8),
+.curve-table td:nth-child(8) {
+  min-width: 120px;
+}
+
+.curve-table th:nth-child(9),
+.curve-table td:nth-child(9),
+.curve-table th:nth-child(10),
+.curve-table td:nth-child(10) {
+  min-width: 118px;
+}
+
+.curve-table th:last-child,
+.curve-table td:last-child {
+  min-width: 58px;
+}
+
+/* 3. 측정성과 입력: 날짜/장비 외에는 더 좁게 */
+.measurement-table th:nth-child(1),
+.measurement-table td:nth-child(1) {
+  min-width: 150px;
+}
+
+.measurement-table th:nth-child(2),
+.measurement-table td:nth-child(2),
+.measurement-table th:nth-child(3),
+.measurement-table td:nth-child(3) {
+  min-width: 78px;
+}
+
+.measurement-table th:nth-child(4),
+.measurement-table td:nth-child(4) {
+  min-width: 92px;
+}
+
+.measurement-table th:nth-child(5),
+.measurement-table td:nth-child(5),
+.measurement-table th:nth-child(6),
+.measurement-table td:nth-child(6),
+.measurement-table th:nth-child(7),
+.measurement-table td:nth-child(7),
+.measurement-table th:nth-child(8),
+.measurement-table td:nth-child(8),
+.measurement-table th:nth-child(9),
+.measurement-table td:nth-child(9) {
+  min-width: 90px;
+}
+
+.measurement-table th:last-child,
+.measurement-table td:last-child {
+  min-width: 58px;
+}
+
+/* =========================================
+   그래프: 모바일에서 넓게 보고,
+   데스크톱에서는 한눈에 보이게
+   ========================================= */
+@media (max-width: 768px) {
+  .chart-box {
+    min-width: 1100px;
+    height: 620px;
+  }
+
+  .compact-table {
+    min-width: max-content;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .chart-setting-grid {
+    grid-template-columns: 1fr;
+  }
 }
