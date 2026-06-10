@@ -291,6 +291,45 @@ function createEmptyMeasurement() {
   }
 }
 
+function createEmptyStation(name = '새 지점') {
+  return {
+    id: makeId(),
+    name,
+    code: '',
+    sections: [],
+    measurements: []
+  }
+}
+
+function createDefaultGroup(name = '그룹 1', stationName = '새 지점') {
+  return {
+    id: makeId(),
+    name,
+    stations: [createEmptyStation(stationName)]
+  }
+}
+
+function buildInitialGroups() {
+  return [
+    {
+      id: makeId(),
+      name: '그룹 1',
+      stations: buildInitialStations()
+    }
+  ]
+}
+
+function flattenGroupsToStations(groups) {
+  return groups.flatMap((group) => group.stations)
+}
+
+const DEFAULT_GROUPS = buildInitialGroups()
+const SHARED_TABLE_STYLE = {
+  tableLayout: 'auto',
+  width: 'max-content',
+  minWidth: '100%'
+}
+
 function SpreadsheetGrid({
   title,
   columns,
@@ -524,7 +563,7 @@ function SpreadsheetGrid({
       </div>
 
       <div className="table-wrap" ref={tableRef}>
-        <table className="spreadsheet">
+        <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
           <thead>
             <tr>
               {columns.map((col) => (
@@ -545,6 +584,7 @@ function SpreadsheetGrid({
                   >
                     <input
                       className="cell-input"
+                      style={{ minWidth: '78px' }}
                       data-cell={`${rowIndex}-${colIndex}`}
                       type={col.type || 'text'}
                       value={row[col.key] ?? ''}
@@ -569,54 +609,70 @@ function SpreadsheetGrid({
   )
 }
 
+
 export default function App() {
-const APP_STATE_ID = 'main'
+  const APP_STATE_ID = 'main'
 
-const [stations, setStations] = useState(() => buildInitialStations())
-const [stationsLoaded, setStationsLoaded] = useState(false)
+  const [groups, setGroups] = useState(() => DEFAULT_GROUPS)
+  const [stationsLoaded, setStationsLoaded] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState(() => DEFAULT_GROUPS[0].id)
+  const [selectedStationId, setSelectedStationId] = useState(() => DEFAULT_GROUPS[0].stations[0].id)
 
-useEffect(() => {
-  const loadStations = async () => {
-    const { data, error } = await supabase
-      .from('app_state')
-      .select('payload')
-      .eq('id', APP_STATE_ID)
-      .maybeSingle()
+  useEffect(() => {
+    const loadAppState = async () => {
+      const { data, error } = await supabase
+        .from('app_state')
+        .select('payload')
+        .eq('id', APP_STATE_ID)
+        .maybeSingle()
 
-    if (error) {
-      console.error('loadStations error:', error)
+      if (error) {
+        console.error('loadStations error:', error)
+        setStationsLoaded(true)
+        return
+      }
+
+      const loadedGroups = data?.payload?.groups
+      const loadedStations = data?.payload?.stations
+
+      if (Array.isArray(loadedGroups) && loadedGroups.length > 0) {
+        setGroups(loadedGroups)
+      } else if (Array.isArray(loadedStations) && loadedStations.length > 0) {
+        setGroups([
+          {
+            id: makeId(),
+            name: '그룹 1',
+            stations: loadedStations
+          }
+        ])
+      }
+
       setStationsLoaded(true)
-      return
     }
 
-    const loadedStations = data?.payload?.stations
-    if (Array.isArray(loadedStations) && loadedStations.length > 0) {
-      setStations(loadedStations)
-    }
+    loadAppState()
+  }, [])
 
-    setStationsLoaded(true)
-  }
+  useEffect(() => {
+    if (!stationsLoaded) return
 
-  loadStations()
-}, [])
+    const timer = setTimeout(async () => {
+      const { error } = await supabase.from('app_state').upsert({
+        id: APP_STATE_ID,
+        payload: {
+          groups,
+          stations: flattenGroupsToStations(groups)
+        },
+        updated_at: new Date().toISOString()
+      })
 
-useEffect(() => {
-  if (!stationsLoaded) return
+      if (error) {
+        console.error('saveStations error:', error)
+      }
+    }, 500)
 
-  const timer = setTimeout(async () => {
-    const { error } = await supabase.from('app_state').upsert({
-      id: APP_STATE_ID,
-      payload: { stations },
-      updated_at: new Date().toISOString()
-    })
-
-    if (error) {
-      console.error('saveStations error:', error)
-    }
-  }, 500)
-
-  return () => clearTimeout(timer)
-}, [stations, stationsLoaded])
+    return () => clearTimeout(timer)
+  }, [groups, stationsLoaded])
 
   const [chartConfig, setChartConfig] = useState(() => {
     const saved = localStorage.getItem(CHART_CONFIG_KEY)
@@ -665,8 +721,8 @@ useEffect(() => {
   const chartWrapperRef = useRef(null)
   const legendRef = useRef(null)
 
-  const [selectedId, setSelectedId] = useState(() => stations[0]?.id || '')
   const [curveTableOpen, setCurveTableOpen] = useState(true)
+
   useEffect(() => {
     localStorage.setItem(CHART_CONFIG_KEY, JSON.stringify(chartConfig))
   }, [chartConfig])
@@ -676,8 +732,20 @@ useEffect(() => {
   }, [legendPos])
 
   useEffect(() => {
-    if (!selectedId && stations[0]) setSelectedId(stations[0].id)
-  }, [selectedId, stations])
+    if (!groups.length) return
+
+    const currentGroup = groups.find((group) => group.id === selectedGroupId) || groups[0]
+    if (currentGroup && currentGroup.id !== selectedGroupId) {
+      setSelectedGroupId(currentGroup.id)
+    }
+
+    if (currentGroup) {
+      const hasStation = currentGroup.stations.some((station) => station.id === selectedStationId)
+      if (!hasStation) {
+        setSelectedStationId(currentGroup.stations[0]?.id || '')
+      }
+    }
+  }, [groups, selectedGroupId, selectedStationId])
 
   useEffect(() => {
     const handlePointerMove = (e) => {
@@ -727,65 +795,182 @@ useEffect(() => {
     })
   }
 
-  const selectedStation = stations.find((s) => s.id === selectedId) || stations[0]
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) || groups[0] || null
+  const selectedGroupStations = selectedGroup?.stations || []
+  const selectedStation =
+    selectedGroupStations.find((station) => station.id === selectedStationId) ||
+    selectedGroupStations[0] ||
+    null
 
-  const updateStation = (stationId, patch) => {
-    setStations((prev) =>
-      prev.map((s) => (s.id === stationId ? { ...s, ...patch } : s))
+  const updateSelectedGroup = (patch) => {
+    if (!selectedGroup) return
+    setGroups((prev) =>
+      prev.map((group) => (group.id === selectedGroup.id ? { ...group, ...patch } : group))
     )
   }
-  const deleteSelectedStation = () => {
-  if (!selectedStation) return
 
-  const ok = window.confirm(
-    `"${selectedStation.name || '선택된 지점'}"을(를) 삭제할까요?`
-  )
-
-  if (!ok) return
-
-  setStations((prev) => {
-    const currentIndex = prev.findIndex(
-      (s) => s.id === selectedStation.id
+  const updateStation = (stationId, patch) => {
+    if (!selectedGroup) return
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        return {
+          ...group,
+          stations: group.stations.map((station) =>
+            station.id === stationId ? { ...station, ...patch } : station
+          )
+        }
+      })
     )
-
-    const next = prev.filter(
-      (s) => s.id !== selectedStation.id
-    )
-
-    const fallback =
-      next[currentIndex] ||
-      next[currentIndex - 1] ||
-      next[0] ||
-      null
-
-    setSelectedId(fallback ? fallback.id : '')
-
-    return next
-  })
-}
+  }
 
   const updateSelectedSections = (nextSections) => {
-    setStations((prev) =>
-      prev.map((s) =>
-        s.id === selectedStation.id ? { ...s, sections: nextSections } : s
-      )
+    if (!selectedGroup || !selectedStation) return
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        return {
+          ...group,
+          stations: group.stations.map((station) =>
+            station.id === selectedStation.id ? { ...station, sections: nextSections } : station
+          )
+        }
+      })
     )
   }
 
   const updateSelectedMeasurements = (nextMeasurements) => {
-    setStations((prev) =>
-      prev.map((s) =>
-        s.id === selectedStation.id ? { ...s, measurements: nextMeasurements } : s
-      )
+    if (!selectedGroup || !selectedStation) return
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        return {
+          ...group,
+          stations: group.stations.map((station) =>
+            station.id === selectedStation.id
+              ? { ...station, measurements: nextMeasurements }
+              : station
+          )
+        }
+      })
     )
   }
+
+  const addGroup = () => {
+    const newGroup = createDefaultGroup(`그룹 ${groups.length + 1}`)
+    setGroups((prev) => [...prev, newGroup])
+    setSelectedGroupId(newGroup.id)
+    setSelectedStationId(newGroup.stations[0].id)
+  }
+
+  const deleteSelectedGroup = () => {
+    if (!selectedGroup) return
+
+    const ok = window.confirm(
+      `"${selectedGroup.name || '선택된 그룹'}"을(를) 삭제할까요?`
+    )
+    if (!ok) return
+
+    const currentIndex = groups.findIndex((group) => group.id === selectedGroup.id)
+    let nextGroups = groups.filter((group) => group.id !== selectedGroup.id)
+
+    if (nextGroups.length === 0) {
+      const fallback = createDefaultGroup('그룹 1')
+      nextGroups = [fallback]
+      setGroups(nextGroups)
+      setSelectedGroupId(fallback.id)
+      setSelectedStationId(fallback.stations[0].id)
+      return
+    }
+
+    const fallbackGroup =
+      nextGroups[currentIndex] || nextGroups[currentIndex - 1] || nextGroups[0]
+
+    setGroups(nextGroups)
+    setSelectedGroupId(fallbackGroup.id)
+    setSelectedStationId(fallbackGroup.stations[0]?.id || '')
+  }
+
+  const addStation = () => {
+    if (!selectedGroup) return
+
+    const newStation = createEmptyStation(`새 지점 ${selectedGroupStations.length + 1}`)
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        return {
+          ...group,
+          stations: [...group.stations, newStation]
+        }
+      })
+    )
+    setSelectedStationId(newStation.id)
+  }
+
+  const deleteSelectedStation = () => {
+    if (!selectedGroup || !selectedStation) return
+
+    const ok = window.confirm(
+      `"${selectedStation.name || '선택된 지점'}"을(를) 삭제할까요?`
+    )
+    if (!ok) return
+
+    const groupIndex = groups.findIndex((group) => group.id === selectedGroup.id)
+    const updatedGroups = groups
+      .map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        return {
+          ...group,
+          stations: group.stations.filter((station) => station.id !== selectedStation.id)
+        }
+      })
+      .filter((group) => group.stations.length > 0)
+
+    if (updatedGroups.length === 0) {
+      const fallback = createDefaultGroup('그룹 1')
+      setGroups([fallback])
+      setSelectedGroupId(fallback.id)
+      setSelectedStationId(fallback.stations[0].id)
+      return
+    }
+
+    const sameGroup = updatedGroups.find((group) => group.id === selectedGroup.id)
+    if (sameGroup) {
+      setGroups(updatedGroups)
+      setSelectedGroupId(sameGroup.id)
+      setSelectedStationId(sameGroup.stations[0]?.id || '')
+      return
+    }
+
+    const fallbackGroup =
+      updatedGroups[groupIndex] || updatedGroups[groupIndex - 1] || updatedGroups[0]
+
+    setGroups(updatedGroups)
+    setSelectedGroupId(fallbackGroup.id)
+    setSelectedStationId(fallbackGroup.stations[0]?.id || '')
+  }
+
+  const handleGroupChange = (groupId) => {
+    const nextGroup = groups.find((group) => group.id === groupId) || groups[0] || null
+    setSelectedGroupId(groupId)
+    setSelectedStationId(nextGroup?.stations[0]?.id || '')
+  }
+
+  const handleStationChange = (stationId) => {
+    setSelectedStationId(stationId)
+  }
+
+  const selectedSections = selectedStation?.sections || []
+  const selectedMeasurements = selectedStation?.measurements || []
+
+  const tableAutoStyle = SHARED_TABLE_STYLE
 
   const measurementGroups = useMemo(() => {
     const map = new Map()
 
-    selectedStation.measurements.forEach((m) => {
-      const year = getYearLabel(m.datetime)
-      const device = normalizeDeviceLabel(m.device)
+    selectedMeasurements.forEach((measurement) => {
+      const year = getYearLabel(measurement.datetime)
+      const device = normalizeDeviceLabel(measurement.device)
       const key = `${year}__${device}`
       if (!map.has(key)) {
         map.set(key, {
@@ -794,16 +979,18 @@ useEffect(() => {
           items: []
         })
       }
-      map.get(key).items.push(m)
+      map.get(key).items.push(measurement)
     })
 
     return Array.from(map.values())
       .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
       .map((group) => ({
         ...group,
-        items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
+        items: group.items
+          .slice()
+          .sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
       }))
-  }, [selectedStation.measurements])
+  }, [selectedMeasurements])
 
   const yearColorMap = useMemo(() => {
     const years = Array.from(new Set(measurementGroups.map((g) => g.year))).sort(
@@ -817,32 +1004,32 @@ useEffect(() => {
   }, [measurementGroups])
 
   const curveRowsBySection = useMemo(() => {
-    return selectedStation.sections.map((section) => ({
+    return selectedSections.map((section) => ({
       section,
       rows: genCurveRows(section)
     }))
-  }, [selectedStation.sections])
+  }, [selectedSections])
 
   const relativeErrors = useMemo(() => {
-    return selectedStation.measurements.map((m) => {
-      const section = findSectionByH(m.h, selectedStation.sections)
-      const measuredQ = num(m.q)
-      const curveQ = section ? calcQ(m.h, section) : null
+    return selectedMeasurements.map((measurement) => {
+      const section = findSectionByH(measurement.h, selectedSections)
+      const measuredQ = num(measurement.q)
+      const curveQ = section ? calcQ(measurement.h, section) : null
       let error = null
       if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
         error = ((measuredQ - curveQ) / curveQ) * 100
       }
       return {
-        ...m,
+        ...measurement,
         sectionName: section?.name || '',
         curveQ,
         error
       }
     })
-  }, [selectedStation.measurements, selectedStation.sections])
+  }, [selectedMeasurements, selectedSections])
 
   const curveDatasets = useMemo(() => {
-    return selectedStation.sections.map((section, idx) => {
+    return selectedSections.map((section, idx) => {
       const isLowExtrapolation = String(section.lowNote || '').includes('외삽')
       const isHighExtrapolation = String(section.highNote || '').includes('외삽')
       const color = CURVE_COLORS[idx % CURVE_COLORS.length]
@@ -864,7 +1051,7 @@ useEffect(() => {
             : null
       }
     })
-  }, [selectedStation.sections, curveRowsBySection])
+  }, [selectedSections, curveRowsBySection])
 
   const measurementDatasets = useMemo(() => {
     return measurementGroups.map((group) => {
@@ -874,8 +1061,8 @@ useEffect(() => {
       return {
         label: `${group.year}년 ${group.device} 측정성과`,
         data: group.items
-          .map((m) => ({ x: num(m.q), y: num(m.h) }))
-          .filter((p) => p.x !== null && p.y !== null),
+          .map((measurement) => ({ x: num(measurement.q), y: num(measurement.h) }))
+          .filter((point) => point.x !== null && point.y !== null),
         showLine: false,
         pointRadius: 5,
         pointHoverRadius: 6,
@@ -893,22 +1080,22 @@ useEffect(() => {
   const legendItems = useMemo(() => {
     const items = []
 
-    measurementDatasets.forEach((ds) => {
+    measurementDatasets.forEach((dataset) => {
       items.push({
         type: 'point',
-        label: ds.label,
-        color: ds.legendColor,
-        symbol: ds.legendSymbol
+        label: dataset.label,
+        color: dataset.legendColor,
+        symbol: dataset.legendSymbol
       })
     })
 
-    curveDatasets.forEach((ds) => {
-      if (!ds.legendVisible || !ds.legendLabel) return
+    curveDatasets.forEach((dataset) => {
+      if (!dataset.legendVisible || !dataset.legendLabel) return
       items.push({
         type: 'line',
-        label: ds.legendLabel,
-        color: ds.borderColor,
-        dash: Array.isArray(ds.borderDash) && ds.borderDash.length > 0
+        label: dataset.legendLabel,
+        color: dataset.borderColor,
+        dash: Array.isArray(dataset.borderDash) && dataset.borderDash.length > 0
       })
     })
 
@@ -993,9 +1180,9 @@ useEffect(() => {
     [chartConfig]
   )
 
-  if (!selectedStation) {
-    return <div className="app">지점을 먼저 추가하세요.</div>
-  }
+  const currentGroupName = selectedGroup?.name || ''
+  const currentStationName = selectedStation?.name || ''
+  const currentStationCode = selectedStation?.code || ''
 
   const sectionColumns = [
     { key: 'name', label: '구간명' },
@@ -1029,40 +1216,54 @@ useEffect(() => {
           <h1>수위-유량 곡선식 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
-        <button
-          className="btn"
-          onClick={() => {
-            const newStation = {
-              id: makeId(),
-              name: '새 지점',
-              code: '',
-              sections: [],
-              measurements: []
-            }
-            setStations((prev) => [...prev, newStation])
-            setSelectedId(newStation.id)
-          }}
-        >
-          + 지점 추가
-        </button>
-        <button
-  className="btn danger"
-  onClick={deleteSelectedStation}
-  disabled={!selectedStation}
->
-  - 지점 삭제
-</button>
+        <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
       </header>
 
       <section className="card">
-        <h2>1. 지점 선택 / 기본정보</h2>
+        <h2>1. 그룹 / 지점 선택 / 기본정보</h2>
         <div className="row">
           <label>
+            그룹 선택
+            <select
+              value={selectedGroupId}
+              onChange={(e) => handleGroupChange(e.target.value)}
+            >
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name || '그룹 없음'}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            그룹명
+            <input
+              value={currentGroupName}
+              onChange={(e) => updateSelectedGroup({ name: e.target.value })}
+            />
+          </label>
+
+          <div className="grid-actions" style={{ alignSelf: 'end' }}>
+            <button className="btn" onClick={addGroup}>
+              + 그룹 추가
+            </button>
+            <button className="btn danger" onClick={deleteSelectedGroup} disabled={!selectedGroup}>
+              - 그룹 삭제
+            </button>
+          </div>
+        </div>
+
+        <div className="row" style={{ marginTop: '12px' }}>
+          <label>
             지점 선택
-            <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-              {stations.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name || '이름 없음'}
+            <select
+              value={selectedStationId}
+              onChange={(e) => handleStationChange(e.target.value)}
+            >
+              {selectedGroupStations.map((station) => (
+                <option key={station.id} value={station.id}>
+                  {station.name || '이름 없음'}
                 </option>
               ))}
             </select>
@@ -1071,9 +1272,9 @@ useEffect(() => {
           <label>
             지점명
             <input
-              value={selectedStation.name}
+              value={currentStationName}
               onChange={(e) =>
-                updateStation(selectedStation.id, { name: e.target.value })
+                selectedStation && updateStation(selectedStation.id, { name: e.target.value })
               }
             />
           </label>
@@ -1081,12 +1282,25 @@ useEffect(() => {
           <label>
             지점코드
             <input
-              value={selectedStation.code}
+              value={currentStationCode}
               onChange={(e) =>
-                updateStation(selectedStation.id, { code: e.target.value })
+                selectedStation && updateStation(selectedStation.id, { code: e.target.value })
               }
             />
           </label>
+
+          <div className="grid-actions" style={{ alignSelf: 'end' }}>
+            <button className="btn" onClick={addStation}>
+              + 지점 추가
+            </button>
+            <button
+              className="btn danger"
+              onClick={deleteSelectedStation}
+              disabled={!selectedStation}
+            >
+              - 지점 삭제
+            </button>
+          </div>
         </div>
       </section>
 
@@ -1094,16 +1308,16 @@ useEffect(() => {
         <SpreadsheetGrid
           title="2. 곡선식 입력"
           columns={sectionColumns}
-          rows={selectedStation.sections}
+          rows={selectedSections}
           onRowsChange={updateSelectedSections}
           createEmptyRow={createEmptySection}
           onDeleteRow={(rowId) =>
-            updateSelectedSections(selectedStation.sections.filter((s) => s.id !== rowId))
+            updateSelectedSections(selectedSections.filter((section) => section.id !== rowId))
           }
           addButtonLabel={{
             label: '+ 구간 추가',
             onClick: () =>
-              updateSelectedSections([...selectedStation.sections, createEmptySection()])
+              updateSelectedSections([...selectedSections, createEmptySection()])
           }}
         />
       </section>
@@ -1112,17 +1326,19 @@ useEffect(() => {
         <SpreadsheetGrid
           title="3. 측정성과 입력"
           columns={measurementColumns}
-          rows={selectedStation.measurements}
+          rows={selectedMeasurements}
           onRowsChange={updateSelectedMeasurements}
           createEmptyRow={createEmptyMeasurement}
           onDeleteRow={(rowId) =>
-            updateSelectedMeasurements(selectedStation.measurements.filter((m) => m.id !== rowId))
+            updateSelectedMeasurements(
+              selectedMeasurements.filter((measurement) => measurement.id !== rowId)
+            )
           }
           addButtonLabel={{
             label: '+ 측정성과 추가',
             onClick: () =>
               updateSelectedMeasurements([
-                ...selectedStation.measurements,
+                ...selectedMeasurements,
                 createEmptyMeasurement()
               ])
           }}
@@ -1152,7 +1368,7 @@ useEffect(() => {
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
               <div className="table-wrap small">
-                <table className="spreadsheet">
+                <table className="spreadsheet" style={tableAutoStyle}>
                   <thead>
                     <tr>
                       <th>수위(m)</th>
@@ -1176,7 +1392,7 @@ useEffect(() => {
       <section className="card">
         <h2>5. 상대오차 계산</h2>
         <div className="table-wrap">
-          <table className="spreadsheet">
+          <table className="spreadsheet" style={tableAutoStyle}>
             <thead>
               <tr>
                 <th>측정일시</th>
@@ -1188,14 +1404,14 @@ useEffect(() => {
               </tr>
             </thead>
             <tbody>
-              {relativeErrors.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.datetime}</td>
-                  <td>{r.h}</td>
-                  <td>{r.q}</td>
-                  <td>{r.sectionName}</td>
-                  <td>{r.curveQ === null ? '' : fmt(r.curveQ, 3)}</td>
-                  <td>{r.error === null ? '' : fmt(r.error, 2)}</td>
+              {relativeErrors.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.datetime}</td>
+                  <td>{row.h}</td>
+                  <td>{row.q}</td>
+                  <td>{row.sectionName}</td>
+                  <td>{row.curveQ === null ? '' : fmt(row.curveQ, 3)}</td>
+                  <td>{row.error === null ? '' : fmt(row.error, 2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1283,7 +1499,11 @@ useEffect(() => {
           </div>
         </div>
 
-        <div className="chart-wrapper" ref={chartWrapperRef}>
+        <div
+          className="chart-wrapper"
+          ref={chartWrapperRef}
+          style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
+        >
           <div
             className="chart-legend"
             ref={legendRef}
@@ -1309,7 +1529,7 @@ useEffect(() => {
             </div>
           </div>
 
-          <div className="chart-box">
+          <div className="chart-box" style={{ minWidth: '1100px', height: '780px' }}>
             <Scatter data={chartData} options={chartOptions} />
           </div>
         </div>
