@@ -1250,7 +1250,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>수위-유량 곡선식 관리 PWA</h1>
+          <h1>측정성과 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
