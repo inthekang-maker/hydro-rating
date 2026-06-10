@@ -739,6 +739,18 @@ export default function App() {
   const legendRef = useRef(null)
 
   const [curveTableOpen, setCurveTableOpen] = useState(true)
+  const [chartZoom, setChartZoom] = useState(1)
+
+  const chartZoomMin = 1
+  const chartZoomMax = 3
+  const chartZoomStep = 0.25
+  const chartZoomPercent = Math.max(100, Math.round(chartZoom * 100))
+
+  const changeChartZoom = (nextZoom) => {
+    const value = Number(nextZoom)
+    if (!Number.isFinite(value)) return
+    setChartZoom(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
+  }
 
   useEffect(() => {
     localStorage.setItem(CHART_CONFIG_KEY, JSON.stringify(chartConfig))
@@ -1522,6 +1534,48 @@ export default function App() {
           style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
         >
           <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '10px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => changeChartZoom(chartZoom - chartZoomStep)}
+            >
+              -
+            </button>
+            <input
+              type="range"
+              min={chartZoomMin}
+              max={chartZoomMax}
+              step={chartZoomStep}
+              value={chartZoom}
+              onChange={(e) => changeChartZoom(e.target.value)}
+              aria-label="그래프 확대/축소"
+              style={{ flex: '1 1 220px', minWidth: '180px' }}
+            />
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => changeChartZoom(chartZoom + chartZoomStep)}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={() => changeChartZoom(1)}
+            >
+              기본
+            </button>
+            <span className="muted">{chartZoom.toFixed(2)}x</span>
+          </div>
+          <div
             className="chart-legend"
             ref={legendRef}
             style={{ top: legendPos.top, left: legendPos.left, touchAction: 'none' }}
@@ -1546,7 +1600,14 @@ export default function App() {
             </div>
           </div>
 
-          <div className="chart-box" style={{ minWidth: '1100px', height: '780px' }}>
+          <div
+            className="chart-box"
+            style={{
+              width: `${chartZoomPercent}%`,
+              minWidth: '100%',
+              height: '780px'
+            }}
+          >
             <Scatter data={chartData} options={chartOptions} />
           </div>
         </div>
