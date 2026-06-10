@@ -1094,37 +1094,47 @@ useEffect(() => {
       </section>
 
       <section className="card">
-        <h2>4. 수위별 환산유량표</h2>
-        {curveRowsBySection.map(({ section, rows }) => (
-          <div className="subcard" key={section.id}>
-            <h3>
-              {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
-            </h3>
-            <p className="muted">
-              Q = {section.a} × (h - {section.b})^{section.c}
-              {section.lowNote ? ` / ${section.lowNote}` : ''}
-              {section.highNote ? ` / ${section.highNote}` : ''}
-            </p>
-            <div className="table-wrap small">
-              <table className="spreadsheet">
-                <thead>
-                  <tr>
-                    <th>수위(m)</th>
-                    <th>유량(m³/s)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.slice(0, 40).map((r, idx) => (
-                    <tr key={idx}>
-                      <td>{fmt(r.h, 2)}</td>
-                      <td>{fmt(r.q, 3)}</td>
+        <div className="section-header">
+          <h2>4. 수위별 환산유량표</h2>
+          <button
+            className="btn secondary"
+            onClick={() => setCurveTableOpen((prev) => !prev)}
+          >
+            {curveTableOpen ? '접기' : '펼치기'}
+          </button>
+        </div>
+
+        {curveTableOpen &&
+          curveRowsBySection.map(({ section, rows }) => (
+            <div className="subcard" key={section.id}>
+              <h3>
+                {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
+              </h3>
+              <p className="muted">
+                Q = {section.a} × (h - {section.b})^{section.c}
+                {section.lowNote ? ` / ${section.lowNote}` : ''}
+                {section.highNote ? ` / ${section.highNote}` : ''}
+              </p>
+              <div className="table-wrap small">
+                <table className="spreadsheet">
+                  <thead>
+                    <tr>
+                      <th>수위(m)</th>
+                      <th>유량(m³/s)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, idx) => (
+                      <tr key={idx}>
+                        <td>{fmt(r.h, 2)}</td>
+                        <td>{fmt(r.q, 3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
       </section>
 
       <section className="card">
