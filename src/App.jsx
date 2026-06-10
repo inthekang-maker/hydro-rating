@@ -570,59 +570,53 @@ function SpreadsheetGrid({
 }
 
 export default function App() {
-  const APP_STATE_ID = 'main'
+const APP_STATE_ID = 'main'
 
-  const [stations, setStations] = useState(() => buildInitialStations())
-  const [stationsLoaded, setStationsLoaded] = useState(false)
+const [stations, setStations] = useState(() => buildInitialStations())
+const [stationsLoaded, setStationsLoaded] = useState(false)
 
-  useEffect(() => {
-    const loadStations = async () => {
-      const { data, error } = await supabase
-        .from('app_state')
-        .select('payload')
-        .eq('id', APP_STATE_ID)
-        .maybeSingle()
+useEffect(() => {
+  const loadStations = async () => {
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('payload')
+      .eq('id', APP_STATE_ID)
+      .maybeSingle()
 
-      if (error) {
-        console.error('loadStations error:', error)
-        setStationsLoaded(true)
-        return
-      }
-
-      const loadedStations = data?.payload?.stations
-
-      if (Array.isArray(loadedStations) && loadedStations.length > 0) {
-        setStations(loadedStations)
-      }
-
+    if (error) {
+      console.error('loadStations error:', error)
       setStationsLoaded(true)
+      return
     }
 
-    loadStations()
-  }, [])
+    const loadedStations = data?.payload?.stations
+    if (Array.isArray(loadedStations) && loadedStations.length > 0) {
+      setStations(loadedStations)
+    }
 
-  useEffect(() => {
-    if (!stationsLoaded) return
+    setStationsLoaded(true)
+  }
 
-    const timer = setTimeout(async () => {
-      console.log('SAVE START')
-      console.log('STATIONS', stations)
+  loadStations()
+}, [])
 
-      const { error } = await supabase.from('app_state').upsert({
-        id: APP_STATE_ID,
-        payload: { stations },
-        updated_at: new Date().toISOString()
-      })
+useEffect(() => {
+  if (!stationsLoaded) return
 
-      if (error) {
-        console.error('saveStations error:', error)
-      } else {
-        console.log('SAVE SUCCESS')
-      }
-    }, 500)
+  const timer = setTimeout(async () => {
+    const { error } = await supabase.from('app_state').upsert({
+      id: APP_STATE_ID,
+      payload: { stations },
+      updated_at: new Date().toISOString()
+    })
 
-    return () => clearTimeout(timer)
-  }, [stations, stationsLoaded])
+    if (error) {
+      console.error('saveStations error:', error)
+    }
+  }, 500)
+
+  return () => clearTimeout(timer)
+}, [stations, stationsLoaded])
 
   const [chartConfig, setChartConfig] = useState(() => {
     const saved = localStorage.getItem(CHART_CONFIG_KEY)
@@ -672,8 +666,7 @@ export default function App() {
   const legendRef = useRef(null)
 
   const [selectedId, setSelectedId] = useState(() => stations[0]?.id || '')
-
-
+  const [curveTableOpen, setCurveTableOpen] = useState(true)
   useEffect(() => {
     localStorage.setItem(CHART_CONFIG_KEY, JSON.stringify(chartConfig))
   }, [chartConfig])
@@ -687,7 +680,7 @@ export default function App() {
   }, [selectedId, stations])
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
+    const handlePointerMove = (e) => {
       if (!legendDragRef.current.dragging) return
       const wrapper = chartWrapperRef.current
       if (!wrapper) return
@@ -702,20 +695,20 @@ export default function App() {
       })
     }
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       legendDragRef.current.dragging = false
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
     }
   }, [])
 
-  const handleLegendMouseDown = (e) => {
+  const handleLegendPointerDown = (e) => {
     e.preventDefault()
     const wrapper = chartWrapperRef.current
     const legend = legendRef.current
@@ -742,44 +735,13 @@ export default function App() {
     )
   }
 
-const deleteSelectedStation = () => {
-  if (!selectedStation) return
-
-  const ok = window.confirm(
-    `"${selectedStation.name || '선택된 지점'}"을(를) 삭제할까요?`
-  )
-  if (!ok) return
-
-  setStations((prev) => {
-    const currentIndex = prev.findIndex(
-      (s) => s.id === selectedStation.id
+  const updateSelectedSections = (nextSections) => {
+    setStations((prev) =>
+      prev.map((s) =>
+        s.id === selectedStation.id ? { ...s, sections: nextSections } : s
+      )
     )
-
-    const next = prev.filter(
-      (s) => s.id !== selectedStation.id
-    )
-
-    const fallback =
-      next[currentIndex] ||
-      next[currentIndex - 1] ||
-      next[0] ||
-      null
-
-    setSelectedId(fallback ? fallback.id : '')
-
-    return next
-  })
-}
-
-const updateSelectedSections = (nextSections) => {
-  setStations((prev) =>
-    prev.map((s) =>
-      s.id === selectedStation.id
-        ? { ...s, sections: nextSections }
-        : s
-    )
-  )
-}
+  }
 
   const updateSelectedMeasurements = (nextMeasurements) => {
     setStations((prev) =>
@@ -1054,14 +1016,6 @@ const updateSelectedSections = (nextSections) => {
         >
           + 지점 추가
         </button>
-
-        <button
-          className="btn danger"
-          onClick={deleteSelectedStation}
-          disabled={!selectedStation}
-        >
-          - 지점 삭제
-        </button>
       </header>
 
       <section className="card">
@@ -1287,8 +1241,8 @@ const updateSelectedSections = (nextSections) => {
           <div
             className="chart-legend"
             ref={legendRef}
-            style={{ top: legendPos.top, left: legendPos.left }}
-            onMouseDown={handleLegendMouseDown}
+            style={{ top: legendPos.top, left: legendPos.left, touchAction: 'none' }}
+            onPointerDown={handleLegendPointerDown}
           >
             <div className="chart-legend-list">
               {legendItems.map((item) => (
