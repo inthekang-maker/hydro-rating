@@ -739,26 +739,6 @@ export default function App() {
   const legendRef = useRef(null)
 
   const [curveTableOpen, setCurveTableOpen] = useState(true)
-  const [chartZoomX, setChartZoomX] = useState(1)
-  const [chartZoomY, setChartZoomY] = useState(1)
-
-  const chartZoomMin = 0.5
-  const chartZoomMax = 3
-  const chartZoomStep = 0.25
-  const chartZoomXPercent = Math.max(100, Math.round(chartZoomX * 100))
-  const chartZoomYHeight = Math.max(320, Math.round(780 * chartZoomY))
-
-  const changeChartZoomX = (nextZoom) => {
-    const value = Number(nextZoom)
-    if (!Number.isFinite(value)) return
-    setChartZoomX(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
-  }
-
-  const changeChartZoomY = (nextZoom) => {
-    const value = Number(nextZoom)
-    if (!Number.isFinite(value)) return
-    setChartZoomY(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
-  }
 
   useEffect(() => {
     localStorage.setItem(CHART_CONFIG_KEY, JSON.stringify(chartConfig))
@@ -1250,7 +1230,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>측정성과 관리 PWA</h1>
+          <h1>수위-유량 곡선식 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
@@ -1539,107 +1519,8 @@ export default function App() {
         <div
           className="chart-wrapper"
           ref={chartWrapperRef}
-          style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
+          style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              gap: '10px',
-              marginBottom: '10px'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                가로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX - chartZoomStep)}
-              >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomX}
-                onChange={(e) => changeChartZoomX(e.target.value)}
-                aria-label="그래프 가로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX + chartZoomStep)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomX.toFixed(2)}x</span>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                세로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY - chartZoomStep)}
-              >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomY}
-                onChange={(e) => changeChartZoomY(e.target.value)}
-                aria-label="그래프 세로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY + chartZoomStep)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomY.toFixed(2)}x</span>
-            </div>
-          </div>
-
           <div
             className="chart-legend"
             ref={legendRef}
@@ -1665,14 +1546,7 @@ export default function App() {
             </div>
           </div>
 
-          <div
-            className="chart-box"
-            style={{
-              width: `${chartZoomXPercent}%`,
-              minWidth: '100%',
-              height: `${chartZoomYHeight}px`
-            }}
-          >
+          <div className="chart-box" style={{ minWidth: '1100px', height: '780px' }}>
             <Scatter data={chartData} options={chartOptions} />
           </div>
         </div>
