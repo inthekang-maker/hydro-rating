@@ -743,6 +743,316 @@ function SpreadsheetGrid({
 
 
 
+
+function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
+  const [selection, setSelection] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const tableRef = useRef(null)
+
+  const tableStyle = {
+    width: 'max-content',
+    minWidth: '0',
+    tableLayout: 'auto',
+    display: 'inline-table'
+  }
+
+  const monthCellStyle = {
+    padding: '4px 6px',
+    whiteSpace: 'nowrap'
+  }
+
+  const inputStyle = {
+    width: '54px',
+    minWidth: '54px',
+    height: '30px',
+    padding: '0 4px',
+    textAlign: 'center'
+  }
+
+  const normalizeRange = (range) => {
+    if (!range) return null
+    return {
+      startRow: Math.min(range.startRow, range.endRow),
+      endRow: Math.max(range.startRow, range.endRow),
+      startCol: Math.min(range.startCol, range.endCol),
+      endCol: Math.max(range.startCol, range.endCol)
+    }
+  }
+
+  const isSelected = (rowIndex, colIndex) => {
+    const r = normalizeRange(selection)
+    if (!r) return false
+    return (
+      rowIndex >= r.startRow &&
+      rowIndex <= r.endRow &&
+      colIndex >= r.startCol &&
+      colIndex <= r.endCol
+    )
+  }
+
+  const selectCell = (rowIndex, colIndex) => {
+    setSelection({
+      startRow: rowIndex,
+      endRow: rowIndex,
+      startCol: colIndex,
+      endCol: colIndex
+    })
+  }
+
+  const extendSelection = (rowIndex, colIndex) => {
+    setSelection((prev) => {
+      if (!prev) {
+        return {
+          startRow: rowIndex,
+          endRow: rowIndex,
+          startCol: colIndex,
+          endCol: colIndex
+        }
+      }
+      return {
+        startRow: prev.startRow,
+        endRow: rowIndex,
+        startCol: prev.startCol,
+        endCol: colIndex
+      }
+    })
+  }
+
+  const selectAll = () => {
+    if (stationRows.length === 0 || monthLabels.length === 0) return
+    setSelection({
+      startRow: 0,
+      endRow: stationRows.length - 1,
+      startCol: 0,
+      endCol: monthLabels.length - 1
+    })
+  }
+
+  const updateProcessPlan = (stationId, monthIndex, value) => {
+    const nextValue = String(value)
+    const target = stationRows.find((row) => row.station.id === stationId)
+    const currentPlan = Array.isArray(target?.station?.processPlan)
+      ? target.station.processPlan
+      : Array.from({ length: 12 }, () => '')
+    const nextPlan = currentPlan.slice(0, 12)
+    nextPlan[monthIndex] = nextValue
+    onUpdateStation(stationId, { processPlan: nextPlan })
+  }
+
+  const updateProcessPlanRow = (stationId, nextPlan) => {
+    const normalized = Array.from({ length: 12 }, (_, idx) => String(nextPlan?.[idx] ?? ''))
+    onUpdateStation(stationId, { processPlan: normalized })
+  }
+
+  const clearSelection = () => {
+    const r = normalizeRange(selection)
+    if (!r) return
+
+    stationRows.slice(r.startRow, r.endRow + 1).forEach((row, rowOffset) => {
+      const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
+      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+        if (colIndex < 0 || colIndex >= 12) continue
+        nextPlan[colIndex] = ''
+      }
+      updateProcessPlanRow(row.station.id, nextPlan)
+    })
+  }
+
+  const copySelection = async () => {
+    const r = normalizeRange(selection)
+    if (!r) return
+
+    const lines = []
+    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+      const row = stationRows[rowIndex]
+      if (!row) continue
+      const cells = []
+      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+        if (colIndex < 0 || colIndex >= 12) continue
+        cells.push(String(row.station.processPlan?.[colIndex] ?? ''))
+      }
+      lines.push(cells.join('\t'))
+    }
+
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const temp = document.createElement('textarea')
+      temp.value = text
+      document.body.appendChild(temp)
+      temp.select()
+      document.execCommand('copy')
+      document.body.removeChild(temp)
+    }
+  }
+
+  const pasteText = (text, rowIndex, colIndex) => {
+    const lines = text.replace(/\r/g, '').split('\n')
+    const matrix = lines
+      .map((line) => line.split('\t'))
+      .filter((line) => line.some((cell) => cell !== ''))
+
+    if (matrix.length === 0) return
+
+    matrix.forEach((line, rOffset) => {
+      const targetRow = rowIndex + rOffset
+      const row = stationRows[targetRow]
+      if (!row) return
+
+      const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
+      line.forEach((cell, cOffset) => {
+        const targetCol = colIndex + cOffset
+        if (targetCol < 0 || targetCol >= 12) return
+        nextPlan[targetCol] = cell
+      })
+      updateProcessPlanRow(row.station.id, nextPlan)
+    })
+  }
+
+  const handleKeyDown = async (e, rowIndex, colIndex) => {
+    const isMod = e.ctrlKey || e.metaKey
+
+    if (isMod && e.key.toLowerCase() === 'a') {
+      e.preventDefault()
+      selectAll()
+      return
+    }
+
+    if (isMod && e.key.toLowerCase() === 'c') {
+      if (selection) {
+        e.preventDefault()
+        await copySelection()
+      }
+      return
+    }
+
+    if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      selection &&
+      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
+    ) {
+      e.preventDefault()
+      clearSelection()
+      return
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const nextRow = Math.min(rowIndex + 1, stationRows.length - 1)
+      const nextInput = tableRef.current?.querySelector(`[data-plan-cell="${nextRow}-${colIndex}"]`)
+      if (nextInput) nextInput.focus()
+    }
+  }
+
+  const handlePaste = (event, rowIndex, colIndex) => {
+    const text = event.clipboardData.getData('text/plain')
+    if (!text) return
+    event.preventDefault()
+    pasteText(text, rowIndex, colIndex)
+  }
+
+  useEffect(() => {
+    const stopDrag = () => setIsDragging(false)
+    window.addEventListener('mouseup', stopDrag)
+    return () => window.removeEventListener('mouseup', stopDrag)
+  }, [])
+
+  return (
+    <section className="card">
+      <div className="section-header">
+        <h2>지점별 측정 계획 / 실적</h2>
+        <div className="grid-actions">
+          <button className="btn secondary" onClick={selectAll}>
+            전체 선택
+          </button>
+          <button className="btn secondary" onClick={copySelection}>
+            선택 복사
+          </button>
+          <button className="btn secondary" onClick={clearSelection}>
+            선택 삭제
+          </button>
+        </div>
+      </div>
+
+      <div className="table-wrap" ref={tableRef}>
+        <table
+          className="spreadsheet"
+          style={tableStyle}
+        >
+          <thead>
+            <tr>
+              <th rowSpan={2}>분류</th>
+              <th rowSpan={2}>그룹</th>
+              <th rowSpan={2}>지점 코드</th>
+              <th rowSpan={2}>지점명</th>
+              <th colSpan={13}>측정 계획</th>
+              <th colSpan={13}>유량측정 실적</th>
+            </tr>
+            <tr>
+              {monthLabels.map((label) => (
+                <th key={`detail-plan-${label}`} style={monthCellStyle}>{label}</th>
+              ))}
+              <th style={monthCellStyle}>총</th>
+              {monthLabels.map((label) => (
+                <th key={`detail-actual-${label}`} style={monthCellStyle}>{label}</th>
+              ))}
+              <th style={monthCellStyle}>총</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stationRows.map(({ station, planValues, actualValues, planTotal, actualTotal }, rowIndex) => (
+              <tr key={station.id}>
+                <td style={monthCellStyle}>{station.classification || '일반 지점'}</td>
+                <td style={monthCellStyle}>{station.groupName}</td>
+                <td style={monthCellStyle}>{station.code || ''}</td>
+                <td style={monthCellStyle}>{station.name || ''}</td>
+                {monthLabels.map((_, colIndex) => (
+                  <td
+                    key={`plan-${station.id}-${colIndex}`}
+                    style={monthCellStyle}
+                    className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                    onMouseDown={() => {
+                      setIsDragging(true)
+                      selectCell(rowIndex, colIndex)
+                    }}
+                    onMouseEnter={() => {
+                      if (!isDragging) return
+                      extendSelection(rowIndex, colIndex)
+                    }}
+                  >
+                    <input
+                      className="cell-input"
+                      style={inputStyle}
+                      data-plan-cell={`${rowIndex}-${colIndex}`}
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={station.processPlan?.[colIndex] ?? ''}
+                      onFocus={() => selectCell(rowIndex, colIndex)}
+                      onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                      onChange={(e) => updateProcessPlan(station.id, colIndex, e.target.value)}
+                      onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                    />
+                  </td>
+                ))}
+                <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>
+                {monthLabels.map((_, idx) => (
+                  <td key={`actual-${station.id}-${idx}`} style={monthCellStyle}>
+                    {actualValues[idx] || ''}
+                  </td>
+                ))}
+                <td style={monthCellStyle}>{fmt(actualTotal, 0)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+
 function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
@@ -949,61 +1259,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
           </table>
         </div>
       </section>
-
-      <section className="card">
-        <h2>지점별 측정 계획 / 실적</h2>
-        <div className="table-wrap">
-          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
-            <thead>
-              <tr>
-                <th rowSpan={2}>분류</th>
-                <th rowSpan={2}>그룹</th>
-                <th rowSpan={2}>지점 코드</th>
-                <th rowSpan={2}>지점명</th>
-                <th colSpan={13}>측정 계획</th>
-                <th colSpan={13}>유량측정 실적</th>
-              </tr>
-              <tr>
-                {monthLabels.map((label) => (
-                  <th key={`detail-plan-${label}`}>{label}</th>
-                ))}
-                <th>총</th>
-                {monthLabels.map((label) => (
-                  <th key={`detail-actual-${label}`}>{label}</th>
-                ))}
-                <th>총</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stationRows.map(({ station, planValues, actualValues, planTotal, actualTotal }) => (
-                <tr key={station.id}>
-                  <td>{station.classification || '일반 지점'}</td>
-                  <td>{station.groupName}</td>
-                  <td>{station.code || ''}</td>
-                  <td>{station.name || ''}</td>
-                  {monthLabels.map((_, idx) => (
-                    <td key={`plan-${station.id}-${idx}`}>
-                      <input
-                        className="cell-input"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={station.processPlan?.[idx] ?? ''}
-                        onChange={(e) => updateProcessPlan(station.id, idx, e.target.value)}
-                      />
-                    </td>
-                  ))}
-                  <td>{fmt(planTotal, 0)}</td>
-                  {monthLabels.map((_, idx) => (
-                    <td key={`actual-${station.id}-${idx}`}>{actualValues[idx] || ''}</td>
-                  ))}
-                  <td>{fmt(actualTotal, 0)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
     </div>
   )
 }
@@ -1715,7 +1971,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>수위-유량 곡선식 관리 PWA</h1>
+          <h1>지점별 자료 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
