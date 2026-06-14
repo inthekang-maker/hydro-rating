@@ -27,12 +27,12 @@ const CHART_LEGEND_POS_KEY = 'hydro-pwa-chart-legend-pos-v1'
 const YEAR_COLORS = [
   '#1d4ed8',
   '#16a34a',
-  '#31587c',
-  '#5e0cec',
-  '#976448',
+  '#db2777',
+  '#7c3aed',
+  '#ea580c',
   '#0891b2',
   '#dc2626',
-  '#5851d8'
+  '#4f46e5'
 ]
 
 const CURVE_COLORS = [
@@ -97,20 +97,11 @@ function calcQ(h, section) {
   return Number.isFinite(q) ? q : null
 }
 
-function findSectionByH(h, sections, measurementDatetime = null) {
+function findSectionByH(h, sections) {
   const H = num(h)
   if (H === null) return null
 
-  const applicableSections = sections.filter((section) => {
-    const hMin = num(section.hMin)
-    const hMax = num(section.hMax)
-    if (hMin === null || hMax === null) return false
-    if (H < hMin || H > hMax) return false
-    if (!measurementDatetime) return true
-    return isMeasurementApplicableToSection(measurementDatetime, section)
-  })
-
-  const exact = applicableSections.find((s) => {
+  const exact = sections.find((s) => {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
     return hMin !== null && hMax !== null && H >= hMin && H <= hMax
@@ -119,7 +110,7 @@ function findSectionByH(h, sections, measurementDatetime = null) {
 
   let best = null
   let bestDist = Infinity
-  for (const s of applicableSections) {
+  for (const s of sections) {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
     if (hMin === null || hMax === null) continue
@@ -179,109 +170,12 @@ function compareYearLabel(a, b) {
   return Number(a) - Number(b)
 }
 
-function parseThreshold(note) {
-  const s = String(note || '').trim()
-  if (!s) return null
-  const match = s.match(/-?\d+(?:\.\d+)?/)
-  if (!match) return null
-  const value = Number(match[0])
-  return Number.isFinite(value) ? value : null
-}
-
-function parseDateTime(value) {
-  if (!value) return null
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d
-}
-
-function isMeasurementApplicableToSection(measurementDatetime, section) {
-  const start = parseDateTime(section.periodStart)
-  const end = parseDateTime(section.periodEnd)
-  const measurementDate = parseDateTime(measurementDatetime)
-  if (!start || !end || !measurementDate) return true
-
-  const startYear = start.getFullYear()
-  const measurementYear = measurementDate.getFullYear()
-
-  if (measurementYear < startYear) return true
-  return measurementDate >= start && measurementDate <= end
-}
-
-function normalizeStation(station) {
-  return {
-    ...station,
-    classification: station.classification || '일반 지점',
-    sections: Array.isArray(station.sections) ? station.sections : [],
-    measurements: Array.isArray(station.measurements) ? station.measurements : [],
-    processPlan: Array.isArray(station.processPlan)
-      ? station.processPlan.slice(0, 12)
-      : Array.from({ length: 12 }, () => '')
-  }
-}
-
-function normalizeGroups(groups) {
-  return (Array.isArray(groups) ? groups : []).map((group) => ({
-    ...group,
-    stations: Array.isArray(group.stations) ? group.stations.map(normalizeStation) : []
-  }))
-}
-
-function buildCurveSegments(section) {
-  const rows = genCurveRows(section)
-  if (rows.length === 0) {
-    return {
-      datasets: [],
-      dashed: false
-    }
-  }
-
-  const lowThreshold = parseThreshold(section.lowNote)
-  const highThreshold = parseThreshold(section.highNote)
-
-  if (lowThreshold === null && highThreshold === null) {
-    return {
-      datasets: [{ rows, dashed: false }],
-      dashed: false
-    }
-  }
-
-  const datasets = []
-
-  if (lowThreshold !== null && highThreshold !== null && lowThreshold < highThreshold) {
-    const lowRows = rows.filter((row) => row.h <= lowThreshold)
-    const midRows = rows.filter((row) => row.h > lowThreshold && row.h < highThreshold)
-    const highRows = rows.filter((row) => row.h >= highThreshold)
-
-    if (lowRows.length) datasets.push({ rows: lowRows, dashed: true })
-    if (midRows.length) datasets.push({ rows: midRows, dashed: false })
-    if (highRows.length) datasets.push({ rows: highRows, dashed: true })
-  } else if (lowThreshold !== null) {
-    const lowRows = rows.filter((row) => row.h <= lowThreshold)
-    const normalRows = rows.filter((row) => row.h > lowThreshold)
-
-    if (lowRows.length) datasets.push({ rows: lowRows, dashed: true })
-    if (normalRows.length) datasets.push({ rows: normalRows, dashed: false })
-  } else if (highThreshold !== null) {
-    const normalRows = rows.filter((row) => row.h < highThreshold)
-    const highRows = rows.filter((row) => row.h >= highThreshold)
-
-    if (normalRows.length) datasets.push({ rows: normalRows, dashed: false })
-    if (highRows.length) datasets.push({ rows: highRows, dashed: true })
-  }
-
-  return {
-    datasets: datasets.length ? datasets : [{ rows, dashed: false }],
-    dashed: true
-  }
-}
-
 function buildInitialStations() {
   return [
     {
       id: makeId(),
       name: '진천군 (가산교)',
       code: '3011520',
-      classification: '일반 지점',
       sections: [
         {
           id: makeId(),
@@ -402,10 +296,8 @@ function createEmptyStation(name = '새 지점') {
     id: makeId(),
     name,
     code: '',
-    classification: '일반 지점',
     sections: [],
-    measurements: [],
-    processPlan: Array.from({ length: 12 }, () => '')
+    measurements: []
   }
 }
 
@@ -431,7 +323,7 @@ function flattenGroupsToStations(groups) {
   return groups.flatMap((group) => group.stations)
 }
 
-const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
+const DEFAULT_GROUPS = buildInitialGroups()
 const SHARED_TABLE_STYLE = {
   tableLayout: 'auto',
   width: 'max-content',
@@ -634,18 +526,11 @@ function SpreadsheetGrid({
       return
     }
 
-    if (
-  (e.key === 'Delete' || e.key === 'Backspace') &&
-  selection &&
-  (
-    selection.startRow !== selection.endRow ||
-    selection.startCol !== selection.endCol
-  )
-) {
-  e.preventDefault()
-  clearSelection()
-  return
-}
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
+      e.preventDefault()
+      clearSelection()
+      return
+    }
 
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -749,9 +634,6 @@ export default function App() {
   const [stationsLoaded, setStationsLoaded] = useState(false)
   const [selectedGroupId, setSelectedGroupId] = useState(() => DEFAULT_GROUPS[0].id)
   const [selectedStationId, setSelectedStationId] = useState(() => DEFAULT_GROUPS[0].stations[0].id)
-  const [measurementYearFilter, setMeasurementYearFilter] = useState('전체')
-  const [relativeErrorYearFilter, setRelativeErrorYearFilter] = useState('전체')
-  const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
 
   useEffect(() => {
     const loadAppState = async () => {
@@ -771,17 +653,15 @@ export default function App() {
       const loadedStations = data?.payload?.stations
 
       if (Array.isArray(loadedGroups) && loadedGroups.length > 0) {
-        setGroups(normalizeGroups(loadedGroups))
+        setGroups(loadedGroups)
       } else if (Array.isArray(loadedStations) && loadedStations.length > 0) {
-        setGroups(
-          normalizeGroups([
-            {
-              id: makeId(),
-              name: '그룹 1',
-              stations: loadedStations
-            }
-          ])
-        )
+        setGroups([
+          {
+            id: makeId(),
+            name: '그룹 1',
+            stations: loadedStations
+          }
+        ])
       }
 
       setStationsLoaded(true)
@@ -859,26 +739,6 @@ export default function App() {
   const legendRef = useRef(null)
 
   const [curveTableOpen, setCurveTableOpen] = useState(true)
-  const [chartZoomX, setChartZoomX] = useState(1)
-  const [chartZoomY, setChartZoomY] = useState(1)
-
-  const chartZoomMin = 0.5
-  const chartZoomMax = 3
-  const chartZoomStep = 0.25
-  const chartZoomXPercent = Math.max(100, Math.round(chartZoomX * 100))
-  const chartZoomYHeight = Math.max(320, Math.round(780 * chartZoomY))
-
-  const changeChartZoomX = (nextZoom) => {
-    const value = Number(nextZoom)
-    if (!Number.isFinite(value)) return
-    setChartZoomX(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
-  }
-
-  const changeChartZoomY = (nextZoom) => {
-    const value = Number(nextZoom)
-    if (!Number.isFinite(value)) return
-    setChartZoomY(Math.min(chartZoomMax, Math.max(chartZoomMin, value)))
-  }
 
   useEffect(() => {
     localStorage.setItem(CHART_CONFIG_KEY, JSON.stringify(chartConfig))
@@ -1122,14 +982,6 @@ export default function App() {
 
   const tableAutoStyle = SHARED_TABLE_STYLE
 
-  const handleMeasurementRowsChange = (nextVisibleRows) => {
-    const visibleIds = new Set(filteredMeasurements.map((row) => row.id))
-    const nextById = new Map(nextVisibleRows.map((row) => [row.id, row]))
-    const updated = selectedMeasurements.map((row) => nextById.get(row.id) || row)
-    const appended = nextVisibleRows.filter((row) => !visibleIds.has(row.id))
-    updateSelectedMeasurements([...updated, ...appended])
-  }
-
   const measurementGroups = useMemo(() => {
     const map = new Map()
 
@@ -1175,32 +1027,9 @@ export default function App() {
     }))
   }, [selectedSections])
 
-  const measurementYearOptions = useMemo(() => {
-    const years = Array.from(
-      new Set(
-        selectedMeasurements
-          .map((measurement) => getYearLabel(measurement.datetime))
-          .filter((year) => year !== '미정')
-      )
-    ).sort(compareYearLabel)
-
-    return ['전체', ...years]
-  }, [selectedMeasurements])
-
-  const filteredMeasurements = useMemo(() => {
-    if (measurementYearFilter === '전체') return selectedMeasurements
-    return selectedMeasurements.filter(
-      (measurement) => getYearLabel(measurement.datetime) === measurementYearFilter
-    )
-  }, [selectedMeasurements, measurementYearFilter])
-
-  const relativeErrorsRaw = useMemo(() => {
-    return selectedMeasurements.map((measurement, index) => {
-      const section = findSectionByH(
-        measurement.h,
-        selectedSections,
-        measurement.datetime
-      )
+  const relativeErrors = useMemo(() => {
+    return selectedMeasurements.map((measurement) => {
+      const section = findSectionByH(measurement.h, selectedSections)
       const measuredQ = num(measurement.q)
       const curveQ = section ? calcQ(measurement.h, section) : null
       let error = null
@@ -1211,66 +1040,33 @@ export default function App() {
         ...measurement,
         sectionName: section?.name || '',
         curveQ,
-        error,
-        measurementYear: getYearLabel(measurement.datetime),
-        _order: index
+        error
       }
     })
   }, [selectedMeasurements, selectedSections])
 
-  const filteredRelativeErrors = useMemo(() => {
-    let rows = relativeErrorsRaw
-
-    if (relativeErrorYearFilter !== '전체') {
-      rows = rows.filter((row) => row.measurementYear === relativeErrorYearFilter)
-    }
-
-    if (relativeErrorSort === '오름차순') {
-      rows = rows.slice().sort((a, b) => {
-        const aH = num(a.h)
-        const bH = num(b.h)
-        const aValue = aH === null ? Number.POSITIVE_INFINITY : aH
-        const bValue = bH === null ? Number.POSITIVE_INFINITY : bH
-        const diff = aValue - bValue
-        if (Number.isFinite(diff) && diff !== 0) return diff
-        return a._order - b._order
-      })
-    } else if (relativeErrorSort === '내림차순') {
-      rows = rows.slice().sort((a, b) => {
-        const aH = num(a.h)
-        const bH = num(b.h)
-        const aValue = aH === null ? Number.NEGATIVE_INFINITY : aH
-        const bValue = bH === null ? Number.NEGATIVE_INFINITY : bH
-        const diff = bValue - aValue
-        if (Number.isFinite(diff) && diff !== 0) return diff
-        return a._order - b._order
-      })
-    } else {
-      rows = rows.slice().sort((a, b) => a._order - b._order)
-    }
-
-    return rows
-  }, [relativeErrorsRaw, relativeErrorYearFilter, relativeErrorSort])
-
   const curveDatasets = useMemo(() => {
-    return selectedSections.flatMap((section, idx) => {
+    return selectedSections.map((section, idx) => {
+      const isLowExtrapolation = String(section.lowNote || '').includes('외삽')
+      const isHighExtrapolation = String(section.highNote || '').includes('외삽')
       const color = CURVE_COLORS[idx % CURVE_COLORS.length]
-      const { datasets } = buildCurveSegments(section)
 
-      return datasets.map((segment) => ({
+      return {
         label: section.name || `구간${idx + 1}`,
-        data: segment.rows.map((r) => ({ x: r.q, y: r.h })),
+        data: (curveRowsBySection[idx]?.rows || []).map((r) => ({ x: r.q, y: r.h })),
         showLine: true,
         pointRadius: 0,
-        pointHoverRadius: 0,
         borderWidth: 3,
         borderColor: color,
-        borderDash: segment.dashed ? [8, 5] : [],
+        borderDash: isLowExtrapolation || isHighExtrapolation ? [8, 5] : [],
         parsing: false,
-        sectionId: section.id,
-        legendColor: color,
-        legendDashed: segment.dashed
-      }))
+        legendVisible: isLowExtrapolation || isHighExtrapolation,
+        legendLabel: isLowExtrapolation
+          ? '저수위 외삽'
+          : isHighExtrapolation
+            ? '고수위 외삽'
+            : null
+      }
     })
   }, [selectedSections, curveRowsBySection])
 
@@ -1310,20 +1106,18 @@ export default function App() {
       })
     })
 
-    selectedSections.forEach((section, idx) => {
-      const color = CURVE_COLORS[idx % CURVE_COLORS.length]
-      const lowThreshold = parseThreshold(section.lowNote)
-      const highThreshold = parseThreshold(section.highNote)
+    curveDatasets.forEach((dataset) => {
+      if (!dataset.legendVisible || !dataset.legendLabel) return
       items.push({
         type: 'line',
-        label: section.name || `구간${idx + 1}`,
-        color,
-        dash: lowThreshold !== null || highThreshold !== null
+        label: dataset.legendLabel,
+        color: dataset.borderColor,
+        dash: Array.isArray(dataset.borderDash) && dataset.borderDash.length > 0
       })
     })
 
     return items
-  }, [measurementDatasets, selectedSections])
+  }, [measurementDatasets, curveDatasets])
 
   const chartData = useMemo(() => {
     return {
@@ -1512,20 +1306,6 @@ export default function App() {
             />
           </label>
 
-          <label>
-            분류
-            <select
-              value={selectedStation?.classification || '일반 지점'}
-              onChange={(e) =>
-                selectedStation &&
-                updateStation(selectedStation.id, { classification: e.target.value })
-              }
-            >
-              <option value="AI 지점">AI 지점</option>
-              <option value="일반 지점">일반 지점</option>
-            </select>
-          </label>
-
           <div className="grid-actions" style={{ alignSelf: 'end' }}>
             <button className="btn" onClick={addStation}>
               + 지점 추가
@@ -1560,32 +1340,11 @@ export default function App() {
       </section>
 
       <section className="card">
-        <div className="grid-actions" style={{ justifyContent: 'flex-end', marginBottom: '10px' }}>
-          <label>
-            연도별
-            <select
-              value={measurementYearFilter}
-              onChange={(e) => setMeasurementYearFilter(e.target.value)}
-            >
-              {measurementYearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year === '전체' ? '전체' : `${year}년`}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
         <SpreadsheetGrid
           title="3. 측정성과 입력"
           columns={measurementColumns}
-          rows={filteredMeasurements}
-          onRowsChange={(nextVisibleRows) => {
-            const visibleIds = new Set(filteredMeasurements.map((row) => row.id))
-            const nextById = new Map(nextVisibleRows.map((row) => [row.id, row]))
-            const updated = selectedMeasurements.map((row) => nextById.get(row.id) || row)
-            const appended = nextVisibleRows.filter((row) => !visibleIds.has(row.id))
-            updateSelectedMeasurements([...updated, ...appended])
-          }}
+          rows={selectedMeasurements}
+          onRowsChange={updateSelectedMeasurements}
           createEmptyRow={createEmptyMeasurement}
           onDeleteRow={(rowId) =>
             updateSelectedMeasurements(
@@ -1648,35 +1407,7 @@ export default function App() {
       </section>
 
       <section className="card">
-        <div className="section-header">
-          <h2>5. 상대오차 계산</h2>
-          <div className="grid-actions">
-            <label>
-              연도별
-              <select
-                value={relativeErrorYearFilter}
-                onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
-              >
-                {measurementYearOptions.map((year) => (
-                  <option key={year} value={year}>
-                    {year === '전체' ? '전체' : `${year}년`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              수위(h) 정렬
-              <select
-                value={relativeErrorSort}
-                onChange={(e) => setRelativeErrorSort(e.target.value)}
-              >
-                <option value="기본">기본</option>
-                <option value="오름차순">오름차순</option>
-                <option value="내림차순">내림차순</option>
-              </select>
-            </label>
-          </div>
-        </div>
+        <h2>5. 상대오차 계산</h2>
         <div className="table-wrap">
           <table className="spreadsheet flow-table" style={tableAutoStyle}>
             <thead>
@@ -1690,7 +1421,7 @@ export default function App() {
               </tr>
             </thead>
             <tbody>
-              {filteredRelativeErrors.map((row) => (
+              {relativeErrors.map((row) => (
                 <tr key={row.id}>
                   <td>{row.datetime}</td>
                   <td>{row.h}</td>
@@ -1788,107 +1519,8 @@ export default function App() {
         <div
           className="chart-wrapper"
           ref={chartWrapperRef}
-          style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
+          style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              gap: '10px',
-              marginBottom: '10px'
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                가로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX - chartZoomStep)}
-              >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomX}
-                onChange={(e) => changeChartZoomX(e.target.value)}
-                aria-label="그래프 가로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX + chartZoomStep)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomX.toFixed(2)}x</span>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
-              }}
-            >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                세로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY - chartZoomStep)}
-              >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomY}
-                onChange={(e) => changeChartZoomY(e.target.value)}
-                aria-label="그래프 세로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY + chartZoomStep)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomY.toFixed(2)}x</span>
-            </div>
-          </div>
-
           <div
             className="chart-legend"
             ref={legendRef}
@@ -1914,14 +1546,7 @@ export default function App() {
             </div>
           </div>
 
-          <div
-            className="chart-box"
-            style={{
-              width: `${chartZoomXPercent}%`,
-              minWidth: '100%',
-              height: `${chartZoomYHeight}px`
-            }}
-          >
+          <div className="chart-box" style={{ minWidth: '1100px', height: '780px' }}>
             <Scatter data={chartData} options={chartOptions} />
           </div>
         </div>
