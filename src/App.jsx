@@ -634,11 +634,18 @@ function SpreadsheetGrid({
       return
     }
 
-    if ((e.key === 'Delete' || e.key === 'Backspace') && selection) {
-      e.preventDefault()
-      clearSelection()
-      return
-    }
+    if (
+  (e.key === 'Delete' || e.key === 'Backspace') &&
+  selection &&
+  (
+    selection.startRow !== selection.endRow ||
+    selection.startCol !== selection.endCol
+  )
+) {
+  e.preventDefault()
+  clearSelection()
+  return
+}
 
     if (e.key === 'Enter') {
       e.preventDefault()
