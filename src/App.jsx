@@ -742,6 +742,273 @@ function SpreadsheetGrid({
 }
 
 
+
+function ProcessRatePage({ groups, onUpdateStation }) {
+  const currentYear = new Date().getFullYear()
+  const [classificationFilter, setClassificationFilter] = useState('전체')
+  const [groupFilter, setGroupFilter] = useState('전체')
+
+  const monthLabels = useMemo(
+    () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
+    []
+  )
+
+  const toNumber = (value) => {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : 0
+  }
+
+  const sum = (values) => values.reduce((acc, value) => acc + toNumber(value), 0)
+
+  const groupOptions = useMemo(
+    () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
+    [groups]
+  )
+
+  const filteredStations = useMemo(() => {
+    const flattened = groups.flatMap((group) =>
+      (group.stations || []).map((station) => ({
+        ...station,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음'
+      }))
+    )
+
+    return flattened
+      .filter((station) => groupFilter === '전체' || station.groupName === groupFilter)
+      .filter((station) => {
+        const classification = station.classification || '일반 지점'
+        return classificationFilter === '전체' || classification === classificationFilter
+      })
+      .sort((a, b) => {
+        const codeCompare = String(a.code || '').localeCompare(String(b.code || ''), 'ko', {
+          numeric: true,
+          sensitivity: 'base'
+        })
+        if (codeCompare !== 0) return codeCompare
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+      })
+  }, [groups, groupFilter, classificationFilter])
+
+  const stationRows = useMemo(() => {
+    return filteredStations.map((station) => {
+      const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
+      const actualValues = Array.from({ length: 12 }, () => 0)
+
+      ;(station.measurements || []).forEach((measurement) => {
+        const d = parseDateTime(measurement.datetime)
+        if (!d || d.getFullYear() !== currentYear) return
+        actualValues[d.getMonth()] += 1
+      })
+
+      const monthlyRates = planValues.map((plan, idx) =>
+        plan > 0 ? (actualValues[idx] / plan) * 100 : null
+      )
+      const cumulativeRates = planValues.map((_, idx) => {
+        const planSum = sum(planValues.slice(0, idx + 1))
+        const actualSum = sum(actualValues.slice(0, idx + 1))
+        return planSum > 0 ? (actualSum / planSum) * 100 : null
+      })
+
+      return {
+        station,
+        planValues,
+        actualValues,
+        monthlyRates,
+        cumulativeRates,
+        planTotal: sum(planValues),
+        actualTotal: sum(actualValues)
+      }
+    })
+  }, [filteredStations, currentYear])
+
+  const summary = useMemo(() => {
+    const planTotals = Array.from({ length: 12 }, () => 0)
+    const actualTotals = Array.from({ length: 12 }, () => 0)
+
+    stationRows.forEach((row) => {
+      row.planValues.forEach((value, idx) => {
+        planTotals[idx] += toNumber(value)
+      })
+      row.actualValues.forEach((value, idx) => {
+        actualTotals[idx] += toNumber(value)
+      })
+    })
+
+    const monthlyRates = planTotals.map((plan, idx) =>
+      plan > 0 ? (actualTotals[idx] / plan) * 100 : null
+    )
+    const cumulativeRates = planTotals.map((_, idx) => {
+      const planSum = sum(planTotals.slice(0, idx + 1))
+      const actualSum = sum(actualTotals.slice(0, idx + 1))
+      return planSum > 0 ? (actualSum / planSum) * 100 : null
+    })
+
+    return {
+      planTotals,
+      actualTotals,
+      monthlyRates,
+      cumulativeRates,
+      planGrandTotal: sum(planTotals),
+      actualGrandTotal: sum(actualTotals)
+    }
+  }, [stationRows])
+
+  const updateProcessPlan = (stationId, monthIndex, value) => {
+    const nextValue = String(value)
+    const target = filteredStations.find((station) => station.id === stationId)
+    const currentPlan = Array.isArray(target?.processPlan)
+      ? target.processPlan
+      : Array.from({ length: 12 }, () => '')
+    const nextPlan = currentPlan.slice(0, 12)
+    nextPlan[monthIndex] = nextValue
+    onUpdateStation(stationId, { processPlan: nextPlan })
+  }
+
+  const renderMonthCells = (values, options = {}) =>
+    values.map((value, idx) => {
+      const isPercent = Boolean(options.percent)
+      const text =
+        value === null || value === undefined
+          ? ''
+          : isPercent
+            ? `${fmt(value, 1)}%`
+            : fmt(value, 0)
+      return <td key={idx}>{text}</td>
+    })
+
+  const renderGrandTotal = (value, options = {}) => {
+    if (value === null || value === undefined) return ''
+    return options.percent ? `${fmt(value, 1)}%` : fmt(value, 0)
+  }
+
+  return (
+    <div>
+      <section className="card">
+        <h2>측정성과 공정률</h2>
+        <div className="row">
+          <label>
+            분류
+            <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
+              <option value="전체">전체</option>
+              <option value="AI 지점">AI 지점</option>
+              <option value="일반 지점">일반 지점</option>
+            </select>
+          </label>
+          <label>
+            그룹
+            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              {groupOptions.map((groupName) => (
+                <option key={groupName} value={groupName}>
+                  {groupName}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="muted" style={{ alignSelf: 'end' }}>
+            기준 연도: {currentYear}년
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>측정성과 공정률 요약</h2>
+        <div className="table-wrap">
+          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                <th>구분</th>
+                {monthLabels.map((label) => (
+                  <th key={`head-${label}`}>{label}</th>
+                ))}
+                <th>총</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>측정 계획</th>
+                {renderMonthCells(summary.planTotals)}
+                <th>{renderGrandTotal(summary.planGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>유량측정 실적</th>
+                {renderMonthCells(summary.actualTotals)}
+                <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>월별 공정률</th>
+                {renderMonthCells(summary.monthlyRates, { percent: true })}
+                <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
+              </tr>
+              <tr>
+                <th>누적 공정률</th>
+                {renderMonthCells(summary.cumulativeRates, { percent: true })}
+                <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="card">
+        <h2>지점별 측정 계획 / 실적</h2>
+        <div className="table-wrap">
+          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                <th rowSpan={2}>분류</th>
+                <th rowSpan={2}>그룹</th>
+                <th rowSpan={2}>지점 코드</th>
+                <th rowSpan={2}>지점명</th>
+                <th colSpan={13}>측정 계획</th>
+                <th colSpan={13}>유량측정 실적</th>
+              </tr>
+              <tr>
+                {monthLabels.map((label) => (
+                  <th key={`detail-plan-${label}`}>{label}</th>
+                ))}
+                <th>총</th>
+                {monthLabels.map((label) => (
+                  <th key={`detail-actual-${label}`}>{label}</th>
+                ))}
+                <th>총</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stationRows.map(({ station, planValues, actualValues, planTotal, actualTotal }) => (
+                <tr key={station.id}>
+                  <td>{station.classification || '일반 지점'}</td>
+                  <td>{station.groupName}</td>
+                  <td>{station.code || ''}</td>
+                  <td>{station.name || ''}</td>
+                  {monthLabels.map((_, idx) => (
+                    <td key={`plan-${station.id}-${idx}`}>
+                      <input
+                        className="cell-input"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={station.processPlan?.[idx] ?? ''}
+                        onChange={(e) => updateProcessPlan(station.id, idx, e.target.value)}
+                      />
+                    </td>
+                  ))}
+                  <td>{fmt(planTotal, 0)}</td>
+                  {monthLabels.map((_, idx) => (
+                    <td key={`actual-${station.id}-${idx}`}>{actualValues[idx] || ''}</td>
+                  ))}
+                  <td>{fmt(actualTotal, 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+
 export default function App() {
   const APP_STATE_ID = 'main'
 
@@ -752,6 +1019,7 @@ export default function App() {
   const [measurementYearFilter, setMeasurementYearFilter] = useState('전체')
   const [relativeErrorYearFilter, setRelativeErrorYearFilter] = useState('전체')
   const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
+  const [activeTab, setActiveTab] = useState('management')
 
   useEffect(() => {
     const loadAppState = async () => {
@@ -978,6 +1246,17 @@ export default function App() {
           )
         }
       })
+    )
+  }
+
+  const updateStationAcrossGroups = (stationId, patch) => {
+    setGroups((prev) =>
+      prev.map((group) => ({
+        ...group,
+        stations: group.stations.map((station) =>
+          station.id === stationId ? { ...station, ...patch } : station
+        )
+      }))
     )
   }
 
@@ -1441,6 +1720,38 @@ export default function App() {
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
       </header>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          marginBottom: '14px',
+          flexWrap: 'wrap'
+        }}
+      >
+        <button
+          type="button"
+          className="btn secondary"
+          style={{
+            background: activeTab === 'management' ? '#1f6feb' : '#6c757d'
+          }}
+          onClick={() => setActiveTab('management')}
+        >
+          측정성과 관리
+        </button>
+        <button
+          type="button"
+          className="btn secondary"
+          style={{
+            background: activeTab === 'process' ? '#1f6feb' : '#6c757d'
+          }}
+          onClick={() => setActiveTab('process')}
+        >
+          측정성과 공정률
+        </button>
+      </div>
+
+      <div style={{ display: activeTab === 'management' ? 'block' : 'none' }}>
 
       <section className="card">
         <h2>1. 그룹 / 지점 선택 / 기본정보</h2>
@@ -1926,6 +2237,11 @@ export default function App() {
           </div>
         </div>
       </section>
+      </div>
+
+      <div style={{ display: activeTab === 'process' ? 'block' : 'none' }}>
+        <ProcessRatePage groups={groups} onUpdateStation={updateStationAcrossGroups} />
+      </div>
     </div>
   )
 }
