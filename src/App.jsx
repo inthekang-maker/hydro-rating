@@ -27,12 +27,12 @@ const CHART_LEGEND_POS_KEY = 'hydro-pwa-chart-legend-pos-v1'
 const YEAR_COLORS = [
   '#1d4ed8',
   '#16a34a',
-  '#db2777',
-  '#7c3aed',
-  '#ea580c',
+  '#31587c',
+  '#5e0cec',
+  '#976448',
   '#0891b2',
   '#dc2626',
-  '#4f46e5'
+  '#5851d8'
 ]
 
 const CURVE_COLORS = [
