@@ -1007,7 +1007,7 @@ const stationNameCellStyle = {
             <tr>
               <th rowSpan={2} style={leftCellStyle}>분류</th>
               <th rowSpan={2} style={leftCellStyle}>그룹</th>
-              <th rowSpan={2}>지점 코드</th>
+              <th rowSpan={2} style={leftCellStyle}>지점 코드</th>
               <th rowSpan={2} style={stationNameCellStyle}>지점명</th>
               {showPlanMonths ? (
                 <th colSpan={13}>측정 계획</th>
