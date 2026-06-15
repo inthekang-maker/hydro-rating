@@ -783,6 +783,16 @@ const stationNameCellStyle = {
   textAlign: 'left'
 }
 
+const inputStyle = {
+  width: '100%',
+  minWidth: '46px',
+  height: '30px',
+  padding: '0 2px',
+  textAlign: 'center',
+  boxSizing: 'border-box',
+  fontSize: '12px'
+}
+
   const normalizeRange = (range) => {
     if (!range) return null
     return {
