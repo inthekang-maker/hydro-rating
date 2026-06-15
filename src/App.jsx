@@ -1101,6 +1101,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
+  const [stationFilter, setStationFilter] = useState('전체')
 
   const monthLabels = useMemo(
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
@@ -1118,6 +1119,15 @@ function ProcessRatePage({ groups, onUpdateStation }) {
     () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
     [groups]
   )
+  const stationOptions = useMemo(
+  () => [
+    '전체',
+    ...filteredStations
+      .map((station) => station.name || '')
+      .filter(Boolean)
+  ],
+  [filteredStations]
+)
 
   const filteredStations = useMemo(() => {
     const flattened = groups.flatMap((group) =>
@@ -1259,6 +1269,22 @@ function ProcessRatePage({ groups, onUpdateStation }) {
               ))}
             </select>
           </label>
+          <label>
+            지점명
+            <select
+             value={stationFilter}
+              onChange={(e) => setStationFilter(e.target.value)}
+              >
+             {stationOptions.map((stationName) => (
+              <option
+              key={stationName}
+              value={stationName}
+              >
+              {stationName}
+              </option>
+              ))}
+              </select>
+             </label>
           <div className="muted" style={{ alignSelf: 'end' }}>
             기준 연도: {currentYear}년
           </div>
@@ -2015,8 +2041,8 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>수위-유량 곡선식 관리 PWA</h1>
-          <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
+          <h1>지짐별 자료 관리 PWA</h1>
+          <p>환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
       </header>
