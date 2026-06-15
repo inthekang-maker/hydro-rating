@@ -452,6 +452,27 @@ function SpreadsheetGrid({
   const tableRef = useRef(null)
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
+  const compactInputWidthMap = {
+    name: 92,
+    hMin: 60,
+    hMax: 60,
+    a: 58,
+    b: 58,
+    c: 58,
+    lowNote: 92,
+    highNote: 92,
+    periodStart: 128,
+    periodEnd: 128,
+    datetime: 128,
+    h: 64,
+    q: 74,
+    device: 76,
+    exclude: 56,
+    tide: 64,
+    vegetation: 64,
+    construction: 64,
+    partialOpen: 64
+  }
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -464,65 +485,26 @@ function SpreadsheetGrid({
   ]
     .filter(Boolean)
     .join(' ')
-  const compactColumnWidths = title.includes('2. 곡선식 입력')
+  const tableStyle = isCompactTable
+    ? { tableLayout: 'auto', width: 'max-content', minWidth: 'max-content', display: 'inline-table' }
+    : { tableLayout: 'auto', width: 'max-content', minWidth: '100%' }
+  const headerCellStyle = isCompactTable
     ? {
-        name: 96,
-        hMin: 86,
-        hMax: 86,
-        a: 64,
-        b: 64,
-        c: 64,
-        lowNote: 100,
-        highNote: 100,
-        periodStart: 128,
-        periodEnd: 128
+        whiteSpace: 'nowrap',
+        overflow: 'visible',
+        textOverflow: 'clip',
+        padding: '10px 8px',
+        fontSize: '12px'
       }
-    : title.includes('3. 측정성과 입력')
-      ? {
-          datetime: 132,
-          h: 64,
-          q: 78,
-          device: 82,
-          exclude: 60,
-          tide: 72,
-          vegetation: 72,
-          construction: 72,
-          partialOpen: 72
-        }
-      : {}
-
-  const getColumnWidth = (key) => compactColumnWidths[key] || null
-
-  const getHeaderStyle = (col) => {
-    const width = getColumnWidth(col.key)
-    if (!width) return { whiteSpace: 'nowrap' }
-    return {
-      width: `${width}px`,
-      minWidth: `${width}px`,
-      whiteSpace: 'nowrap'
-    }
-  }
-
-  const getCellStyle = (col) => {
-    const width = getColumnWidth(col.key)
-    if (!width) return { whiteSpace: 'nowrap' }
-    return {
-      width: `${width}px`,
-      minWidth: `${width}px`,
-      whiteSpace: 'nowrap'
-    }
-  }
-
-  const getInputStyle = (col) => {
-    const width = getColumnWidth(col.key) || 78
-    return {
-      width: '100%',
-      minWidth: `${width}px`,
-      boxSizing: 'border-box'
-    }
-  }
-
-  const tableStyle = { tableLayout: 'auto', width: 'max-content', minWidth: '100%' }
+    : undefined
+  const bodyCellStyle = isCompactTable
+    ? {
+        whiteSpace: 'nowrap',
+        overflow: 'visible',
+        textOverflow: 'clip',
+        padding: '0'
+      }
+    : undefined
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -755,7 +737,7 @@ function SpreadsheetGrid({
           <thead>
             <tr>
               {columns.map((col) => (
-                <th key={col.key} style={getHeaderStyle(col)}>{col.label}</th>
+                <th key={col.key} style={headerCellStyle}>{col.label}</th>
               ))}
               <th />
             </tr>
@@ -767,13 +749,17 @@ function SpreadsheetGrid({
                   <td
                     key={col.key}
                     className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                    style={getCellStyle(col)}
+                    style={bodyCellStyle}
                     onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
                     onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
                   >
                     <input
                       className="cell-input"
-                      style={getInputStyle(col)}
+                      style={{
+                        width: isCompactTable ? `${compactInputWidthMap[col.key] || 64}px` : '78px',
+                        minWidth: isCompactTable ? `${compactInputWidthMap[col.key] || 64}px` : '78px',
+                        fontSize: isCompactTable ? '12px' : '13px'
+                      }}
                       data-cell={`${rowIndex}-${colIndex}`}
                       type={col.type || 'text'}
                       value={row[col.key] ?? ''}
@@ -801,40 +787,35 @@ function SpreadsheetGrid({
 
 
 
-
 function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   const [selection, setSelection] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const [showPlanMonths, setShowPlanMonths] = useState(true)
   const tableRef = useRef(null)
 
-  const visibleMonthCount = showPlanMonths ? monthLabels.length : 0
+  const visiblePlanLabels = showPlanMonths ? monthLabels : []
+  const planMonthCount = visiblePlanLabels.length
 
   const tableStyle = {
     width: 'max-content',
-    minWidth: '100%',
-    tableLayout: 'auto'
+    minWidth: 'max-content',
+    tableLayout: 'auto',
+    display: 'inline-table'
   }
 
   const monthCellStyle = {
-    padding: '3px 4px',
-    whiteSpace: 'nowrap'
-  }
-
-  const monthHeaderStyle = {
-    ...monthCellStyle,
-    width: '40px',
-    minWidth: '40px',
-    textAlign: 'center'
+    padding: '4px 4px',
+    whiteSpace: 'nowrap',
+    fontSize: '12px'
   }
 
   const inputStyle = {
-    width: '40px',
-    minWidth: '40px',
+    width: '42px',
+    minWidth: '42px',
     height: '28px',
     padding: '0 2px',
     textAlign: 'center',
-    boxSizing: 'border-box'
+    fontSize: '12px'
   }
 
   const normalizeRange = (range) => {
@@ -887,12 +868,12 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const selectAll = () => {
-    if (!showPlanMonths || stationRows.length === 0 || visibleMonthCount === 0) return
+    if (stationRows.length === 0 || planMonthCount === 0) return
     setSelection({
       startRow: 0,
       endRow: stationRows.length - 1,
       startCol: 0,
-      endCol: visibleMonthCount - 1
+      endCol: planMonthCount - 1
     })
   }
 
@@ -913,14 +894,13 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const clearSelection = () => {
-    if (!showPlanMonths) return
     const r = normalizeRange(selection)
-    if (!r) return
+    if (!r || planMonthCount === 0) return
 
     stationRows.slice(r.startRow, r.endRow + 1).forEach((row) => {
       const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
       for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
+        if (colIndex < 0 || colIndex >= planMonthCount) continue
         nextPlan[colIndex] = ''
       }
       updateProcessPlanRow(row.station.id, nextPlan)
@@ -928,9 +908,8 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const copySelection = async () => {
-    if (!showPlanMonths) return
     const r = normalizeRange(selection)
-    if (!r) return
+    if (!r || planMonthCount === 0) return
 
     const lines = []
     for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
@@ -938,7 +917,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       if (!row) continue
       const cells = []
       for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
+        if (colIndex < 0 || colIndex >= planMonthCount) continue
         cells.push(String(row.station.processPlan?.[colIndex] ?? ''))
       }
       lines.push(cells.join('	'))
@@ -959,7 +938,6 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const pasteText = (text, rowIndex, colIndex) => {
-    if (!showPlanMonths) return
     const lines = text.replace(/
 /g, '').split('
 ')
@@ -977,7 +955,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
       line.forEach((cell, cOffset) => {
         const targetCol = colIndex + cOffset
-        if (targetCol < 0 || targetCol >= 12) return
+        if (targetCol < 0 || targetCol >= planMonthCount) return
         nextPlan[targetCol] = cell
       })
       updateProcessPlanRow(row.station.id, nextPlan)
@@ -1032,15 +1010,14 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
     return () => window.removeEventListener('mouseup', stopDrag)
   }, [])
 
-  useEffect(() => {
-    setSelection(null)
-  }, [showPlanMonths])
-
   return (
     <section className="card">
       <div className="section-header">
         <h2>지점별 측정 계획 / 실적</h2>
         <div className="grid-actions">
+          <button className="btn secondary" onClick={() => setShowPlanMonths((prev) => !prev)}>
+            {showPlanMonths ? '계획 숨기기' : '계획 펼치기'}
+          </button>
           <button className="btn secondary" onClick={selectAll}>
             전체 선택
           </button>
@@ -1049,9 +1026,6 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
           </button>
           <button className="btn secondary" onClick={clearSelection}>
             선택 삭제
-          </button>
-          <button className="btn secondary" onClick={() => setShowPlanMonths((prev) => !prev)}>
-            {showPlanMonths ? '측정 계획 숨기기' : '측정 계획 펼치기'}
           </button>
         </div>
       </div>
@@ -1064,18 +1038,18 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
               <th rowSpan={2}>그룹</th>
               <th rowSpan={2}>지점 코드</th>
               <th rowSpan={2}>지점명</th>
-              <th colSpan={showPlanMonths ? 13 : 1}>측정 계획</th>
+              <th colSpan={planMonthCount + 1}>측정 계획</th>
               <th colSpan={13}>유량측정 실적</th>
             </tr>
             <tr>
-              {showPlanMonths && monthLabels.map((label) => (
-                <th key={`detail-plan-${label}`} style={monthHeaderStyle}>{label}</th>
+              {visiblePlanLabels.map((label) => (
+                <th key={`detail-plan-${label}`} style={monthCellStyle}>{label}</th>
               ))}
-              {showPlanMonths && <th style={monthHeaderStyle}>총</th>}
+              <th style={monthCellStyle}>총</th>
               {monthLabels.map((label) => (
-                <th key={`detail-actual-${label}`} style={monthHeaderStyle}>{label}</th>
+                <th key={`detail-actual-${label}`} style={monthCellStyle}>{label}</th>
               ))}
-              <th style={monthHeaderStyle}>총</th>
+              <th style={monthCellStyle}>총</th>
             </tr>
           </thead>
           <tbody>
@@ -1085,7 +1059,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
                 <td style={monthCellStyle}>{station.groupName}</td>
                 <td style={monthCellStyle}>{station.code || ''}</td>
                 <td style={monthCellStyle}>{station.name || ''}</td>
-                {showPlanMonths && monthLabels.map((_, colIndex) => (
+                {visiblePlanLabels.map((_, colIndex) => (
                   <td
                     key={`plan-${station.id}-${colIndex}`}
                     style={monthCellStyle}
@@ -1114,7 +1088,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
                     />
                   </td>
                 ))}
-                {showPlanMonths && <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>}
+                <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>
                 {monthLabels.map((_, idx) => (
                   <td key={`actual-${station.id}-${idx}`} style={monthCellStyle}>
                     {actualValues[idx] || ''}
@@ -1129,7 +1103,6 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
     </section>
   )
 }
-
 
 function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
