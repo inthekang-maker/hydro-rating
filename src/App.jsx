@@ -452,6 +452,54 @@ function SpreadsheetGrid({
   const tableRef = useRef(null)
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
+  const compactColumnWidthMap = title.includes('2. 곡선식 입력')
+    ? {
+        name: 110,
+        hMin: 72,
+        hMax: 72,
+        a: 62,
+        b: 66,
+        c: 62,
+        lowNote: 98,
+        highNote: 98,
+        periodStart: 130,
+        periodEnd: 130
+      }
+    : title.includes('3. 측정성과 입력')
+      ? {
+          datetime: 140,
+          h: 68,
+          q: 78,
+          device: 82,
+          exclude: 64,
+          tide: 72,
+          vegetation: 72,
+          construction: 72,
+          partialOpen: 72
+        }
+      : {}
+  const getCompactCellStyle = (key) =>
+    isCompactTable
+      ? {
+          width: `${compactColumnWidthMap[key] ?? 72}px`,
+          minWidth: `${compactColumnWidthMap[key] ?? 72}px`,
+          maxWidth: `${compactColumnWidthMap[key] ?? 72}px`,
+          padding: '4px 6px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }
+      : undefined
+  const getDeleteCellStyle = () =>
+    isCompactTable
+      ? {
+          width: '54px',
+          minWidth: '54px',
+          maxWidth: '54px',
+          padding: '4px 4px',
+          whiteSpace: 'nowrap'
+        }
+      : undefined
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -465,7 +513,7 @@ function SpreadsheetGrid({
     .filter(Boolean)
     .join(' ')
   const tableStyle = isCompactTable
-    ? { tableLayout: 'auto', width: 'auto', minWidth: '0', display: 'inline-table' }
+    ? { tableLayout: 'auto', width: 'max-content', minWidth: '0', display: 'inline-table' }
     : { tableLayout: 'auto', width: 'max-content', minWidth: '100%' }
 
   const normalizeRange = (range) => {
@@ -699,9 +747,11 @@ function SpreadsheetGrid({
           <thead>
             <tr>
               {columns.map((col) => (
-                <th key={col.key}>{col.label}</th>
+                <th key={col.key} style={getCompactCellStyle(col.key)}>
+                  {col.label}
+                </th>
               ))}
-              <th />
+              <th style={getDeleteCellStyle()} />
             </tr>
           </thead>
           <tbody>
@@ -711,12 +761,19 @@ function SpreadsheetGrid({
                   <td
                     key={col.key}
                     className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                    style={getCompactCellStyle(col.key)}
                     onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
                     onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
                   >
                     <input
                       className="cell-input"
-                      style={{ minWidth: isCompactTable ? '0' : '78px' }}
+                      style={{
+                        minWidth: isCompactTable ? '0' : '78px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: isCompactTable ? '0 4px' : '0 10px',
+                        fontSize: isCompactTable ? '12px' : '13px'
+                      }}
                       data-cell={`${rowIndex}-${colIndex}`}
                       type={col.type || 'text'}
                       value={row[col.key] ?? ''}
@@ -727,7 +784,7 @@ function SpreadsheetGrid({
                     />
                   </td>
                 ))}
-                <td className="delete-cell">
+                <td className="delete-cell" style={getDeleteCellStyle()}>
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
                   </button>
@@ -743,316 +800,6 @@ function SpreadsheetGrid({
 
 
 
-
-function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
-  const [selection, setSelection] = useState(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const tableRef = useRef(null)
-
-  const tableStyle = {
-    width: 'max-content',
-    minWidth: '0',
-    tableLayout: 'auto',
-    display: 'inline-table'
-  }
-
-  const monthCellStyle = {
-    padding: '4px 6px',
-    whiteSpace: 'nowrap'
-  }
-
-  const inputStyle = {
-    width: '54px',
-    minWidth: '54px',
-    height: '30px',
-    padding: '0 4px',
-    textAlign: 'center'
-  }
-
-  const normalizeRange = (range) => {
-    if (!range) return null
-    return {
-      startRow: Math.min(range.startRow, range.endRow),
-      endRow: Math.max(range.startRow, range.endRow),
-      startCol: Math.min(range.startCol, range.endCol),
-      endCol: Math.max(range.startCol, range.endCol)
-    }
-  }
-
-  const isSelected = (rowIndex, colIndex) => {
-    const r = normalizeRange(selection)
-    if (!r) return false
-    return (
-      rowIndex >= r.startRow &&
-      rowIndex <= r.endRow &&
-      colIndex >= r.startCol &&
-      colIndex <= r.endCol
-    )
-  }
-
-  const selectCell = (rowIndex, colIndex) => {
-    setSelection({
-      startRow: rowIndex,
-      endRow: rowIndex,
-      startCol: colIndex,
-      endCol: colIndex
-    })
-  }
-
-  const extendSelection = (rowIndex, colIndex) => {
-    setSelection((prev) => {
-      if (!prev) {
-        return {
-          startRow: rowIndex,
-          endRow: rowIndex,
-          startCol: colIndex,
-          endCol: colIndex
-        }
-      }
-      return {
-        startRow: prev.startRow,
-        endRow: rowIndex,
-        startCol: prev.startCol,
-        endCol: colIndex
-      }
-    })
-  }
-
-  const selectAll = () => {
-    if (stationRows.length === 0 || monthLabels.length === 0) return
-    setSelection({
-      startRow: 0,
-      endRow: stationRows.length - 1,
-      startCol: 0,
-      endCol: monthLabels.length - 1
-    })
-  }
-
-  const updateProcessPlan = (stationId, monthIndex, value) => {
-    const nextValue = String(value)
-    const target = stationRows.find((row) => row.station.id === stationId)
-    const currentPlan = Array.isArray(target?.station?.processPlan)
-      ? target.station.processPlan
-      : Array.from({ length: 12 }, () => '')
-    const nextPlan = currentPlan.slice(0, 12)
-    nextPlan[monthIndex] = nextValue
-    onUpdateStation(stationId, { processPlan: nextPlan })
-  }
-
-  const updateProcessPlanRow = (stationId, nextPlan) => {
-    const normalized = Array.from({ length: 12 }, (_, idx) => String(nextPlan?.[idx] ?? ''))
-    onUpdateStation(stationId, { processPlan: normalized })
-  }
-
-  const clearSelection = () => {
-    const r = normalizeRange(selection)
-    if (!r) return
-
-    stationRows.slice(r.startRow, r.endRow + 1).forEach((row, rowOffset) => {
-      const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
-        nextPlan[colIndex] = ''
-      }
-      updateProcessPlanRow(row.station.id, nextPlan)
-    })
-  }
-
-  const copySelection = async () => {
-    const r = normalizeRange(selection)
-    if (!r) return
-
-    const lines = []
-    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
-      const row = stationRows[rowIndex]
-      if (!row) continue
-      const cells = []
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
-        cells.push(String(row.station.processPlan?.[colIndex] ?? ''))
-      }
-      lines.push(cells.join('\t'))
-    }
-
-    const text = lines.join('\n')
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const temp = document.createElement('textarea')
-      temp.value = text
-      document.body.appendChild(temp)
-      temp.select()
-      document.execCommand('copy')
-      document.body.removeChild(temp)
-    }
-  }
-
-  const pasteText = (text, rowIndex, colIndex) => {
-    const lines = text.replace(/\r/g, '').split('\n')
-    const matrix = lines
-      .map((line) => line.split('\t'))
-      .filter((line) => line.some((cell) => cell !== ''))
-
-    if (matrix.length === 0) return
-
-    matrix.forEach((line, rOffset) => {
-      const targetRow = rowIndex + rOffset
-      const row = stationRows[targetRow]
-      if (!row) return
-
-      const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
-      line.forEach((cell, cOffset) => {
-        const targetCol = colIndex + cOffset
-        if (targetCol < 0 || targetCol >= 12) return
-        nextPlan[targetCol] = cell
-      })
-      updateProcessPlanRow(row.station.id, nextPlan)
-    })
-  }
-
-  const handleKeyDown = async (e, rowIndex, colIndex) => {
-    const isMod = e.ctrlKey || e.metaKey
-
-    if (isMod && e.key.toLowerCase() === 'a') {
-      e.preventDefault()
-      selectAll()
-      return
-    }
-
-    if (isMod && e.key.toLowerCase() === 'c') {
-      if (selection) {
-        e.preventDefault()
-        await copySelection()
-      }
-      return
-    }
-
-    if (
-      (e.key === 'Delete' || e.key === 'Backspace') &&
-      selection &&
-      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
-    ) {
-      e.preventDefault()
-      clearSelection()
-      return
-    }
-
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      const nextRow = Math.min(rowIndex + 1, stationRows.length - 1)
-      const nextInput = tableRef.current?.querySelector(`[data-plan-cell="${nextRow}-${colIndex}"]`)
-      if (nextInput) nextInput.focus()
-    }
-  }
-
-  const handlePaste = (event, rowIndex, colIndex) => {
-    const text = event.clipboardData.getData('text/plain')
-    if (!text) return
-    event.preventDefault()
-    pasteText(text, rowIndex, colIndex)
-  }
-
-  useEffect(() => {
-    const stopDrag = () => setIsDragging(false)
-    window.addEventListener('mouseup', stopDrag)
-    return () => window.removeEventListener('mouseup', stopDrag)
-  }, [])
-
-  return (
-    <section className="card">
-      <div className="section-header">
-        <h2>지점별 측정 계획 / 실적</h2>
-        <div className="grid-actions">
-          <button className="btn secondary" onClick={selectAll}>
-            전체 선택
-          </button>
-          <button className="btn secondary" onClick={copySelection}>
-            선택 복사
-          </button>
-          <button className="btn secondary" onClick={clearSelection}>
-            선택 삭제
-          </button>
-        </div>
-      </div>
-
-      <div className="table-wrap" ref={tableRef}>
-        <table
-          className="spreadsheet"
-          style={tableStyle}
-        >
-          <thead>
-            <tr>
-              <th rowSpan={2}>분류</th>
-              <th rowSpan={2}>그룹</th>
-              <th rowSpan={2}>지점 코드</th>
-              <th rowSpan={2}>지점명</th>
-              <th colSpan={13}>측정 계획</th>
-              <th colSpan={13}>유량측정 실적</th>
-            </tr>
-            <tr>
-              {monthLabels.map((label) => (
-                <th key={`detail-plan-${label}`} style={monthCellStyle}>{label}</th>
-              ))}
-              <th style={monthCellStyle}>총</th>
-              {monthLabels.map((label) => (
-                <th key={`detail-actual-${label}`} style={monthCellStyle}>{label}</th>
-              ))}
-              <th style={monthCellStyle}>총</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stationRows.map(({ station, planValues, actualValues, planTotal, actualTotal }, rowIndex) => (
-              <tr key={station.id}>
-                <td style={monthCellStyle}>{station.classification || '일반 지점'}</td>
-                <td style={monthCellStyle}>{station.groupName}</td>
-                <td style={monthCellStyle}>{station.code || ''}</td>
-                <td style={monthCellStyle}>{station.name || ''}</td>
-                {monthLabels.map((_, colIndex) => (
-                  <td
-                    key={`plan-${station.id}-${colIndex}`}
-                    style={monthCellStyle}
-                    className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                    onMouseDown={() => {
-                      setIsDragging(true)
-                      selectCell(rowIndex, colIndex)
-                    }}
-                    onMouseEnter={() => {
-                      if (!isDragging) return
-                      extendSelection(rowIndex, colIndex)
-                    }}
-                  >
-                    <input
-                      className="cell-input"
-                      style={inputStyle}
-                      data-plan-cell={`${rowIndex}-${colIndex}`}
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={station.processPlan?.[colIndex] ?? ''}
-                      onFocus={() => selectCell(rowIndex, colIndex)}
-                      onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                      onChange={(e) => updateProcessPlan(station.id, colIndex, e.target.value)}
-                      onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-                    />
-                  </td>
-                ))}
-                <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>
-                {monthLabels.map((_, idx) => (
-                  <td key={`actual-${station.id}-${idx}`} style={monthCellStyle}>
-                    {actualValues[idx] || ''}
-                  </td>
-                ))}
-                <td style={monthCellStyle}>{fmt(actualTotal, 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
-}
-
-
 function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
@@ -1062,6 +809,55 @@ function ProcessRatePage({ groups, onUpdateStation }) {
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
     []
   )
+
+  const tableLabelStyle = {
+    width: '92px',
+    minWidth: '92px',
+    maxWidth: '92px',
+    padding: '4px 6px',
+    whiteSpace: 'nowrap',
+    textAlign: 'center'
+  }
+  const tableNameStyle = {
+    width: '140px',
+    minWidth: '140px',
+    maxWidth: '140px',
+    padding: '4px 6px',
+    whiteSpace: 'nowrap'
+  }
+  const tableCodeStyle = {
+    width: '90px',
+    minWidth: '90px',
+    maxWidth: '90px',
+    padding: '4px 6px',
+    whiteSpace: 'nowrap',
+    textAlign: 'center'
+  }
+  const tableMonthStyle = {
+    width: '52px',
+    minWidth: '52px',
+    maxWidth: '52px',
+    padding: '4px 4px',
+    whiteSpace: 'nowrap',
+    textAlign: 'center'
+  }
+  const tableTotalStyle = {
+    width: '56px',
+    minWidth: '56px',
+    maxWidth: '56px',
+    padding: '4px 4px',
+    whiteSpace: 'nowrap',
+    textAlign: 'center'
+  }
+  const processInputStyle = {
+    width: '100%',
+    minWidth: '0',
+    boxSizing: 'border-box',
+    height: '28px',
+    padding: '0 4px',
+    textAlign: 'center',
+    fontSize: '12px'
+  }
 
   const toNumber = (value) => {
     const n = Number(value)
@@ -1175,7 +971,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
     onUpdateStation(stationId, { processPlan: nextPlan })
   }
 
-  const renderMonthCells = (values, options = {}) =>
+  const renderMonthCells = (values, options = {}, cellStyle = tableMonthStyle) =>
     values.map((value, idx) => {
       const isPercent = Boolean(options.percent)
       const text =
@@ -1184,7 +980,11 @@ function ProcessRatePage({ groups, onUpdateStation }) {
           : isPercent
             ? `${fmt(value, 1)}%`
             : fmt(value, 0)
-      return <td key={idx}>{text}</td>
+      return (
+        <td key={idx} style={cellStyle}>
+          {text}
+        </td>
+      )
     })
 
   const renderGrandTotal = (value, options = {}) => {
@@ -1227,39 +1027,114 @@ function ProcessRatePage({ groups, onUpdateStation }) {
           <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
             <thead>
               <tr>
-                <th>구분</th>
+                <th style={tableLabelStyle}>구분</th>
                 {monthLabels.map((label) => (
-                  <th key={`head-${label}`}>{label}</th>
+                  <th key={`head-${label}`} style={tableMonthStyle}>
+                    {label}
+                  </th>
                 ))}
-                <th>총</th>
+                <th style={tableTotalStyle}>총</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <th>측정 계획</th>
-                {renderMonthCells(summary.planTotals)}
-                <th>{renderGrandTotal(summary.planGrandTotal)}</th>
+                <th style={tableLabelStyle}>측정 계획</th>
+                {renderMonthCells(summary.planTotals, {}, tableMonthStyle)}
+                <th style={tableTotalStyle}>{renderGrandTotal(summary.planGrandTotal)}</th>
               </tr>
               <tr>
-                <th>유량측정 실적</th>
-                {renderMonthCells(summary.actualTotals)}
-                <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
+                <th style={tableLabelStyle}>유량측정 실적</th>
+                {renderMonthCells(summary.actualTotals, {}, tableMonthStyle)}
+                <th style={tableTotalStyle}>{renderGrandTotal(summary.actualGrandTotal)}</th>
               </tr>
               <tr>
-                <th>월별 공정률</th>
-                {renderMonthCells(summary.monthlyRates, { percent: true })}
-                <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
+                <th style={tableLabelStyle}>월별 공정률</th>
+                {renderMonthCells(summary.monthlyRates, { percent: true }, tableMonthStyle)}
+                <th style={tableTotalStyle}>
+                  {renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}
+                </th>
               </tr>
               <tr>
-                <th>누적 공정률</th>
-                {renderMonthCells(summary.cumulativeRates, { percent: true })}
-                <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
+                <th style={tableLabelStyle}>누적 공정률</th>
+                {renderMonthCells(summary.cumulativeRates, { percent: true }, tableMonthStyle)}
+                <th style={tableTotalStyle}>
+                  {renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}
+                </th>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
-      <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
+
+      <section className="card">
+        <h2>지점별 측정 계획 / 실적</h2>
+        <div className="table-wrap">
+          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={tableLabelStyle}>
+                  분류
+                </th>
+                <th rowSpan={2} style={tableLabelStyle}>
+                  그룹
+                </th>
+                <th rowSpan={2} style={tableCodeStyle}>
+                  지점 코드
+                </th>
+                <th rowSpan={2} style={tableNameStyle}>
+                  지점명
+                </th>
+                <th colSpan={13}>측정 계획</th>
+                <th colSpan={13}>유량측정 실적</th>
+              </tr>
+              <tr>
+                {monthLabels.map((label) => (
+                  <th key={`detail-plan-${label}`} style={tableMonthStyle}>
+                    {label}
+                  </th>
+                ))}
+                <th style={tableTotalStyle}>총</th>
+                {monthLabels.map((label) => (
+                  <th key={`detail-actual-${label}`} style={tableMonthStyle}>
+                    {label}
+                  </th>
+                ))}
+                <th style={tableTotalStyle}>총</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stationRows.map(({ station, planValues, actualValues, planTotal, actualTotal }) => (
+                <tr key={station.id}>
+                  <td style={tableLabelStyle}>{station.classification || '일반 지점'}</td>
+                  <td style={tableLabelStyle}>{station.groupName}</td>
+                  <td style={tableCodeStyle}>{station.code || ''}</td>
+                  <td style={tableNameStyle}>{station.name || ''}</td>
+                  {monthLabels.map((_, idx) => (
+                    <td key={`plan-${station.id}-${idx}`} style={tableMonthStyle}>
+                      <input
+                        className="cell-input"
+                        style={processInputStyle}
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={station.processPlan?.[idx] ?? ''}
+                        onChange={(e) => updateProcessPlan(station.id, idx, e.target.value)}
+                      />
+                    </td>
+                  ))}
+                  <td style={tableTotalStyle}>{fmt(planTotal, 0)}</td>
+                  {monthLabels.map((_, idx) => (
+                    <td key={`actual-${station.id}-${idx}`} style={tableMonthStyle}>
+                      {actualValues[idx] || ''}
+                    </td>
+                  ))}
+                  <td style={tableTotalStyle}>{fmt(actualTotal, 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   )
 }
@@ -1971,7 +1846,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>지점별 자료 관리 PWA</h1>
+          <h1>수위-유량 곡선식 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
