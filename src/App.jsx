@@ -758,30 +758,27 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
     tableLayout: 'auto'
   }
 
-const monthCellStyle = {
-  padding: '4px 4px',
-  whiteSpace: 'nowrap',
-  width: '46px',
-  minWidth: '46px',
-  maxWidth: '46px',
-  textAlign: 'center',
-  overflow: 'visible',
-  textOverflow: 'clip',
-  fontSize: '12px'
-}
+  const monthCellStyle = {
+    padding: '4px 4px',
+    whiteSpace: 'nowrap',
+    width: '46px',
+    minWidth: '46px',
+    maxWidth: '46px',
+    textAlign: 'center',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    fontSize: '12px'
+  }
 
-const leftCellStyle = {
-  padding: '4px 6px',
-  whiteSpace: 'nowrap',
-  width: '1%',
-  minWidth: '1%',
-  textAlign: 'center'
-}
-
-const stationNameCellStyle = {
-  ...leftCellStyle,
-  textAlign: 'left'
-}
+  const inputStyle = {
+    width: '100%',
+    minWidth: '46px',
+    height: '30px',
+    padding: '0 2px',
+    textAlign: 'center',
+    boxSizing: 'border-box',
+    fontSize: '12px'
+  }
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -1005,10 +1002,10 @@ const stationNameCellStyle = {
         <table className="spreadsheet" style={tableStyle}>
           <thead>
             <tr>
-              <th rowSpan={2} style={leftCellStyle}>분류</th>
-              <th rowSpan={2} style={leftCellStyle}>그룹</th>
-              <th rowSpan={2} style={leftCellStyle}>지점 코드</th>
-              <th rowSpan={2} style={stationNameCellStyle}>지점명</th>
+              <th rowSpan={2}>분류</th>
+              <th rowSpan={2}>그룹</th>
+              <th rowSpan={2}>지점 코드</th>
+              <th rowSpan={2}>지점명</th>
               {showPlanMonths ? (
                 <th colSpan={13}>측정 계획</th>
               ) : (
@@ -1036,10 +1033,10 @@ const stationNameCellStyle = {
             {stationRows.map(
               ({ station, planValues, actualValues, planTotal, actualTotal }, rowIndex) => (
                 <tr key={station.id}>
-                  <td style={leftCellStyle}>{station.classification || '일반 지점'}</td>
-                  <td style={leftCellStyle}>{station.groupName}</td>
-                  <td style={leftCellStyle}>{station.code || ''}</td>
-                  <td style={stationNameCellStyle}>{station.name || ''}</td>
+                  <td style={monthCellStyle}>{station.classification || '일반 지점'}</td>
+                  <td style={monthCellStyle}>{station.groupName}</td>
+                  <td style={monthCellStyle}>{station.code || ''}</td>
+                  <td style={monthCellStyle}>{station.name || ''}</td>
                   {showPlanMonths &&
                     monthLabels.map((_, colIndex) => (
                       <td
