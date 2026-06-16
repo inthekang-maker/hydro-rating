@@ -1114,100 +1114,6 @@ const inputStyle = {
   )
 }
 
-function DragSelectTable({ className = 'spreadsheet', columns, rows, renderCell }) {
-  const [selection, setSelection] = useState(null)
-  const [isDragging, setIsDragging] = useState(false)
-
-  useEffect(() => {
-    const stopDrag = () => setIsDragging(false)
-    window.addEventListener('mouseup', stopDrag)
-    return () => window.removeEventListener('mouseup', stopDrag)
-  }, [])
-
-  const normalizeRange = (range) => {
-    if (!range) return null
-    return {
-      startRow: Math.min(range.startRow, range.endRow),
-      endRow: Math.max(range.startRow, range.endRow),
-      startCol: Math.min(range.startCol, range.endCol),
-      endCol: Math.max(range.startCol, range.endCol)
-    }
-  }
-
-  const isSelected = (rowIndex, colIndex) => {
-    const r = normalizeRange(selection)
-    if (!r) return false
-    return (
-      rowIndex >= r.startRow &&
-      rowIndex <= r.endRow &&
-      colIndex >= r.startCol &&
-      colIndex <= r.endCol
-    )
-  }
-
-  const selectCell = (rowIndex, colIndex) => {
-    setSelection({
-      startRow: rowIndex,
-      endRow: rowIndex,
-      startCol: colIndex,
-      endCol: colIndex
-    })
-  }
-
-  const extendSelection = (rowIndex, colIndex) => {
-    setSelection((prev) => {
-      if (!prev) {
-        return {
-          startRow: rowIndex,
-          endRow: rowIndex,
-          startCol: colIndex,
-          endCol: colIndex
-        }
-      }
-      return {
-        startRow: prev.startRow,
-        endRow: rowIndex,
-        startCol: prev.startCol,
-        endCol: colIndex
-      }
-    })
-  }
-
-  return (
-    <table className={className}>
-      <thead>
-        <tr>
-          {columns.map((label) => (
-            <th key={label}>{label}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, rowIndex) => (
-          <tr key={row.key ?? rowIndex}>
-            {columns.map((_, colIndex) => (
-              <td
-                key={`${row.key ?? rowIndex}-${colIndex}`}
-                className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                onMouseDown={() => {
-                  setIsDragging(true)
-                  selectCell(rowIndex, colIndex)
-                }}
-                onMouseEnter={() => {
-                  if (!isDragging) return
-                  extendSelection(rowIndex, colIndex)
-                }}
-              >
-                {renderCell(row, rowIndex, colIndex)}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  )
-}
-
 function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
@@ -1414,56 +1320,45 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         </div>
       </section>
 
-       <section className="card">
-  <h2>측정성과 공정률 요약</h2>
-  <div className="table-wrap">
-    <DragSelectTable
-      className="spreadsheet"
-      columns={['구분', ...monthLabels, '총']}
-      rows={[
-        {
-          key: 'plan',
-          label: '측정 계획',
-          values: summary.planTotals,
-          grandValue: summary.planGrandTotal,
-          percent: false
-        },
-        {
-          key: 'actual',
-          label: '유량측정 실적',
-          values: summary.actualTotals,
-          grandValue: summary.actualGrandTotal,
-          percent: false
-        },
-        {
-          key: 'monthly',
-          label: '월별 공정률',
-          values: summary.monthlyRates,
-          grandValue: summary.monthlyRates[11] ?? null,
-          percent: true
-        },
-        {
-          key: 'cumulative',
-          label: '누적 공정률',
-          values: summary.cumulativeRates,
-          grandValue: summary.cumulativeRates[11] ?? null,
-          percent: true
-        }
-      ]}
-      renderCell={(row, rowIndex, colIndex) => {
-        if (colIndex === 0) return row.label
-        if (colIndex === monthLabels.length + 1) {
-          if (row.grandValue === null || row.grandValue === undefined) return ''
-          return row.percent ? `${fmt(row.grandValue, 1)}%` : fmt(row.grandValue, 0)
-        }
-        const value = row.values[colIndex - 1]
-        if (value === null || value === undefined) return ''
-        return row.percent ? `${fmt(value, 1)}%` : fmt(value, 0)
-      }}
-    />
-  </div>
-</section>
-<ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
+      <section className="card">
+        <h2>측정성과 공정률 요약</h2>
+        <div className="table-wrap">
+          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                <th>구분</th>
+                {monthLabels.map((label) => (
+                  <th key={`head-${label}`}>{label}</th>
+                ))}
+                <th>총</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>측정 계획</th>
+                {renderMonthCells(summary.planTotals)}
+                <th>{renderGrandTotal(summary.planGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>유량측정 실적</th>
+                {renderMonthCells(summary.actualTotals)}
+                <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>월별 공정률</th>
+                {renderMonthCells(summary.monthlyRates, { percent: true })}
+                <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
+              </tr>
+              <tr>
+                <th>누적 공정률</th>
+                {renderMonthCells(summary.cumulativeRates, { percent: true })}
+                <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
     </div>
   )
 }
@@ -2419,101 +2314,108 @@ export default function App() {
         />
       </section>
 
-     <section className="card">
-  <div className="section-header">
-    <h2>4. 수위별 환산유량표</h2>
-    <button
-      className="btn secondary"
-      onClick={() => setCurveTableOpen((prev) => !prev)}
-    >
-      {curveTableOpen ? '접기' : '펼치기'}
-    </button>
-  </div>
+      <section className="card">
+        <div className="section-header">
+          <h2>4. 수위별 환산유량표</h2>
+          <button
+            className="btn secondary"
+            onClick={() => setCurveTableOpen((prev) => !prev)}
+          >
+            {curveTableOpen ? '접기' : '펼치기'}
+          </button>
+        </div>
 
-  {curveTableOpen &&
-    curveRowsBySection.map(({ section, rows }) => {
-      const curveTableRows = rows.map((r, idx) => ({
-        key: idx,
-        hText: fmt(r.h, 2),
-        qText: fmt(r.q, 3)
-      }))
+        {curveTableOpen &&
+          curveRowsBySection.map(({ section, rows }) => (
+            <div className="subcard" key={section.id}>
+              <h3>
+                {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
+              </h3>
+              <p className="muted">
+                Q = {section.a} × (h - {section.b})^{section.c}
+                {section.lowNote ? ` / ${section.lowNote}` : ''}
+                {section.highNote ? ` / ${section.highNote}` : ''}
+              </p>
+              <div className="table-wrap small">
+                <table className="spreadsheet flow-table" style={tableAutoStyle}>
+                  <thead>
+                    <tr>
+                      <th>수위(m)</th>
+                      <th>유량(m³/s)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, idx) => (
+                      <tr key={idx}>
+                        <td>{fmt(r.h, 2)}</td>
+                        <td>{fmt(r.q, 3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+      </section>
 
-      return (
-        <div className="subcard" key={section.id}>
-          <h3>
-            {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
-          </h3>
-          <p className="muted">
-            Q = {section.a} × (h - {section.b})^{section.c}
-            {section.lowNote ? ` / ${section.lowNote}` : ''}
-            {section.highNote ? ` / ${section.highNote}` : ''}
-          </p>
-          <div className="table-wrap small">
-            <DragSelectTable
-              className="spreadsheet flow-table"
-              columns={['수위(m)', '유량(m³/s)']}
-              rows={curveTableRows}
-              renderCell={(row, rowIndex, colIndex) => {
-                if (colIndex === 0) return row.hText
-                return row.qText
-              }}
-            />
+      <section className="card">
+        <div className="section-header">
+          <h2>5. 상대오차 계산</h2>
+          <div className="grid-actions">
+            <label>
+              연도별
+              <select
+                value={relativeErrorYearFilter}
+                onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
+              >
+                {measurementYearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year === '전체' ? '전체' : `${year}년`}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              수위(h) 정렬
+              <select
+                value={relativeErrorSort}
+                onChange={(e) => setRelativeErrorSort(e.target.value)}
+              >
+                <option value="기본">기본</option>
+                <option value="오름차순">오름차순</option>
+                <option value="내림차순">내림차순</option>
+              </select>
+            </label>
           </div>
         </div>
-      )
-    })}
-</section> 
-
-<section className="card">
-  <div className="section-header">
-    <h2>5. 상대오차 계산</h2>
-    <div className="grid-actions">
-      <label>
-        연도별
-        <select
-          value={relativeErrorYearFilter}
-          onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
-        >
-          {measurementYearOptions.map((year) => (
-            <option key={year} value={year}>
-              {year === '전체' ? '전체' : `${year}년`}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        수위(h) 정렬
-        <select
-          value={relativeErrorSort}
-          onChange={(e) => setRelativeErrorSort(e.target.value)}
-        >
-          <option value="기본">기본</option>
-          <option value="오름차순">오름차순</option>
-          <option value="내림차순">내림차순</option>
-        </select>
-      </label>
-    </div>
-  </div>
-  <div className="table-wrap">
-    <DragSelectTable
-      className="spreadsheet flow-table"
-      columns={['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)']}
-      rows={filteredRelativeErrors.map((row) => ({
-        ...row,
-        key: row.id
-      }))}
-      renderCell={(row, rowIndex, colIndex) => {
-        if (colIndex === 0) return row.datetime
-        if (colIndex === 1) return row.h
-        if (colIndex === 2) return row.q
-        if (colIndex === 3) return row.sectionName
-        if (colIndex === 4) return row.curveQ === null ? '' : fmt(row.curveQ, 3)
-        return row.error === null ? '' : fmt(row.error, 2)
-      }}
-    />
-  </div>
-  <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
-</section>
+        <div className="table-wrap">
+          <table className="spreadsheet flow-table" style={tableAutoStyle}>
+            <thead>
+              <tr>
+                <th>측정일시</th>
+                <th>수위(h)</th>
+                <th>측정유량</th>
+                <th>곡선식 적용구간</th>
+                <th>곡선식 유량</th>
+                <th>상대오차(%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRelativeErrors.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.datetime}</td>
+                  <td>{row.h}</td>
+                  <td>{row.q}</td>
+                  <td>{row.sectionName}</td>
+                  <td>{row.curveQ === null ? '' : fmt(row.curveQ, 3)}</td>
+                  <td>{row.error === null ? '' : fmt(row.error, 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
+      </section>
 
       <section className="card chart-card">
         <h2>6. 그래프</h2>
