@@ -2464,24 +2464,55 @@ export default function App() {
     })}
 </section> 
 
-      <section className="card">
+<section className="card">
   <div className="section-header">
     <h2>5. 상대오차 계산</h2>
-    ...
+    <div className="grid-actions">
+      <label>
+        연도별
+        <select
+          value={relativeErrorYearFilter}
+          onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
+        >
+          {measurementYearOptions.map((year) => (
+            <option key={year} value={year}>
+              {year === '전체' ? '전체' : `${year}년`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        수위(h) 정렬
+        <select
+          value={relativeErrorSort}
+          onChange={(e) => setRelativeErrorSort(e.target.value)}
+        >
+          <option value="기본">기본</option>
+          <option value="오름차순">오름차순</option>
+          <option value="내림차순">내림차순</option>
+        </select>
+      </label>
+    </div>
   </div>
   <div className="table-wrap">
-    <table className="spreadsheet flow-table" style={tableAutoStyle}>
-      <thead>...</thead>
-      <tbody>
-        {filteredRelativeErrors.map((row) => (
-          <tr key={row.id}>
-            ...
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <DragSelectTable
+      className="spreadsheet flow-table"
+      columns={['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)']}
+      rows={filteredRelativeErrors.map((row) => ({
+        ...row,
+        key: row.id
+      }))}
+      renderCell={(row, rowIndex, colIndex) => {
+        if (colIndex === 0) return row.datetime
+        if (colIndex === 1) return row.h
+        if (colIndex === 2) return row.q
+        if (colIndex === 3) return row.sectionName
+        if (colIndex === 4) return row.curveQ === null ? '' : fmt(row.curveQ, 3)
+        return row.error === null ? '' : fmt(row.error, 2)
+      }}
+    />
   </div>
-  <p className="muted">...</p>
+  <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
 </section>
 
       <section className="card chart-card">
