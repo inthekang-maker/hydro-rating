@@ -1029,7 +1029,7 @@ const inputStyle = {
       </div>
 
       <div className="table-wrap" ref={tableRef}>
-        <table className="spreadsheet" style={tableStyle}>
+        <table className="spreadsheet plan-matrix-table" style={tableStyle}>
           <thead>
             <tr>
               <th rowSpan={2} style={leftCellStyle}>분류</th>
@@ -1284,7 +1284,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
             분류
             <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
               <option value="전체">전체</option>
-              <option value="AI 지점">AI 지점</option>
+              <option value="자동유량">자동유량</option>
               <option value="일반 지점">일반 지점</option>
             </select>
           </label>
@@ -2226,7 +2226,7 @@ export default function App() {
                 updateStation(selectedStation.id, { classification: e.target.value })
               }
             >
-              <option value="AI 지점">AI 지점</option>
+              <option value="자동유량">자동유량</option>
               <option value="일반 지점">일반 지점</option>
             </select>
           </label>

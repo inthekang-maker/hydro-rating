@@ -148,14 +148,23 @@ table.spreadsheet td {
   cursor: cell;
 }
 
-table.spreadsheet tr {
+table.spreadsheet td {
+  cursor: cell;
+}
+
+/* 읽기 전용 표만 드래그 선택 금지 */
+table.spreadsheet:not(.compact-table):not(.plan-matrix-table) th,
+table.spreadsheet:not(.compact-table):not(.plan-matrix-table) td {
   -webkit-user-select: none;
   -moz-user-select: none;
   user-select: none;
 }
 
-table.spreadsheet th,
-table.spreadsheet td {
+/* 입력 표는 선택 허용 */
+table.spreadsheet.compact-table th,
+table.spreadsheet.compact-table td,
+table.spreadsheet.plan-matrix-table th,
+table.spreadsheet.plan-matrix-table td {
   -webkit-user-select: text;
   -moz-user-select: text;
   user-select: text;
