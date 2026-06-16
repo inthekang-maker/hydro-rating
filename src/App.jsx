@@ -1114,6 +1114,211 @@ const inputStyle = {
   )
 }
 
+function CopyableMatrixTable({
+  className = 'spreadsheet',
+  matrix,
+  bodyHeaderCols = [],
+  style
+}) {
+  const [selection, setSelection] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const wrapperRef = useRef(null)
+
+  const normalizedMatrix = useMemo(() => {
+    if (!Array.isArray(matrix)) return []
+    return matrix.map((row) =>
+      Array.isArray(row)
+        ? row.map((cell) => (cell === null || cell === undefined ? '' : String(cell)))
+        : []
+    )
+  }, [matrix])
+
+  const rowCount = normalizedMatrix.length
+  const colCount = useMemo(
+    () => normalizedMatrix.reduce((max, row) => Math.max(max, row.length), 0),
+    [normalizedMatrix]
+  )
+  const bodyHeaderColSet = useMemo(() => new Set(bodyHeaderCols), [bodyHeaderCols])
+
+  const normalizeRange = (range) => {
+    if (!range) return null
+    return {
+      startRow: Math.min(range.startRow, range.endRow),
+      endRow: Math.max(range.startRow, range.endRow),
+      startCol: Math.min(range.startCol, range.endCol),
+      endCol: Math.max(range.startCol, range.endCol)
+    }
+  }
+
+  const isSelected = (rowIndex, colIndex) => {
+    const r = normalizeRange(selection)
+    if (!r) return false
+    return (
+      rowIndex >= r.startRow &&
+      rowIndex <= r.endRow &&
+      colIndex >= r.startCol &&
+      colIndex <= r.endCol
+    )
+  }
+
+  const selectCell = (rowIndex, colIndex) => {
+    setSelection({
+      startRow: rowIndex,
+      endRow: rowIndex,
+      startCol: colIndex,
+      endCol: colIndex
+    })
+  }
+
+  const extendSelection = (rowIndex, colIndex) => {
+    setSelection((prev) => {
+      if (!prev) {
+        return {
+          startRow: rowIndex,
+          endRow: rowIndex,
+          startCol: colIndex,
+          endCol: colIndex
+        }
+      }
+      return {
+        startRow: prev.startRow,
+        endRow: rowIndex,
+        startCol: prev.startCol,
+        endCol: colIndex
+      }
+    })
+  }
+
+  const selectAll = () => {
+    if (rowCount === 0 || colCount === 0) return
+    setSelection({
+      startRow: 0,
+      endRow: rowCount - 1,
+      startCol: 0,
+      endCol: colCount - 1
+    })
+  }
+
+  const copySelection = async () => {
+    const r = normalizeRange(selection)
+    if (!r) return
+
+    const lines = []
+    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+      const row = normalizedMatrix[rowIndex] || []
+      const cells = []
+      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+        cells.push(String(row[colIndex] ?? ''))
+      }
+      lines.push(cells.join('\t'))
+    }
+
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const temp = document.createElement('textarea')
+      temp.value = text
+      document.body.appendChild(temp)
+      temp.select()
+      document.execCommand('copy')
+      document.body.removeChild(temp)
+    }
+  }
+
+  useEffect(() => {
+    const stopDrag = () => setIsDragging(false)
+    window.addEventListener('mouseup', stopDrag)
+    return () => window.removeEventListener('mouseup', stopDrag)
+  }, [])
+
+  const handleKeyDown = async (e) => {
+    const isMod = e.ctrlKey || e.metaKey
+
+    if (isMod && e.key.toLowerCase() === 'a') {
+      e.preventDefault()
+      selectAll()
+      return
+    }
+
+    if (isMod && e.key.toLowerCase() === 'c') {
+      if (selection) {
+        e.preventDefault()
+        await copySelection()
+      }
+    }
+  }
+
+  const handleMouseDown = (rowIndex, colIndex, event) => {
+    event.preventDefault()
+    setIsDragging(true)
+    wrapperRef.current?.focus()
+    selectCell(rowIndex, colIndex)
+  }
+
+  const handleMouseEnter = (rowIndex, colIndex) => {
+    if (!isDragging) return
+    extendSelection(rowIndex, colIndex)
+  }
+
+  return (
+    <div
+      ref={wrapperRef}
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      style={{ outline: 'none' }}
+    >
+      <table
+        className={className}
+        style={{
+          tableLayout: 'auto',
+          width: 'max-content',
+          minWidth: '100%',
+          userSelect: 'none',
+          ...style
+        }}
+      >
+        <thead>
+          <tr>
+            {(normalizedMatrix[0] || []).map((cell, colIndex) => (
+              <th
+                key={`head-${colIndex}`}
+                className={isSelected(0, colIndex) ? 'selected-cell' : ''}
+                onMouseDown={(e) => handleMouseDown(0, colIndex, e)}
+                onMouseEnter={() => handleMouseEnter(0, colIndex)}
+              >
+                {cell}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {normalizedMatrix.slice(1).map((row, rowOffset) => {
+            const rowIndex = rowOffset + 1
+            return (
+              <tr key={`row-${rowIndex}`}>
+                {Array.from({ length: colCount }).map((_, colIndex) => {
+                  const Tag = bodyHeaderColSet.has(colIndex) ? 'th' : 'td'
+                  return (
+                    <Tag
+                      key={`cell-${rowIndex}-${colIndex}`}
+                      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                      onMouseDown={(e) => handleMouseDown(rowIndex, colIndex, e)}
+                      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
+                    >
+                      {row[colIndex] ?? ''}
+                    </Tag>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
@@ -1323,39 +1528,41 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       <section className="card">
         <h2>측정성과 공정률 요약</h2>
         <div className="table-wrap">
-          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
-            <thead>
-              <tr>
-                <th>구분</th>
-                {monthLabels.map((label) => (
-                  <th key={`head-${label}`}>{label}</th>
-                ))}
-                <th>총</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th>측정 계획</th>
-                {renderMonthCells(summary.planTotals)}
-                <th>{renderGrandTotal(summary.planGrandTotal)}</th>
-              </tr>
-              <tr>
-                <th>유량측정 실적</th>
-                {renderMonthCells(summary.actualTotals)}
-                <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
-              </tr>
-              <tr>
-                <th>월별 공정률</th>
-                {renderMonthCells(summary.monthlyRates, { percent: true })}
-                <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
-              </tr>
-              <tr>
-                <th>누적 공정률</th>
-                {renderMonthCells(summary.cumulativeRates, { percent: true })}
-                <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
-              </tr>
-            </tbody>
-          </table>
+          <CopyableMatrixTable
+            className="spreadsheet"
+            bodyHeaderCols={[0]}
+            matrix={[
+              ['구분', ...monthLabels, '총'],
+              [
+                '측정 계획',
+                ...summary.planTotals.map((value) => (value === null || value === undefined ? '' : fmt(value, 0))),
+                summary.planGrandTotal === null || summary.planGrandTotal === undefined
+                  ? ''
+                  : fmt(summary.planGrandTotal, 0)
+              ],
+              [
+                '유량측정 실적',
+                ...summary.actualTotals.map((value) => (value === null || value === undefined ? '' : fmt(value, 0))),
+                summary.actualGrandTotal === null || summary.actualGrandTotal === undefined
+                  ? ''
+                  : fmt(summary.actualGrandTotal, 0)
+              ],
+              [
+                '월별 공정률',
+                ...summary.monthlyRates.map((value) => (value === null || value === undefined ? '' : `${fmt(value, 1)}%`)),
+                summary.monthlyRates[11] === null || summary.monthlyRates[11] === undefined
+                  ? ''
+                  : `${fmt(summary.monthlyRates[11], 1)}%`
+              ],
+              [
+                '누적 공정률',
+                ...summary.cumulativeRates.map((value) => (value === null || value === undefined ? '' : `${fmt(value, 1)}%`)),
+                summary.cumulativeRates[11] === null || summary.cumulativeRates[11] === undefined
+                  ? ''
+                  : `${fmt(summary.cumulativeRates[11], 1)}%`
+              ]
+            ]}
+          />
         </div>
       </section>
       <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
@@ -2337,22 +2544,13 @@ export default function App() {
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
               <div className="table-wrap small">
-                <table className="spreadsheet flow-table" style={tableAutoStyle}>
-                  <thead>
-                    <tr>
-                      <th>수위(m)</th>
-                      <th>유량(m³/s)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, idx) => (
-                      <tr key={idx}>
-                        <td>{fmt(r.h, 2)}</td>
-                        <td>{fmt(r.q, 3)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <CopyableMatrixTable
+                  className="spreadsheet flow-table"
+                  matrix={[
+                    ['수위(m)', '유량(m³/s)'],
+                    ...rows.map((r) => [fmt(r.h, 2), fmt(r.q, 3)])
+                  ]}
+                />
               </div>
             </div>
           ))}
@@ -2389,30 +2587,20 @@ export default function App() {
           </div>
         </div>
         <div className="table-wrap">
-          <table className="spreadsheet flow-table" style={tableAutoStyle}>
-            <thead>
-              <tr>
-                <th>측정일시</th>
-                <th>수위(h)</th>
-                <th>측정유량</th>
-                <th>곡선식 적용구간</th>
-                <th>곡선식 유량</th>
-                <th>상대오차(%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRelativeErrors.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.datetime}</td>
-                  <td>{row.h}</td>
-                  <td>{row.q}</td>
-                  <td>{row.sectionName}</td>
-                  <td>{row.curveQ === null ? '' : fmt(row.curveQ, 3)}</td>
-                  <td>{row.error === null ? '' : fmt(row.error, 2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <CopyableMatrixTable
+            className="spreadsheet flow-table"
+            matrix={[
+              ['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)'],
+              ...filteredRelativeErrors.map((row) => [
+                row.datetime,
+                row.h,
+                row.q,
+                row.sectionName,
+                row.curveQ === null ? '' : fmt(row.curveQ, 3),
+                row.error === null ? '' : fmt(row.error, 2)
+              ])
+            ]}
+          />
         </div>
         <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
       </section>
