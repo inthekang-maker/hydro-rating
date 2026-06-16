@@ -1369,44 +1369,50 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       <section className="card">
         <h2>측정성과 공정률</h2>
         <div className="row">
-          <label>
-            분류
-            <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
-              <option value="전체">전체</option>
-              <option value="자동유량">자동유량</option>
-              <option value="일반 지점">일반 지점</option>
-            </select>
-          </label>
-          <label>
-            그룹
-            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-              {groupOptions.map((groupName) => (
-                <option key={groupName} value={groupName}>
-                  {groupName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            지점
-            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-              {stationOptions.map((stationOption) =>
-                stationOption === '전체' ? (
-                  <option key="전체" value="전체">
-                    전체
-                  </option>
-                ) : (
-                  <option key={stationOption.id} value={stationOption.id}>
-                    {stationOption.label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
-          <div className="muted" style={{ alignSelf: 'end' }}>
-            기준 연도: {currentYear}년
-          </div>
-        </div>
+  <label>
+    그룹
+    <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+      {groupOptions.map((groupName) => (
+        <option key={groupName} value={groupName}>
+          {groupName}
+        </option>
+      ))}
+    </select>
+  </label>
+
+  <label>
+    분류
+    <select
+      value={classificationFilter}
+      onChange={(e) => setClassificationFilter(e.target.value)}
+    >
+      <option value="전체">전체</option>
+      <option value="AI 지점">AI 지점</option>
+      <option value="일반 지점">일반 지점</option>
+    </select>
+  </label>
+
+  <label>
+    지점
+    <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
+      {stationOptions.map((stationOption) =>
+        stationOption === '전체' ? (
+          <option key="전체" value="전체">
+            전체
+          </option>
+        ) : (
+          <option key={stationOption.id} value={stationOption.id}>
+            {stationOption.label}
+          </option>
+        )
+      )}
+    </select>
+  </label>
+
+  <div className="muted" style={{ alignSelf: 'end' }}>
+    기준 연도: {currentYear}년
+  </div>
+</div>
       </section>
 
       <section className="card">
