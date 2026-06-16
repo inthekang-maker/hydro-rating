@@ -578,10 +578,11 @@ function SpreadsheetGrid({
         if (!col) continue
         cells.push(String(row[col.key] ?? ''))
       }
-      lines.push(cells.join('\t'))
+      lines.push(cells.join('	'))
     }
 
-    const text = lines.join('\n')
+    const text = lines.join('
+')
     try {
       await navigator.clipboard.writeText(text)
     } catch {
@@ -595,9 +596,11 @@ function SpreadsheetGrid({
   }
 
   const pasteText = (text, rowIndex, colIndex) => {
-    const lines = text.replace(/\r/g, '').split('\n')
+    const lines = text.replace(/
+/g, '').split('
+')
     const matrix = lines
-      .map((line) => line.split('\t'))
+      .map((line) => line.split('	'))
       .filter((line) => line.some((cell) => cell !== ''))
 
     if (matrix.length === 0) return
@@ -775,40 +778,42 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
     tableLayout: 'auto'
   }
 
-const monthCellStyle = {
-  padding: '4px 4px',
-  whiteSpace: 'nowrap',
-  width: '46px',
-  minWidth: '46px',
-  maxWidth: '46px',
-  textAlign: 'center',
-  overflow: 'visible',
-  textOverflow: 'clip',
-  fontSize: '12px'
-}
+  const monthCellStyle = {
+    padding: '4px 4px',
+    whiteSpace: 'nowrap',
+    width: '46px',
+    minWidth: '46px',
+    maxWidth: '46px',
+    textAlign: 'center',
+    overflow: 'visible',
+    textOverflow: 'clip',
+    fontSize: '12px'
+  }
 
-const leftCellStyle = {
-  padding: '4px 6px',
-  whiteSpace: 'nowrap',
-  width: '1%',
-  minWidth: '1%',
-  textAlign: 'center'
-}
+  const leftCellStyle = {
+    padding: '4px 6px',
+    whiteSpace: 'nowrap',
+    width: '1%',
+    minWidth: '1%',
+    textAlign: 'center'
+  }
 
-const stationNameCellStyle = {
-  ...leftCellStyle,
-  textAlign: 'left'
-}
+  const stationNameCellStyle = {
+    ...leftCellStyle,
+    textAlign: 'left'
+  }
 
-const inputStyle = {
-  width: '100%',
-  minWidth: '46px',
-  height: '30px',
-  padding: '0 2px',
-  textAlign: 'center',
-  boxSizing: 'border-box',
-  fontSize: '12px'
-}
+  const inputStyle = {
+    width: '100%',
+    minWidth: '46px',
+    height: '30px',
+    padding: '0 2px',
+    textAlign: 'center',
+    boxSizing: 'border-box',
+    fontSize: '12px'
+  }
+
+  const hiddenColumnCount = 18
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -860,12 +865,23 @@ const inputStyle = {
   }
 
   const selectAll = () => {
-    if (stationRows.length === 0 || monthLabels.length === 0) return
+    if (stationRows.length === 0) return
+
+    if (showPlanMonths) {
+      setSelection({
+        startRow: 0,
+        endRow: stationRows.length - 1,
+        startCol: 0,
+        endCol: monthLabels.length - 1
+      })
+      return
+    }
+
     setSelection({
       startRow: 0,
       endRow: stationRows.length - 1,
       startCol: 0,
-      endCol: monthLabels.length - 1
+      endCol: hiddenColumnCount - 1
     })
   }
 
@@ -889,17 +905,23 @@ const inputStyle = {
     const r = normalizeRange(selection)
     if (!r) return
 
-    stationRows.slice(r.startRow, r.endRow + 1).forEach((row) => {
-      const nextPlan = Array.from(
-        { length: 12 },
-        (_, idx) => String(row.station.processPlan?.[idx] ?? '')
-      )
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
-        nextPlan[colIndex] = ''
-      }
-      updateProcessPlanRow(row.station.id, nextPlan)
-    })
+    if (showPlanMonths) {
+      stationRows.slice(r.startRow, r.endRow + 1).forEach((row) => {
+        const nextPlan = Array.from(
+          { length: 12 },
+          (_, idx) => String(row.station.processPlan?.[idx] ?? '')
+        )
+        for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+          if (colIndex < 0 || colIndex >= 12) continue
+          nextPlan[colIndex] = ''
+        }
+        updateProcessPlanRow(row.station.id, nextPlan)
+      })
+      return
+    }
+
+    // hidden mode is view-only: just clear selection
+    setSelection(null)
   }
 
   const copySelection = async () => {
@@ -911,10 +933,29 @@ const inputStyle = {
       const row = stationRows[rowIndex]
       if (!row) continue
       const cells = []
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        if (colIndex < 0 || colIndex >= 12) continue
-        cells.push(String(row.station.processPlan?.[colIndex] ?? ''))
+
+      if (showPlanMonths) {
+        for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+          if (colIndex < 0 || colIndex >= 12) continue
+          cells.push(String(row.station.processPlan?.[colIndex] ?? ''))
+        }
+      } else {
+        const rowValues = [
+          row.station.classification || '일반 지점',
+          row.station.groupName || '',
+          row.station.code || '',
+          row.station.name || '',
+          fmt(row.planTotal, 0),
+          ...row.actualValues.map((value) => String(value ?? '')),
+          fmt(row.actualTotal, 0)
+        ]
+
+        for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+          if (colIndex < 0 || colIndex >= rowValues.length) continue
+          cells.push(String(rowValues[colIndex] ?? ''))
+        }
       }
+
       lines.push(cells.join('\t'))
     }
 
@@ -967,7 +1008,7 @@ const inputStyle = {
     }
 
     if (isMod && e.key.toLowerCase() === 'c') {
-      if (selection) {
+      if (!showPlanMonths && selection) {
         e.preventDefault()
         await copySelection()
       }
@@ -1005,18 +1046,63 @@ const inputStyle = {
     return () => window.removeEventListener('mouseup', stopDrag)
   }, [])
 
+  useEffect(() => {
+    setSelection(null)
+    setIsDragging(false)
+  }, [showPlanMonths])
+
+  useEffect(() => {
+    if (showPlanMonths) return
+
+    const handleWindowKeyDown = (e) => {
+      const isMod = e.ctrlKey || e.metaKey
+      if (!isMod) return
+
+      if (e.key.toLowerCase() === 'c' && selection) {
+        e.preventDefault()
+        copySelection()
+      }
+
+      if (e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        selectAll()
+      }
+    }
+
+    window.addEventListener('keydown', handleWindowKeyDown)
+    return () => window.removeEventListener('keydown', handleWindowKeyDown)
+  }, [showPlanMonths, selection])
+
+  const renderHiddenSelectableCell = (value, rowIndex, colIndex, cellStyle = monthCellStyle) => (
+    <td
+      style={cellStyle}
+      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+      onMouseDown={() => {
+        setIsDragging(true)
+        selectCell(rowIndex, colIndex)
+      }}
+      onMouseEnter={() => {
+        if (!isDragging) return
+        extendSelection(rowIndex, colIndex)
+      }}
+      onClick={() => selectCell(rowIndex, colIndex)}
+    >
+      {value}
+    </td>
+  )
+
   return (
     <section className="card">
       <div className="section-header">
         <h2>지점별 측정 계획 / 실적</h2>
         <div className="grid-actions">
-          <button className="btn secondary" onClick={selectAll} disabled={!showPlanMonths}>
+          <button className="btn secondary" onClick={selectAll} disabled={showPlanMonths}>
             전체 선택
           </button>
-          <button className="btn secondary" onClick={copySelection} disabled={!showPlanMonths}>
+          <button className="btn secondary" onClick={copySelection} disabled={showPlanMonths}>
             선택 복사
           </button>
-          <button className="btn secondary" onClick={clearSelection} disabled={!showPlanMonths}>
+          <button className="btn secondary" onClick={clearSelection} disabled={showPlanMonths}>
             선택 삭제
           </button>
           <button
@@ -1060,262 +1146,182 @@ const inputStyle = {
             </tr>
           </thead>
           <tbody>
-            {stationRows.map(
-              ({ station, planValues, actualValues, planTotal, actualTotal }, rowIndex) => (
+            {stationRows.map((row, rowIndex) => {
+              const { station, actualValues, planTotal, actualTotal } = row
+              return (
                 <tr key={station.id}>
-                 <td style={leftCellStyle}>{station.classification || '일반 지점'}</td>
-                 <td style={leftCellStyle}>{station.groupName}</td>
-                 <td style={leftCellStyle}>{station.code || ''}</td>
-                 <td style={stationNameCellStyle}>{station.name || ''}</td>
-                  {showPlanMonths &&
-                    monthLabels.map((_, colIndex) => (
+                  {showPlanMonths ? (
+                    <>
+                      <td style={leftCellStyle}>{station.classification || '일반 지점'}</td>
+                      <td style={leftCellStyle}>{station.groupName}</td>
+                      <td style={leftCellStyle}>{station.code || ''}</td>
+                      <td style={stationNameCellStyle}>{station.name || ''}</td>
+
+                      {monthLabels.map((_, colIndex) => (
+                        <td
+                          key={`plan-${station.id}-${colIndex}`}
+                          style={monthCellStyle}
+                          className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                          onMouseDown={() => {
+                            setIsDragging(true)
+                            selectCell(rowIndex, colIndex)
+                          }}
+                          onMouseEnter={() => {
+                            if (!isDragging) return
+                            extendSelection(rowIndex, colIndex)
+                          }}
+                        >
+                          <input
+                            className="cell-input"
+                            style={inputStyle}
+                            data-plan-cell={`${rowIndex}-${colIndex}`}
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={station.processPlan?.[colIndex] ?? ''}
+                            onFocus={() => selectCell(rowIndex, colIndex)}
+                            onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                            onChange={(e) => updateProcessPlan(station.id, colIndex, e.target.value)}
+                            onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                          />
+                        </td>
+                      ))}
+
+                      <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>
+
+                      {monthLabels.map((_, idx) => (
+                        <td key={`actual-${station.id}-${idx}`} style={monthCellStyle}>
+                          {actualValues[idx] || ''}
+                        </td>
+                      ))}
+
+                      <td style={monthCellStyle}>{fmt(actualTotal, 0)}</td>
+                    </>
+                  ) : (
+                    <>
                       <td
-                        key={`plan-${station.id}-${colIndex}`}
-                        style={monthCellStyle}
-                        className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                        style={leftCellStyle}
+                        className={isSelected(rowIndex, 0) ? 'selected-cell' : ''}
                         onMouseDown={() => {
                           setIsDragging(true)
-                          selectCell(rowIndex, colIndex)
+                          selectCell(rowIndex, 0)
                         }}
                         onMouseEnter={() => {
                           if (!isDragging) return
-                          extendSelection(rowIndex, colIndex)
+                          extendSelection(rowIndex, 0)
                         }}
+                        onClick={() => selectCell(rowIndex, 0)}
                       >
-                        <input
-                          className="cell-input"
-                          style={inputStyle}
-                          data-plan-cell={`${rowIndex}-${colIndex}`}
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={station.processPlan?.[colIndex] ?? ''}
-                          onFocus={() => selectCell(rowIndex, colIndex)}
-                          onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                          onChange={(e) => updateProcessPlan(station.id, colIndex, e.target.value)}
-                          onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-                        />
+                        {station.classification || '일반 지점'}
                       </td>
-                    ))}
-                  <td style={monthCellStyle}>{fmt(planTotal, 0)}</td>
-                  {monthLabels.map((_, idx) => (
-                    <td key={`actual-${station.id}-${idx}`} style={monthCellStyle}>
-                      {actualValues[idx] || ''}
-                    </td>
-                  ))}
-                  <td style={monthCellStyle}>{fmt(actualTotal, 0)}</td>
+                      <td
+                        style={leftCellStyle}
+                        className={isSelected(rowIndex, 1) ? 'selected-cell' : ''}
+                        onMouseDown={() => {
+                          setIsDragging(true)
+                          selectCell(rowIndex, 1)
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDragging) return
+                          extendSelection(rowIndex, 1)
+                        }}
+                        onClick={() => selectCell(rowIndex, 1)}
+                      >
+                        {station.groupName}
+                      </td>
+                      <td
+                        style={leftCellStyle}
+                        className={isSelected(rowIndex, 2) ? 'selected-cell' : ''}
+                        onMouseDown={() => {
+                          setIsDragging(true)
+                          selectCell(rowIndex, 2)
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDragging) return
+                          extendSelection(rowIndex, 2)
+                        }}
+                        onClick={() => selectCell(rowIndex, 2)}
+                      >
+                        {station.code || ''}
+                      </td>
+                      <td
+                        style={stationNameCellStyle}
+                        className={isSelected(rowIndex, 3) ? 'selected-cell' : ''}
+                        onMouseDown={() => {
+                          setIsDragging(true)
+                          selectCell(rowIndex, 3)
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDragging) return
+                          extendSelection(rowIndex, 3)
+                        }}
+                        onClick={() => selectCell(rowIndex, 3)}
+                      >
+                        {station.name || ''}
+                      </td>
+
+                      <td
+                        style={monthCellStyle}
+                        className={isSelected(rowIndex, 4) ? 'selected-cell' : ''}
+                        onMouseDown={() => {
+                          setIsDragging(true)
+                          selectCell(rowIndex, 4)
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDragging) return
+                          extendSelection(rowIndex, 4)
+                        }}
+                        onClick={() => selectCell(rowIndex, 4)}
+                      >
+                        {fmt(planTotal, 0)}
+                      </td>
+
+                      {monthLabels.map((_, idx) => {
+                        const hiddenColIndex = 5 + idx
+                        return (
+                          <td
+                            key={`actual-${station.id}-${idx}`}
+                            style={monthCellStyle}
+                            className={isSelected(rowIndex, hiddenColIndex) ? 'selected-cell' : ''}
+                            onMouseDown={() => {
+                              setIsDragging(true)
+                              selectCell(rowIndex, hiddenColIndex)
+                            }}
+                            onMouseEnter={() => {
+                              if (!isDragging) return
+                              extendSelection(rowIndex, hiddenColIndex)
+                            }}
+                            onClick={() => selectCell(rowIndex, hiddenColIndex)}
+                          >
+                            {actualValues[idx] || ''}
+                          </td>
+                        )
+                      })}
+
+                      <td
+                        style={monthCellStyle}
+                        className={isSelected(rowIndex, 17) ? 'selected-cell' : ''}
+                        onMouseDown={() => {
+                          setIsDragging(true)
+                          selectCell(rowIndex, 17)
+                        }}
+                        onMouseEnter={() => {
+                          if (!isDragging) return
+                          extendSelection(rowIndex, 17)
+                        }}
+                        onClick={() => selectCell(rowIndex, 17)}
+                      >
+                        {fmt(actualTotal, 0)}
+                      </td>
+                    </>
+                  )}
                 </tr>
               )
-            )}
+            })}
           </tbody>
         </table>
       </div>
     </section>
-  )
-}
-
-function CopyableMatrixTable({
-  className = 'spreadsheet',
-  matrix,
-  bodyHeaderCols = [],
-  style
-}) {
-  const [selection, setSelection] = useState(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const wrapperRef = useRef(null)
-
-  const normalizedMatrix = useMemo(() => {
-    if (!Array.isArray(matrix)) return []
-    return matrix.map((row) =>
-      Array.isArray(row)
-        ? row.map((cell) => (cell === null || cell === undefined ? '' : String(cell)))
-        : []
-    )
-  }, [matrix])
-
-  const rowCount = normalizedMatrix.length
-  const colCount = useMemo(
-    () => normalizedMatrix.reduce((max, row) => Math.max(max, row.length), 0),
-    [normalizedMatrix]
-  )
-  const bodyHeaderColSet = useMemo(() => new Set(bodyHeaderCols), [bodyHeaderCols])
-
-  const normalizeRange = (range) => {
-    if (!range) return null
-    return {
-      startRow: Math.min(range.startRow, range.endRow),
-      endRow: Math.max(range.startRow, range.endRow),
-      startCol: Math.min(range.startCol, range.endCol),
-      endCol: Math.max(range.startCol, range.endCol)
-    }
-  }
-
-  const isSelected = (rowIndex, colIndex) => {
-    const r = normalizeRange(selection)
-    if (!r) return false
-    return (
-      rowIndex >= r.startRow &&
-      rowIndex <= r.endRow &&
-      colIndex >= r.startCol &&
-      colIndex <= r.endCol
-    )
-  }
-
-  const selectCell = (rowIndex, colIndex) => {
-    setSelection({
-      startRow: rowIndex,
-      endRow: rowIndex,
-      startCol: colIndex,
-      endCol: colIndex
-    })
-  }
-
-  const extendSelection = (rowIndex, colIndex) => {
-    setSelection((prev) => {
-      if (!prev) {
-        return {
-          startRow: rowIndex,
-          endRow: rowIndex,
-          startCol: colIndex,
-          endCol: colIndex
-        }
-      }
-      return {
-        startRow: prev.startRow,
-        endRow: rowIndex,
-        startCol: prev.startCol,
-        endCol: colIndex
-      }
-    })
-  }
-
-  const selectAll = () => {
-    if (rowCount === 0 || colCount === 0) return
-    setSelection({
-      startRow: 0,
-      endRow: rowCount - 1,
-      startCol: 0,
-      endCol: colCount - 1
-    })
-  }
-
-  const copySelection = async () => {
-    const r = normalizeRange(selection)
-    if (!r) return
-
-    const lines = []
-    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
-      const row = normalizedMatrix[rowIndex] || []
-      const cells = []
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        cells.push(String(row[colIndex] ?? ''))
-      }
-      lines.push(cells.join('\t'))
-    }
-
-    const text = lines.join('\n')
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const temp = document.createElement('textarea')
-      temp.value = text
-      document.body.appendChild(temp)
-      temp.select()
-      document.execCommand('copy')
-      document.body.removeChild(temp)
-    }
-  }
-
-  useEffect(() => {
-    const stopDrag = () => setIsDragging(false)
-    window.addEventListener('mouseup', stopDrag)
-    return () => window.removeEventListener('mouseup', stopDrag)
-  }, [])
-
-  const handleKeyDown = async (e) => {
-    const isMod = e.ctrlKey || e.metaKey
-
-    if (isMod && e.key.toLowerCase() === 'a') {
-      e.preventDefault()
-      selectAll()
-      return
-    }
-
-    if (isMod && e.key.toLowerCase() === 'c') {
-      if (selection) {
-        e.preventDefault()
-        await copySelection()
-      }
-    }
-  }
-
-  const handleMouseDown = (rowIndex, colIndex, event) => {
-    event.preventDefault()
-    setIsDragging(true)
-    wrapperRef.current?.focus()
-    selectCell(rowIndex, colIndex)
-  }
-
-  const handleMouseEnter = (rowIndex, colIndex) => {
-    if (!isDragging) return
-    extendSelection(rowIndex, colIndex)
-  }
-
-  return (
-    <div
-      ref={wrapperRef}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      style={{ outline: 'none' }}
-    >
-      <table
-        className={className}
-        style={{
-          tableLayout: 'auto',
-          width: 'max-content',
-          minWidth: '100%',
-          userSelect: 'none',
-          ...style
-        }}
-      >
-        <thead>
-          <tr>
-            {(normalizedMatrix[0] || []).map((cell, colIndex) => (
-              <th
-                key={`head-${colIndex}`}
-                className={isSelected(0, colIndex) ? 'selected-cell' : ''}
-                onMouseDown={(e) => handleMouseDown(0, colIndex, e)}
-                onMouseEnter={() => handleMouseEnter(0, colIndex)}
-              >
-                {cell}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {normalizedMatrix.slice(1).map((row, rowOffset) => {
-            const rowIndex = rowOffset + 1
-            return (
-              <tr key={`row-${rowIndex}`}>
-                {Array.from({ length: colCount }).map((_, colIndex) => {
-                  const Tag = bodyHeaderColSet.has(colIndex) ? 'th' : 'td'
-                  return (
-                    <Tag
-                      key={`cell-${rowIndex}-${colIndex}`}
-                      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                      onMouseDown={(e) => handleMouseDown(rowIndex, colIndex, e)}
-                      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
-                    >
-                      {row[colIndex] ?? ''}
-                    </Tag>
-                  )
-                })}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
   )
 }
 
@@ -1528,41 +1534,39 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       <section className="card">
         <h2>측정성과 공정률 요약</h2>
         <div className="table-wrap">
-          <CopyableMatrixTable
-            className="spreadsheet"
-            bodyHeaderCols={[0]}
-            matrix={[
-              ['구분', ...monthLabels, '총'],
-              [
-                '측정 계획',
-                ...summary.planTotals.map((value) => (value === null || value === undefined ? '' : fmt(value, 0))),
-                summary.planGrandTotal === null || summary.planGrandTotal === undefined
-                  ? ''
-                  : fmt(summary.planGrandTotal, 0)
-              ],
-              [
-                '유량측정 실적',
-                ...summary.actualTotals.map((value) => (value === null || value === undefined ? '' : fmt(value, 0))),
-                summary.actualGrandTotal === null || summary.actualGrandTotal === undefined
-                  ? ''
-                  : fmt(summary.actualGrandTotal, 0)
-              ],
-              [
-                '월별 공정률',
-                ...summary.monthlyRates.map((value) => (value === null || value === undefined ? '' : `${fmt(value, 1)}%`)),
-                summary.monthlyRates[11] === null || summary.monthlyRates[11] === undefined
-                  ? ''
-                  : `${fmt(summary.monthlyRates[11], 1)}%`
-              ],
-              [
-                '누적 공정률',
-                ...summary.cumulativeRates.map((value) => (value === null || value === undefined ? '' : `${fmt(value, 1)}%`)),
-                summary.cumulativeRates[11] === null || summary.cumulativeRates[11] === undefined
-                  ? ''
-                  : `${fmt(summary.cumulativeRates[11], 1)}%`
-              ]
-            ]}
-          />
+          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr>
+                <th>구분</th>
+                {monthLabels.map((label) => (
+                  <th key={`head-${label}`}>{label}</th>
+                ))}
+                <th>총</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th>측정 계획</th>
+                {renderMonthCells(summary.planTotals)}
+                <th>{renderGrandTotal(summary.planGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>유량측정 실적</th>
+                {renderMonthCells(summary.actualTotals)}
+                <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
+              </tr>
+              <tr>
+                <th>월별 공정률</th>
+                {renderMonthCells(summary.monthlyRates, { percent: true })}
+                <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
+              </tr>
+              <tr>
+                <th>누적 공정률</th>
+                {renderMonthCells(summary.cumulativeRates, { percent: true })}
+                <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
       <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
@@ -2544,13 +2548,22 @@ export default function App() {
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
               <div className="table-wrap small">
-                <CopyableMatrixTable
-                  className="spreadsheet flow-table"
-                  matrix={[
-                    ['수위(m)', '유량(m³/s)'],
-                    ...rows.map((r) => [fmt(r.h, 2), fmt(r.q, 3)])
-                  ]}
-                />
+                <table className="spreadsheet flow-table" style={tableAutoStyle}>
+                  <thead>
+                    <tr>
+                      <th>수위(m)</th>
+                      <th>유량(m³/s)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, idx) => (
+                      <tr key={idx}>
+                        <td>{fmt(r.h, 2)}</td>
+                        <td>{fmt(r.q, 3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           ))}
@@ -2587,20 +2600,30 @@ export default function App() {
           </div>
         </div>
         <div className="table-wrap">
-          <CopyableMatrixTable
-            className="spreadsheet flow-table"
-            matrix={[
-              ['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)'],
-              ...filteredRelativeErrors.map((row) => [
-                row.datetime,
-                row.h,
-                row.q,
-                row.sectionName,
-                row.curveQ === null ? '' : fmt(row.curveQ, 3),
-                row.error === null ? '' : fmt(row.error, 2)
-              ])
-            ]}
-          />
+          <table className="spreadsheet flow-table" style={tableAutoStyle}>
+            <thead>
+              <tr>
+                <th>측정일시</th>
+                <th>수위(h)</th>
+                <th>측정유량</th>
+                <th>곡선식 적용구간</th>
+                <th>곡선식 유량</th>
+                <th>상대오차(%)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRelativeErrors.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.datetime}</td>
+                  <td>{row.h}</td>
+                  <td>{row.q}</td>
+                  <td>{row.sectionName}</td>
+                  <td>{row.curveQ === null ? '' : fmt(row.curveQ, 3)}</td>
+                  <td>{row.error === null ? '' : fmt(row.error, 2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
         <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
       </section>
