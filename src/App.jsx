@@ -431,6 +431,23 @@ function flattenGroupsToStations(groups) {
   return groups.flatMap((group) => group.stations)
 }
 
+function moveArrayItem(items, fromIndex, toIndex) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= items.length ||
+    toIndex >= items.length
+  ) {
+    return items.slice()
+  }
+
+  const next = items.slice()
+  const [item] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, item)
+  return next
+}
+
 const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
 const SHARED_TABLE_STYLE = {
   tableLayout: 'auto',
@@ -1101,6 +1118,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
+  const [stationFilter, setStationFilter] = useState('전체')
 
   const monthLabels = useMemo(
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
@@ -1119,12 +1137,36 @@ function ProcessRatePage({ groups, onUpdateStation }) {
     [groups]
   )
 
+  const stationOptions = useMemo(() => {
+    const flattened = groups.flatMap((group, groupIndex) => {
+      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
+      return (group.stations || []).map((station, stationIndex) => ({
+        id: station.id,
+        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
+    })
+
+    return ['전체', ...flattened]
+  }, [groups, groupFilter])
+
+  useEffect(() => {
+    if (stationFilter === '전체') return
+    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
+    if (!exists) setStationFilter('전체')
+  }, [stationOptions, stationFilter])
+
   const filteredStations = useMemo(() => {
-    const flattened = groups.flatMap((group) =>
-      (group.stations || []).map((station) => ({
+    const flattened = groups.flatMap((group, groupIndex) =>
+      (group.stations || []).map((station, stationIndex) => ({
         ...station,
         groupId: group.id,
-        groupName: group.name || '그룹 없음'
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
       }))
     )
 
@@ -1134,15 +1176,12 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         const classification = station.classification || '일반 지점'
         return classificationFilter === '전체' || classification === classificationFilter
       })
+      .filter((station) => stationFilter === '전체' || station.id === stationFilter)
       .sort((a, b) => {
-        const codeCompare = String(a.code || '').localeCompare(String(b.code || ''), 'ko', {
-          numeric: true,
-          sensitivity: 'base'
-        })
-        if (codeCompare !== 0) return codeCompare
-        return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+        if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
+        return a.stationIndex - b.stationIndex
       })
-  }, [groups, groupFilter, classificationFilter])
+  }, [groups, groupFilter, classificationFilter, stationFilter])
 
   const stationRows = useMemo(() => {
     return filteredStations.map((station) => {
@@ -1257,6 +1296,22 @@ function ProcessRatePage({ groups, onUpdateStation }) {
                   {groupName}
                 </option>
               ))}
+            </select>
+          </label>
+          <label>
+            지점
+            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
+              {stationOptions.map((stationOption) =>
+                stationOption === '전체' ? (
+                  <option key="전체" value="전체">
+                    전체
+                  </option>
+                ) : (
+                  <option key={stationOption.id} value={stationOption.id}>
+                    {stationOption.label}
+                  </option>
+                )
+              )}
             </select>
           </label>
           <div className="muted" style={{ alignSelf: 'end' }}>
@@ -1521,16 +1576,49 @@ export default function App() {
   }
 
   const selectedGroup = groups.find((group) => group.id === selectedGroupId) || groups[0] || null
+  const selectedGroupIndex = groups.findIndex((group) => group.id === selectedGroup?.id)
   const selectedGroupStations = selectedGroup?.stations || []
+  const selectedStationIndex = selectedGroupStations.findIndex((station) => station.id === selectedStationId)
   const selectedStation =
     selectedGroupStations.find((station) => station.id === selectedStationId) ||
     selectedGroupStations[0] ||
     null
+  const canMoveGroupUp = selectedGroupIndex > 0
+  const canMoveGroupDown = selectedGroupIndex >= 0 && selectedGroupIndex < groups.length - 1
+  const canMoveStationUp = selectedStationIndex > 0
+  const canMoveStationDown =
+    selectedStationIndex >= 0 && selectedStationIndex < selectedGroupStations.length - 1
 
   const updateSelectedGroup = (patch) => {
     if (!selectedGroup) return
     setGroups((prev) =>
       prev.map((group) => (group.id === selectedGroup.id ? { ...group, ...patch } : group))
+    )
+  }
+
+  const moveSelectedGroup = (direction) => {
+    if (!selectedGroup) return
+    setGroups((prev) => {
+      const index = prev.findIndex((group) => group.id === selectedGroup.id)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= prev.length) return prev
+      return moveArrayItem(prev, index, nextIndex)
+    })
+  }
+
+  const moveSelectedStation = (direction) => {
+    if (!selectedGroup || !selectedStation) return
+    setGroups((prev) =>
+      prev.map((group) => {
+        if (group.id !== selectedGroup.id) return group
+        const index = group.stations.findIndex((station) => station.id === selectedStation.id)
+        const nextIndex = index + direction
+        if (index < 0 || nextIndex < 0 || nextIndex >= group.stations.length) return group
+        return {
+          ...group,
+          stations: moveArrayItem(group.stations, index, nextIndex)
+        }
+      })
     )
   }
 
@@ -2085,6 +2173,12 @@ export default function App() {
             <button className="btn danger" onClick={deleteSelectedGroup} disabled={!selectedGroup}>
               - 그룹 삭제
             </button>
+            <button className="btn secondary" onClick={() => moveSelectedGroup(-1)} disabled={!canMoveGroupUp}>
+              ▲ 그룹 위로
+            </button>
+            <button className="btn secondary" onClick={() => moveSelectedGroup(1)} disabled={!canMoveGroupDown}>
+              ▼ 그룹 아래로
+            </button>
           </div>
         </div>
 
@@ -2147,6 +2241,12 @@ export default function App() {
               disabled={!selectedStation}
             >
               - 지점 삭제
+            </button>
+            <button className="btn secondary" onClick={() => moveSelectedStation(-1)} disabled={!canMoveStationUp}>
+              ▲ 지점 위로
+            </button>
+            <button className="btn secondary" onClick={() => moveSelectedStation(1)} disabled={!canMoveStationDown}>
+              ▼ 지점 아래로
             </button>
           </div>
         </div>
