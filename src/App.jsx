@@ -601,10 +601,31 @@ const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) 
   return latest
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
+const floorToTenMinuteSlot = (date) => {
+  const d = new Date(date.getTime())
+  d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - (d.getMinutes() % 10))
+  return d
+}
+
+const getHrfcoQueryEndTime = (referenceTime = new Date()) => {
+  const base = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+    ? new Date(referenceTime.getTime())
+    : new Date()
+
+  // 10분 자료는 화면 시각보다 몇 분 늦게 게시되는 경우가 있어,
+  // 클릭 시각에서 7분을 되돌린 뒤 가장 가까운 10분 시점으로 맞춘다.
+  // 예) 15:02 -> 14:50, 15:07 -> 15:00
+  base.setMinutes(base.getMinutes() - 7)
+  return floorToTenMinuteSlot(base)
+}
+
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
-  const now = new Date()
+  const clickTime = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+    ? new Date(referenceTime.getTime())
+    : new Date()
 
   if (!trimmedApiKey) {
     throw new Error('API 키가 비어 있습니다.')
@@ -614,16 +635,14 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
   }
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
+  const queryEndTime = getHrfcoQueryEndTime(clickTime)
 
-  // 버튼을 누른 "현재 시각" 기준으로, 그 시각까지 조회 가능한 모든 10분 수위를 받아
-  // 가장 최신 timestamp 1건을 선택한다.
-  // 업데이트가 몇 분 늦게 반영되더라도 가장 최근 자료를 잡도록 넓은 범위를 먼저 시도한다.
-  const fallbackWindows = [168, 72, 24, 6] // hours
+  const fallbackWindows = [72, 24, 6] // hours
   let latest = null
 
   for (const hours of fallbackWindows) {
-    const start = new Date(now.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(now)}.xml`
+    const start = new Date(queryEndTime.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(queryEndTime)}.xml`
 
     try {
       const response = await fetch(url)
@@ -1971,7 +1990,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           }
 
           try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
             if (latest && latest.value !== null && latest.value !== undefined) {
               return [station.id, {
                 currentWater: latest.value,
@@ -2082,7 +2101,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
               <thead>
                 <tr>
                   {stationColumns.map((col) => (
-                    <th key={col.station.id} style={{ width: '1%', minWidth: '56px', maxWidth: '96px', padding: '3px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                    <th key={col.station.id} style={{ width: 'auto', minWidth: '64px', maxWidth: '110px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
                       <div>{col.station.name || '지점 없음'}</div>
                       <div className="muted" style={{ fontSize: '12px' }}>
                         {col.station.code || '코드 없음'}
@@ -2106,10 +2125,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                           key={`${col.station.id}-${rowIndex}`}
                           style={{
                             textAlign: 'center',
-                            width: '1%',
-                            minWidth: '56px',
-                            maxWidth: '96px',
-                            padding: '3px 4px',
+                            width: 'auto',
+                            minWidth: '64px',
+                            maxWidth: '110px',
+                            padding: '4px 4px',
                             whiteSpace: 'nowrap',
                             backgroundColor: bg,
                             color: fg,
