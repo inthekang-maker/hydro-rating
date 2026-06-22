@@ -565,68 +565,65 @@ function SpreadsheetGrid({
     onRowsChange(next)
   }
 
-  const copySelection = async () => {
-    const r = normalizeRange(selection)
-    if (!r) return
+const copySelection = async () => {
+  const r = normalizeRange(selection)
+  if (!r) return
 
-    const lines = []
-    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
-      const row = rows[rowIndex] || {}
-      const cells = []
-      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-        const col = columns[colIndex]
-        if (!col) continue
-        cells.push(String(row[col.key] ?? ''))
+  const lines = []
+  for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+    const row = rows[rowIndex] || {}
+    const cells = []
+    for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+      const col = columns[colIndex]
+      if (!col) continue
+      cells.push(String(row[col.key] ?? ''))
+    }
+    lines.push(cells.join('\t'))
+  }
+
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const temp = document.createElement('textarea')
+    temp.value = text
+    document.body.appendChild(temp)
+    temp.select()
+    document.execCommand('copy')
+    document.body.removeChild(temp)
+  }
+}
+
+const pasteText = (text, rowIndex, colIndex) => {
+  const lines = text.replace(/\r/g, '').split('\n')
+  const matrix = lines
+    .map((line) => line.split('\t'))
+    .filter((line) => line.some((cell) => cell !== ''))
+
+  if (matrix.length === 0) return
+
+  const next = rows.map((r) => ({ ...r }))
+  while (next.length < rowIndex + matrix.length) {
+    next.push(createEmptyRow())
+  }
+
+  matrix.forEach((line, rOffset) => {
+    const targetRow = rowIndex + rOffset
+    if (!next[targetRow]) return
+
+    line.forEach((cell, cOffset) => {
+      const targetCol = colIndex + cOffset
+      if (!columns[targetCol]) return
+      const key = columns[targetCol].key
+      next[targetRow] = {
+        ...next[targetRow],
+        [key]: cell
       }
-      lines.push(cells.join('	'))
-    }
-
-    const text = lines.join('
-')
-    try {
-      await navigator.clipboard.writeText(text)
-    } catch {
-      const temp = document.createElement('textarea')
-      temp.value = text
-      document.body.appendChild(temp)
-      temp.select()
-      document.execCommand('copy')
-      document.body.removeChild(temp)
-    }
-  }
-
-  const pasteText = (text, rowIndex, colIndex) => {
-    const lines = text.replace(/
-/g, '').split('
-')
-    const matrix = lines
-      .map((line) => line.split('	'))
-      .filter((line) => line.some((cell) => cell !== ''))
-
-    if (matrix.length === 0) return
-
-    const next = rows.map((r) => ({ ...r }))
-    while (next.length < rowIndex + matrix.length) {
-      next.push(createEmptyRow())
-    }
-
-    matrix.forEach((line, rOffset) => {
-      const targetRow = rowIndex + rOffset
-      if (!next[targetRow]) return
-
-      line.forEach((cell, cOffset) => {
-        const targetCol = colIndex + cOffset
-        if (!columns[targetCol]) return
-        const key = columns[targetCol].key
-        next[targetRow] = {
-          ...next[targetRow],
-          [key]: cell
-        }
-      })
     })
+  })
 
-    onRowsChange(next)
-  }
+  onRowsChange(next)
+}
 
   const setCell = (rowIndex, key, value) => {
     const next = rows.map((r, idx) => (idx === rowIndex ? { ...r, [key]: value } : r))
