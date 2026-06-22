@@ -477,23 +477,11 @@ const formatHrfcoDateTime = (date) => {
   return `${yyyy}${mm}${dd}${hh}${mi}`
 }
 
-const alignToPreviousTenMinuteMark = (date) => {
-  const aligned = new Date(date.getTime())
-  aligned.setSeconds(0, 0)
-  const minutes = aligned.getMinutes()
-  const remainder = minutes % 10
-  if (remainder !== 0) {
-    aligned.setMinutes(minutes - remainder)
-  }
-  return aligned
-}
-
 const normalizeHrfcoStationName = (value) =>
   String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/\([^)]*\)/g, '')
-    .replace(/[\s\-_.·•,()\[\]{}<>/\\|:;~`'"!?@#$%^&*=+]/g, '')
+    .replace(/[\s\-_.·•,()\[\]{}<>/\|:;~`'"!?@#$%^&*=+]/g, '')
 
 const loadHrfcoStationInfo = async (apiKey) => {
   const trimmedApiKey = String(apiKey || '').trim()
@@ -618,10 +606,27 @@ const extractHrfcoWaterLevelRowsFromXml = (xmlText, stationCode, stationName) =>
   return rows
 }
 
+const floorToTenMinuteSlot = (date) => {
+  const d = new Date(date.getTime())
+  d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - (d.getMinutes() % 10))
+  return d
+}
+
+const getHrfcoQueryEndTime = (referenceTime = new Date()) => {
+  const base = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+    ? new Date(referenceTime.getTime())
+    : new Date()
+
+  // 현재 시각이 1~9분이어도 가장 최근의 10분 단위 수위를 조회할 수 있도록
+  // 현재 시각을 그대로 기준으로 가장 가까운 이전 10분 시점으로 맞춘다.
+  return floorToTenMinuteSlot(base)
+}
+
 const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
-  const now = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+  const clickTime = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
     ? new Date(referenceTime.getTime())
     : new Date()
 
@@ -633,17 +638,14 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
   }
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
-  // 10분 단위 API 특성상, 현재 시각이 1~9분이어도
-  // 가장 최근의 완료된 10분 수위를 가져오도록 직전 10분 경계로 맞춘다.
-  const endTime = alignToPreviousTenMinuteMark(now)
+  const queryEndTime = getHrfcoQueryEndTime(clickTime)
 
-  // 버튼을 누른 시각과 무관하게, 최신 수위가 포함될 수 있도록 넓은 구간을 조회한다.
-  const fallbackWindows = [720, 168, 72, 24, 6] // hours
+  const fallbackWindows = [72, 24, 6] // hours
   const rowMap = new Map()
 
   for (const hours of fallbackWindows) {
-    const start = new Date(endTime.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(endTime)}.xml`
+    const start = new Date(queryEndTime.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(queryEndTime)}.xml`
 
     try {
       const response = await fetch(url)
@@ -688,21 +690,19 @@ const buildCurrentWaterEntries = (station, currentValue, previousValue) => {
     const currentRounded = roundTo(currentValue, 2)
     if (currentRounded !== null) {
       const exactMatch = historicalValues.some((value) => value === currentRounded)
-      let symbol = '-'
-      if (previousValue !== null && previousValue !== undefined) {
-        const prevRounded = roundTo(previousValue, 2)
-        if (prevRounded !== null) {
-          if (currentRounded > prevRounded) symbol = '▲'
-          else if (currentRounded < prevRounded) symbol = '▼'
-        }
+      const previousRounded = roundTo(previousValue, 2)
+      let trend = '-'
+      if (previousRounded !== null) {
+        if (currentRounded > previousRounded) trend = '▲'
+        else if (currentRounded < previousRounded) trend = '▼'
       }
 
       entries.push({
         value: currentRounded,
-        display: `${fmt(currentRounded, 2)} ${symbol}`,
+        display: `${fmt(currentRounded, 2)} ${trend}`,
         isCurrent: true,
         exactMatch,
-        trend: symbol === '▲' ? 'up' : symbol === '▼' ? 'down' : 'same'
+        trend
       })
     }
   }
@@ -1986,6 +1986,8 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
         station,
         currentWater: result.currentWater ?? null,
         currentTime: result.currentTime || '',
+        previousWater: result.previousWater ?? null,
+        previousTime: result.previousTime || '',
         error: result.error || '',
         entries: buildCurrentWaterEntries(station, result.currentWater, result.previousWater)
       }
@@ -1997,14 +1999,17 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   }, [stationColumns])
 
   useEffect(() => {
+    const body = bodyScrollRef.current
+    if (!body) return
+
     const measure = () => {
-      const body = bodyScrollRef.current
-      if (!body) return
       setScrollContentWidth(body.scrollWidth || body.clientWidth || 0)
     }
 
+    measure()
     const raf = requestAnimationFrame(measure)
     window.addEventListener('resize', measure)
+
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', measure)
@@ -2056,39 +2061,45 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
     setStatusMessage('현재 수위를 조회하는 중입니다...')
 
     try {
-      const results = []
-      for (const station of filteredStations) {
-        const stationName = String(station.name || '').trim()
-        const previous = currentWaterResults[station.id] || { currentWater: null, currentTime: '', previousWater: null, previousTime: '', error: '' }
+      const results = await Promise.all(
+        filteredStations.map(async (station) => {
+          const stationName = String(station.name || '').trim()
+          const previous = currentWaterResults[station.id] || {
+            currentWater: null,
+            currentTime: '',
+            previousWater: null,
+            previousTime: '',
+            error: ''
+          }
 
-        if (!stationName) {
-          results.push([station.id, { ...previous, error: '지점명 없음' }])
-          continue
-        }
+          if (!stationName) {
+            return [station.id, { ...previous, error: '지점명 없음' }]
+          }
 
-        try {
-          const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
-          if (latest && latest.current && latest.current.value !== null && latest.current.value !== undefined) {
-            results.push([station.id, {
-              currentWater: latest.current.value,
-              currentTime: latest.current.ymdhm,
-              previousWater: latest.previous?.value ?? null,
-              previousTime: latest.previous?.ymdhm ?? '',
-              error: ''
-            }])
-          } else {
-            results.push([station.id, {
+          try {
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
+            if (latest && latest.current && latest.current.value !== null && latest.current.value !== undefined) {
+              return [station.id, {
+                currentWater: latest.current.value,
+                currentTime: latest.current.ymdhm,
+                previousWater: latest.previous?.value ?? null,
+                previousTime: latest.previous?.ymdhm ?? '',
+                error: ''
+              }]
+            }
+
+            return [station.id, {
               ...previous,
               error: '최근 수위를 찾지 못했습니다.'
-            }])
+            }]
+          } catch (error) {
+            return [station.id, {
+              ...previous,
+              error: error instanceof Error ? error.message : '조회 실패'
+            }]
           }
-        } catch (error) {
-          results.push([station.id, {
-            ...previous,
-            error: error instanceof Error ? error.message : '조회 실패'
-          }])
-        }
-      }
+        })
+      )
 
       setCurrentWaterResults((prev) => ({
         ...prev,
@@ -2178,14 +2189,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             <div
               ref={topScrollRef}
               style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 4,
-                backgroundColor: '#fff',
                 overflowX: 'auto',
                 overflowY: 'hidden',
                 height: '16px',
-                marginBottom: '8px'
+                marginBottom: '6px'
               }}
             >
               <div
@@ -2205,12 +2212,12 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                         key={col.station.id}
                         style={{
                           position: 'sticky',
-                          top: '16px',
+                          top: 0,
                           zIndex: 3,
-                          backgroundColor: '#eef4ff',
+                          backgroundColor: '#f8fbff',
                           width: 'auto',
-                          minWidth: '72px',
-                          maxWidth: '96px',
+                          minWidth: '64px',
+                          maxWidth: '110px',
                           padding: '4px 4px',
                           whiteSpace: 'normal',
                           wordBreak: 'break-word',
@@ -2231,10 +2238,20 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                       {stationColumns.map((col) => {
                         const entry = col.entries[rowIndex]
                         const isCurrent = Boolean(entry?.isCurrent)
-                        const bg = isCurrent
-                          ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
-                          : undefined
-                        const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
+                        const currentTrend = entry?.trend || ''
+                        const currentColor =
+                          currentTrend === '▲'
+                            ? '#ef4444'
+                            : currentTrend === '▼'
+                              ? '#2563eb'
+                              : '#111827'
+                        const currentBackground =
+                          currentTrend === '▲'
+                            ? 'rgba(239, 68, 68, 0.08)'
+                            : currentTrend === '▼'
+                              ? 'rgba(37, 99, 235, 0.08)'
+                              : 'rgba(17, 24, 39, 0.05)'
+
                         return (
                           <td
                             key={`${col.station.id}-${rowIndex}`}
@@ -2245,8 +2262,8 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                               maxWidth: '110px',
                               padding: '4px 4px',
                               whiteSpace: 'nowrap',
-                              backgroundColor: bg,
-                              color: fg,
+                              backgroundColor: isCurrent ? currentBackground : undefined,
+                              color: isCurrent ? currentColor : undefined,
                               fontWeight: isCurrent ? 700 : 400
                             }}
                           >
@@ -2262,13 +2279,12 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           </>
         )}
         <p className="muted" style={{ marginTop: '8px' }}>
-          현재 수위가 기존 측정성과 값과 같으면 하늘색, 다르면 빨간색으로 표시됩니다.
+          현재 수위는 직전 수위와 비교해 ▲ / ▼ / - 로 표시됩니다.
         </p>
       </section>
     </div>
   )
 }
-
 
 export default function App() {
   const APP_STATE_ID = 'main'
