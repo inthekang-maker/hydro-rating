@@ -455,6 +455,222 @@ const SHARED_TABLE_STYLE = {
   minWidth: '100%'
 }
 
+
+function CopyableMatrixTable({
+  headers,
+  rows,
+  tableClassName = 'spreadsheet',
+  style,
+  wrapperClassName = ''
+}) {
+  const [selection, setSelection] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const tableRef = useRef(null)
+
+  const normalizeRange = (range) => {
+    if (!range) return null
+    return {
+      startRow: Math.min(range.startRow, range.endRow),
+      endRow: Math.max(range.startRow, range.endRow),
+      startCol: Math.min(range.startCol, range.endCol),
+      endCol: Math.max(range.startCol, range.endCol)
+    }
+  }
+
+  const isSelected = (rowIndex, colIndex) => {
+    const r = normalizeRange(selection)
+    if (!r) return false
+    return (
+      rowIndex >= r.startRow &&
+      rowIndex <= r.endRow &&
+      colIndex >= r.startCol &&
+      colIndex <= r.endCol
+    )
+  }
+
+  const selectCell = (rowIndex, colIndex) => {
+    setSelection({
+      startRow: rowIndex,
+      endRow: rowIndex,
+      startCol: colIndex,
+      endCol: colIndex
+    })
+  }
+
+  const extendSelection = (rowIndex, colIndex) => {
+    setSelection((prev) => {
+      if (!prev) {
+        return {
+          startRow: rowIndex,
+          endRow: rowIndex,
+          startCol: colIndex,
+          endCol: colIndex
+        }
+      }
+      return {
+        startRow: prev.startRow,
+        endRow: rowIndex,
+        startCol: prev.startCol,
+        endCol: colIndex
+      }
+    })
+  }
+
+  const selectAll = () => {
+    if (rows.length === 0 || headers.length === 0) return
+    setSelection({
+      startRow: 0,
+      endRow: rows.length - 1,
+      startCol: 0,
+      endCol: headers.length - 1
+    })
+  }
+
+  const clearSelection = () => {
+    setSelection(null)
+  }
+
+  const copySelection = async () => {
+    const r = normalizeRange(selection)
+    if (!r) return
+
+    const lines = []
+    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+      const row = rows[rowIndex] || []
+      const cells = []
+      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+        cells.push(String(row[colIndex] ?? ''))
+      }
+      lines.push(cells.join('\t'))
+    }
+
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const temp = document.createElement('textarea')
+      temp.value = text
+      document.body.appendChild(temp)
+      temp.select()
+      document.execCommand('copy')
+      document.body.removeChild(temp)
+    }
+  }
+
+  useEffect(() => {
+    const stopDrag = () => setIsDragging(false)
+    window.addEventListener('mouseup', stopDrag)
+    return () => window.removeEventListener('mouseup', stopDrag)
+  }, [])
+
+  const handleKeyDown = async (e, rowIndex, colIndex) => {
+    const isMod = e.ctrlKey || e.metaKey
+
+    if (isMod && e.key.toLowerCase() === 'a') {
+      e.preventDefault()
+      selectAll()
+      return
+    }
+
+    if (isMod && e.key.toLowerCase() === 'c') {
+      if (selection) {
+        e.preventDefault()
+        await copySelection()
+      }
+      return
+    }
+
+    if (
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      selection &&
+      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
+    ) {
+      e.preventDefault()
+      clearSelection()
+      return
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const nextRow = Math.min(rowIndex + 1, rows.length - 1)
+      const nextCell = tableRef.current?.querySelector(
+        `[data-copy-cell="${nextRow}-${colIndex}"]`
+      )
+      if (nextCell) nextCell.focus()
+    }
+  }
+
+  return (
+    <div className={wrapperClassName}>
+      <div className="grid-actions" style={{ justifyContent: 'flex-end', marginBottom: '8px' }}>
+        <button className="btn secondary" onClick={selectAll}>
+          전체 선택
+        </button>
+        <button className="btn secondary" onClick={copySelection}>
+          선택 복사
+        </button>
+        <button className="btn secondary" onClick={clearSelection}>
+          선택 해제
+        </button>
+      </div>
+
+      <div
+        className="table-wrap"
+        ref={tableRef}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (selection) {
+            const isMod = e.ctrlKey || e.metaKey
+            if (isMod && e.key.toLowerCase() === 'c') {
+              e.preventDefault()
+              copySelection()
+            }
+            if (isMod && e.key.toLowerCase() === 'a') {
+              e.preventDefault()
+              selectAll()
+            }
+          }
+        }}
+      >
+        <table className={tableClassName} style={style}>
+          <thead>
+            <tr>
+              {headers.map((header) => (
+                <th key={header}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {row.map((cell, colIndex) => (
+                  <td
+                    key={`${rowIndex}-${colIndex}`}
+                    data-copy-cell={`${rowIndex}-${colIndex}`}
+                    className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                    onMouseDown={() => {
+                      setIsDragging(true)
+                      selectCell(rowIndex, colIndex)
+                    }}
+                    onMouseEnter={() => {
+                      if (!isDragging) return
+                      extendSelection(rowIndex, colIndex)
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                    tabIndex={0}
+                  >
+                    {cell ?? ''}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function SpreadsheetGrid({
   title,
   columns,
@@ -1421,56 +1637,19 @@ const summary = useMemo(() => {
 
       <section className="card">
         <h2>측정성과 공정률 요약</h2>
-        <div className="table-wrap">
-          <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
-            <thead>
-              <tr>
-                <th>구분</th>
-                {monthLabels.map((label) => (
-                  <th key={`head-${label}`}>{label}</th>
-                ))}
-                <th>총</th>
-              </tr>
-            </thead>
-<tbody>
-  <tr>
-    <th>측정 계획</th>
-    {renderMonthCells(summary.planTotals)}
-    <th>{renderGrandTotal(summary.planGrandTotal)}</th>
-  </tr>
-
-  <tr>
-    <th>유량측정 실적</th>
-    {renderMonthCells(summary.actualTotals)}
-    <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
-  </tr>
-
-  <tr>
-    <th>누적측정 계획</th>
-    {renderMonthCells(summary.cumulativePlanTotals)}
-    <th>{renderGrandTotal(summary.cumulativePlanGrandTotal)}</th>
-  </tr>
-
-  <tr>
-    <th>누적측정 실적</th>
-    {renderMonthCells(summary.cumulativeActualTotals)}
-    <th>{renderGrandTotal(summary.cumulativeActualGrandTotal)}</th>
-  </tr>
-
-  <tr>
-    <th>월별 공정률</th>
-    {renderMonthCells(summary.monthlyRates, { percent: true })}
-    <th>{renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })}</th>
-  </tr>
-
-  <tr>
-    <th>누적 공정률</th>
-    {renderMonthCells(summary.cumulativeRates, { percent: true })}
-    <th>{renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })}</th>
-  </tr>
-</tbody>
-          </table>
-        </div>
+        <CopyableMatrixTable
+            headers={['구분', ...monthLabels, '총']}
+            rows={[
+              ['측정 계획', ...summary.planTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.planGrandTotal)],
+              ['유량측정 실적', ...summary.actualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.actualGrandTotal)],
+              ['누적측정 계획', ...summary.cumulativePlanTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativePlanGrandTotal)],
+              ['누적측정 실적', ...summary.cumulativeActualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativeActualGrandTotal)],
+              ['월별 공정률', ...summary.monthlyRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })],
+              ['누적 공정률', ...summary.cumulativeRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })]
+            ]}
+            tableClassName="spreadsheet"
+            style={{ width: 'max-content', minWidth: '100%' }}
+          />
       </section>
       <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
     </div>
@@ -2450,24 +2629,12 @@ export default function App() {
                 {section.lowNote ? ` / ${section.lowNote}` : ''}
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
-              <div className="table-wrap small">
-                <table className="spreadsheet flow-table" style={tableAutoStyle}>
-                  <thead>
-                    <tr>
-                      <th>수위(m)</th>
-                      <th>유량(m³/s)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, idx) => (
-                      <tr key={idx}>
-                        <td>{fmt(r.h, 2)}</td>
-                        <td>{fmt(r.q, 3)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <CopyableMatrixTable
+                  headers={['수위(m)', '유량(m³/s)']}
+                  rows={rows.map((r) => [fmt(r.h, 2), fmt(r.q, 3)])}
+                  tableClassName="spreadsheet flow-table"
+                  style={tableAutoStyle}
+                />
             </div>
           ))}
       </section>
@@ -2502,32 +2669,19 @@ export default function App() {
             </label>
           </div>
         </div>
-        <div className="table-wrap">
-          <table className="spreadsheet flow-table" style={tableAutoStyle}>
-            <thead>
-              <tr>
-                <th>측정일시</th>
-                <th>수위(h)</th>
-                <th>측정유량</th>
-                <th>곡선식 적용구간</th>
-                <th>곡선식 유량</th>
-                <th>상대오차(%)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRelativeErrors.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.datetime}</td>
-                  <td>{row.h}</td>
-                  <td>{row.q}</td>
-                  <td>{row.sectionName}</td>
-                  <td>{row.curveQ === null ? '' : fmt(row.curveQ, 3)}</td>
-                  <td>{row.error === null ? '' : fmt(row.error, 2)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <CopyableMatrixTable
+            headers={['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)']}
+            rows={filteredRelativeErrors.map((row) => [
+              row.datetime,
+              row.h,
+              row.q,
+              row.sectionName,
+              row.curveQ === null ? '' : fmt(row.curveQ, 3),
+              row.error === null ? '' : fmt(row.error, 2)
+            ])}
+            tableClassName="spreadsheet flow-table"
+            style={tableAutoStyle}
+          />
         <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
       </section>
 
