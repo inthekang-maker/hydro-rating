@@ -601,9 +601,10 @@ const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) 
   return latest
 }
 
-const floorToRecentTenMinuteMark = (date) => {
-  const d = new Date(date.getTime() - 7 * 60 * 1000)
+const floorToPreviousTenMinutes = (date) => {
+  const d = new Date(date.getTime())
   d.setSeconds(0, 0)
+  d.setMinutes(d.getMinutes() - 7)
   d.setMinutes(Math.floor(d.getMinutes() / 10) * 10)
   return d
 }
@@ -623,16 +624,16 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
   }
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
+  const endTime = floorToPreviousTenMinutes(now)
 
-  // 클릭 시각에 관계없이, 현재 시각에서 7분을 뺀 뒤 그보다 이전 10분 단위의
-  // 가장 최신 자료를 찾는다. 예: 17:02/17:03 -> 16:50
-  const lookupEnd = floorToRecentTenMinuteMark(now)
-  const fallbackWindows = [96, 72, 24, 6] // hours
+  // HRFCO 10분 수위는 약간 늦게 게시될 수 있으므로,
+  // 버튼을 누른 시각 기준으로 최근 자료가 들어올 수 있는 시간대를 넉넉하게 조회한다.
+  const fallbackWindows = [72, 24, 6] // hours
   let latest = null
 
   for (const hours of fallbackWindows) {
-    const start = new Date(lookupEnd.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(lookupEnd)}.xml`
+    const start = new Date(endTime.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(endTime)}.xml`
 
     try {
       const response = await fetch(url)
@@ -648,8 +649,6 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
     } catch {
       // 다음 범위로 계속 시도
     }
-
-    if (latest) break
   }
 
   return latest || { ymdhm: '', value: null, stationCode, stationName: trimmedStationName }
@@ -661,13 +660,29 @@ const buildCurrentWaterEntries = (station, currentValue) => {
     .filter((value) => value !== null)
     .sort((a, b) => a - b)
 
-  const entries = historicalValues.map((value) => ({ value, isCurrent: false, exactMatch: false }))
+  const entries = historicalValues.map((value, idx) => {
+    const prev = idx > 0 ? historicalValues[idx - 1] : null
+    const diff = prev === null ? 0 : value - prev
+    return {
+      value,
+      isCurrent: false,
+      exactMatch: false,
+      trend: diff > 0 ? 'up' : diff < 0 ? 'down' : 'same'
+    }
+  })
 
   if (currentValue !== null && currentValue !== undefined) {
     const currentRounded = roundTo(currentValue, 2)
     if (currentRounded !== null) {
       const exactMatch = historicalValues.some((value) => value === currentRounded)
-      entries.push({ value: currentRounded, isCurrent: true, exactMatch })
+      const prev = historicalValues.length > 0 ? historicalValues[historicalValues.length - 1] : null
+      const diff = prev === null ? 0 : currentRounded - prev
+      entries.push({
+        value: currentRounded,
+        isCurrent: true,
+        exactMatch,
+        trend: diff > 0 ? 'up' : diff < 0 ? 'down' : 'same'
+      })
     }
   }
 
@@ -2085,15 +2100,19 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 
       <section className="card">
         <h2>지점별 현재 수위</h2>
-        <div className="table-wrap">
+        <div className="table-wrap" style={{ overflowX: 'auto' }}>
           {stationColumns.length === 0 ? (
             <div className="muted">선택된 지점이 없습니다.</div>
           ) : (
-            <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content' }}>
+            <>
+              <div style={{ overflowX: 'auto', marginBottom: '6px' }}>
+                <div style={{ minWidth: `${Math.max(1, stationColumns.length) * 110}px`, height: '1px' }} />
+              </div>
+              <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content' }}>
               <thead>
                 <tr>
                   {stationColumns.map((col) => (
-                    <th key={col.station.id} style={{ width: 'auto', minWidth: '64px', maxWidth: '110px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                    <th key={col.station.id} style={{ width: 'auto', minWidth: '72px', maxWidth: '96px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
                       <div>{col.station.name || '지점 없음'}</div>
                       <div className="muted" style={{ fontSize: '12px' }}>
                         {col.station.code || '코드 없음'}
@@ -2127,7 +2146,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                             fontWeight: isCurrent ? 700 : 400
                           }}
                         >
-                          {entry ? fmt(entry.value, 2) : ''}
+                          {entry ? `${fmt(entry.value, 2)}${isCurrent ? ` ${entry.trend === 'up' ? '▲' : entry.trend === 'down' ? '▼' : '-'}` : ''}` : ''}
                         </td>
                       )
                     })}
