@@ -576,28 +576,7 @@ const findHrfcoStationCodeByName = async (apiKey, stationName) => {
   throw new Error(`지점명 "${targetName}"에 해당하는 코드를 찾지 못했습니다.`)
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
-  const trimmedApiKey = String(apiKey || '').trim()
-  const trimmedStationName = String(stationName || '').trim()
-  if (!trimmedApiKey) {
-    throw new Error('API 키가 비어 있습니다.')
-  }
-  if (!trimmedStationName) {
-    throw new Error('지점명이 비어 있습니다.')
-  }
-
-  const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
-
-  const endDt = new Date()
-  const startDt = new Date(endDt.getTime() - 60 * 60 * 1000)
-  const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(startDt)}/${formatHrfcoDateTime(endDt)}.xml`
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`API 요청 실패 (${response.status})`)
-  }
-
-  const xmlText = await response.text()
+const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) => {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml')
   const xpathResult = doc.evaluate('//*[ymdhm and wl]', doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
 
@@ -615,7 +594,47 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
     if (!Number.isFinite(value)) continue
 
     if (!latest || ymdhm > latest.ymdhm) {
-      latest = { ymdhm, value: roundTo(value, 2), stationCode, stationName: trimmedStationName }
+      latest = { ymdhm, value: roundTo(value, 2), stationCode, stationName }
+    }
+  }
+
+  return latest
+}
+
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
+  const trimmedApiKey = String(apiKey || '').trim()
+  const trimmedStationName = String(stationName || '').trim()
+  if (!trimmedApiKey) {
+    throw new Error('API 키가 비어 있습니다.')
+  }
+  if (!trimmedStationName) {
+    throw new Error('지점명이 비어 있습니다.')
+  }
+
+  const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
+  const now = new Date()
+
+  // 최근 업데이트가 7, 17, 27분처럼 조금 늦게 들어와도 잡히도록 충분한 범위를 조회한다.
+  const fallbackWindows = [6, 24, 72] // hours
+  let latest = null
+
+  for (const hours of fallbackWindows) {
+    const start = new Date(now.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(now)}.xml`
+
+    try {
+      const response = await fetch(url)
+      if (!response.ok) continue
+
+      const xmlText = await response.text()
+      const candidate = extractLatestHrfcoWaterLevelFromXml(xmlText, stationCode, trimmedStationName)
+      if (!candidate) continue
+
+      if (!latest || candidate.ymdhm > latest.ymdhm) {
+        latest = candidate
+      }
+    } catch {
+      // 다음 범위로 계속 시도
     }
   }
 
@@ -1942,21 +1961,29 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
       const results = await Promise.all(
         filteredStations.map(async (station) => {
           const stationName = String(station.name || '').trim()
+          const previous = currentWaterResults[station.id] || { currentWater: null, currentTime: '', error: '' }
+
           if (!stationName) {
-            return [station.id, { currentWater: null, currentTime: '', error: '지점명 없음' }]
+            return [station.id, { ...previous, error: '지점명 없음' }]
           }
 
           try {
             const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
+            if (latest && latest.value !== null && latest.value !== undefined) {
+              return [station.id, {
+                currentWater: latest.value,
+                currentTime: latest.ymdhm,
+                error: ''
+              }]
+            }
+
             return [station.id, {
-              currentWater: latest.value,
-              currentTime: latest.ymdhm,
-              error: ''
+              ...previous,
+              error: '최근 수위를 찾지 못했습니다.'
             }]
           } catch (error) {
             return [station.id, {
-              currentWater: null,
-              currentTime: '',
+              ...previous,
               error: error instanceof Error ? error.message : '조회 실패'
             }]
           }
@@ -2052,7 +2079,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
               <thead>
                 <tr>
                   {stationColumns.map((col) => (
-                    <th key={col.station.id} style={{ width: 'auto', minWidth: '72px', maxWidth: '120px', padding: '4px 6px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                    <th key={col.station.id} style={{ width: 'auto', minWidth: '64px', maxWidth: '110px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
                       <div>{col.station.name || '지점 없음'}</div>
                       <div className="muted" style={{ fontSize: '12px' }}>
                         {col.station.code || '코드 없음'}
@@ -2077,9 +2104,9 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                           style={{
                             textAlign: 'center',
                             width: 'auto',
-                            minWidth: '72px',
-                            maxWidth: '120px',
-                            padding: '4px 6px',
+                            minWidth: '64px',
+                            maxWidth: '110px',
+                            padding: '4px 4px',
                             whiteSpace: 'nowrap',
                             backgroundColor: bg,
                             color: fg,
