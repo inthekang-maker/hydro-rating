@@ -481,7 +481,9 @@ const normalizeHrfcoStationName = (value) =>
   String(value || '')
     .trim()
     .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
     .replace(/[\s\-_.·•,()\[\]{}<>/\|:;~`'"!?@#$%^&*=+]/g, '')
+    .replace(/[^0-9a-z가-힣]/g, '')
 
 const loadHrfcoStationInfo = async (apiKey) => {
   const trimmedApiKey = String(apiKey || '').trim()
@@ -559,6 +561,10 @@ const findHrfcoStationCodeByName = async (apiKey, stationName) => {
   )
   if (partial) return partial.code
 
+  const strippedTarget = targetNorm.replace(/\d+$/, '')
+  const strippedMatch = items.find((item) => item.normName.replace(/\d+$/, '') === strippedTarget)
+  if (strippedMatch) return strippedMatch.code
+
   let best = null
   let bestScore = Infinity
   for (const item of items) {
@@ -605,12 +611,9 @@ const extractWaterLevelObservationsFromXml = (xmlText, stationCode, stationName)
   return observations
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
-  const clickTime = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
-    ? new Date(referenceTime.getTime())
-    : new Date()
 
   if (!trimmedApiKey) {
     throw new Error('API 키가 비어 있습니다.')
@@ -621,14 +624,15 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
 
-  // 버튼 클릭 시각까지의 최신 수위 자료를 넓은 범위에서 조회한다.
-  // 10분 단위 게시가 지연될 수 있으므로 72시간, 24시간, 6시간 범위를 차례대로 시도한다.
-  const fallbackWindows = [72, 24, 6] // hours
+  // 아무 때나 클릭해도 가장 최근에 게시된 10분 수위를 찾도록
+  // 조회 종료 시각을 현재 시각보다 넉넉하게 잡고, 시작 시각은 점점 넓혀서 시도한다.
+  const queryEnd = new Date(Date.now() + 30 * 60 * 1000)
+  const fallbackWindows = [168, 72, 24, 6] // hours
   const observationMap = new Map()
 
   for (const hours of fallbackWindows) {
-    const start = new Date(clickTime.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(clickTime)}.xml`
+    const start = new Date(queryEnd.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(queryEnd)}.xml`
 
     try {
       const response = await fetch(url)
@@ -2046,7 +2050,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           }
 
           try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
             if (latest && latest.value !== null && latest.value !== undefined) {
               return [station.id, {
                 currentWater: latest.value,
