@@ -456,6 +456,94 @@ const SHARED_TABLE_STYLE = {
 }
 
 
+const HRFCO_API_KEY_STORAGE_KEY = 'hrfco-api-key-v1'
+
+const roundTo = (value, digits = 2) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  const factor = 10 ** digits
+  return Math.round(n * factor) / factor
+}
+
+const formatHrfcoDateTime = (date) => {
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}${mm}${dd}${hh}${mi}`
+}
+
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationCode) => {
+  const trimmedApiKey = String(apiKey || '').trim()
+  const trimmedStationCode = String(stationCode || '').trim()
+  if (!trimmedApiKey) {
+    throw new Error('API 키가 비어 있습니다.')
+  }
+  if (!trimmedStationCode) {
+    throw new Error('지점 코드가 비어 있습니다.')
+  }
+
+  const endDt = new Date()
+  const startDt = new Date(endDt.getTime() - 60 * 60 * 1000)
+  const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(trimmedStationCode)}/${formatHrfcoDateTime(startDt)}/${formatHrfcoDateTime(endDt)}.xml`
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`API 요청 실패 (${response.status})`)
+  }
+
+  const xmlText = await response.text()
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml')
+  const xpathResult = doc.evaluate('//*[ymdhm and wl]', doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
+
+  let latest = null
+  for (let i = 0; i < xpathResult.snapshotLength; i += 1) {
+    const node = xpathResult.snapshotItem(i)
+    if (!node) continue
+
+    const ymdhm = String(node.querySelector('ymdhm')?.textContent || '').trim()
+    let wl = String(node.querySelector('wl')?.textContent || '').trim()
+    if (!ymdhm) continue
+    if (wl === '-' || wl === '') continue
+    wl = wl.replace(/,/g, '')
+    const value = Number(wl)
+    if (!Number.isFinite(value)) continue
+
+    if (!latest || ymdhm > latest.ymdhm) {
+      latest = { ymdhm, value: roundTo(value, 2) }
+    }
+  }
+
+  return latest || { ymdhm: '', value: null }
+}
+
+const buildCurrentWaterEntries = (station, currentValue) => {
+  const historicalValues = (station.measurements || [])
+    .map((measurement) => roundTo(measurement.h, 2))
+    .filter((value) => value !== null)
+    .sort((a, b) => a - b)
+
+  const entries = historicalValues.map((value) => ({ value, isCurrent: false, exactMatch: false }))
+
+  if (currentValue !== null && currentValue !== undefined) {
+    const currentRounded = roundTo(currentValue, 2)
+    if (currentRounded !== null) {
+      const exactMatch = historicalValues.some((value) => value === currentRounded)
+      entries.push({ value: currentRounded, isCurrent: true, exactMatch })
+    }
+  }
+
+  entries.sort((a, b) => {
+    if (a.value !== b.value) return a.value - b.value
+    if (a.isCurrent === b.isCurrent) return 0
+    return a.isCurrent ? 1 : -1
+  })
+
+  return entries
+}
+
+
 function CopyableMatrixTable({
   headers,
   rows,
@@ -1657,6 +1745,258 @@ const summary = useMemo(() => {
 }
 
 
+function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
+  const [classificationFilter, setClassificationFilter] = useState('전체')
+  const [groupFilter, setGroupFilter] = useState('전체')
+  const [stationFilter, setStationFilter] = useState('전체')
+  const [currentWaterResults, setCurrentWaterResults] = useState({})
+  const [isFetching, setIsFetching] = useState(false)
+  const [statusMessage, setStatusMessage] = useState('')
+
+  const groupOptions = useMemo(
+    () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
+    [groups]
+  )
+
+  const stationOptions = useMemo(() => {
+    const flattened = groups.flatMap((group, groupIndex) => {
+      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
+      return (group.stations || []).map((station, stationIndex) => ({
+        id: station.id,
+        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
+    })
+
+    return ['전체', ...flattened]
+  }, [groups, groupFilter])
+
+  useEffect(() => {
+    if (stationFilter === '전체') return
+    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
+    if (!exists) setStationFilter('전체')
+  }, [stationOptions, stationFilter])
+
+  const filteredStations = useMemo(() => {
+    const flattened = groups.flatMap((group, groupIndex) =>
+      (group.stations || []).map((station, stationIndex) => ({
+        ...station,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
+    )
+
+    return flattened
+      .filter((station) => groupFilter === '전체' || station.groupName === groupFilter)
+      .filter((station) => {
+        const classification = station.classification || '일반 지점'
+        return classificationFilter === '전체' || classification === classificationFilter
+      })
+      .filter((station) => stationFilter === '전체' || station.id === stationFilter)
+      .sort((a, b) => {
+        if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
+        return a.stationIndex - b.stationIndex
+      })
+  }, [groups, groupFilter, classificationFilter, stationFilter])
+
+  const stationColumns = useMemo(() => {
+    return filteredStations.map((station) => {
+      const result = currentWaterResults[station.id] || {}
+      return {
+        station,
+        currentWater: result.currentWater ?? null,
+        currentTime: result.currentTime || '',
+        error: result.error || '',
+        entries: buildCurrentWaterEntries(station, result.currentWater)
+      }
+    })
+  }, [filteredStations, currentWaterResults])
+
+  const maxRows = useMemo(() => {
+    return stationColumns.reduce((max, col) => Math.max(max, col.entries.length), 0)
+  }, [stationColumns])
+
+  const handleFetchCurrentWater = async () => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      window.alert('API 키를 입력해 주세요.')
+      return
+    }
+    if (filteredStations.length === 0) {
+      window.alert('선택된 지점이 없습니다.')
+      return
+    }
+
+    setIsFetching(true)
+    setStatusMessage('현재 수위를 조회하는 중입니다...')
+
+    try {
+      const results = await Promise.all(
+        filteredStations.map(async (station) => {
+          if (!station.code) {
+            return [station.id, { currentWater: null, currentTime: '', error: '지점 코드 없음' }]
+          }
+
+          try {
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, station.code)
+            return [station.id, {
+              currentWater: latest.value,
+              currentTime: latest.ymdhm,
+              error: ''
+            }]
+          } catch (error) {
+            return [station.id, {
+              currentWater: null,
+              currentTime: '',
+              error: error instanceof Error ? error.message : '조회 실패'
+            }]
+          }
+        })
+      )
+
+      setCurrentWaterResults((prev) => ({
+        ...prev,
+        ...Object.fromEntries(results)
+      }))
+      setStatusMessage('현재 수위 조회가 완료되었습니다.')
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '현재 수위 조회 실패')
+    } finally {
+      setIsFetching(false)
+    }
+  }
+
+  return (
+    <div>
+      <section className="card">
+        <h2>계기수위-측정성과</h2>
+        <div className="row">
+          <label>
+            그룹
+            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              {groupOptions.map((groupName) => (
+                <option key={groupName} value={groupName}>
+                  {groupName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
+            분류
+            <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
+              <option value="전체">전체</option>
+              <option value="자동유량">자동유량</option>
+              <option value="일반 지점">일반 지점</option>
+            </select>
+          </label>
+
+          <label>
+            지점
+            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
+              {stationOptions.map((stationOption) =>
+                stationOption === '전체' ? (
+                  <option key="전체" value="전체">전체</option>
+                ) : (
+                  <option key={stationOption.id} value={stationOption.id}>
+                    {stationOption.label}
+                  </option>
+                )
+              )}
+            </select>
+          </label>
+
+          <label>
+            API 키
+            <input
+              type="text"
+              value={hrfcoApiKey}
+              onChange={(e) => onHrfcoApiKeyChange(e.target.value)}
+              placeholder="HRFCO API 키"
+            />
+          </label>
+
+          <div className="grid-actions" style={{ alignSelf: 'end' }}>
+            <button className="btn" onClick={handleFetchCurrentWater} disabled={isFetching}>
+              {isFetching ? '조회 중...' : '현재 수위'}
+            </button>
+          </div>
+        </div>
+
+        <div className="muted" style={{ marginTop: '8px' }}>
+          선택된 지점 수: {filteredStations.length}개
+        </div>
+        {statusMessage ? (
+          <div className="muted" style={{ marginTop: '4px' }}>
+            {statusMessage}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="card">
+        <h2>지점별 현재 수위</h2>
+        <div className="table-wrap">
+          {stationColumns.length === 0 ? (
+            <div className="muted">선택된 지점이 없습니다.</div>
+          ) : (
+            <table className="spreadsheet" style={{ width: 'max-content', minWidth: '100%' }}>
+              <thead>
+                <tr>
+                  {stationColumns.map((col) => (
+                    <th key={col.station.id} style={{ minWidth: '120px' }}>
+                      <div>{col.station.name || '지점 없음'}</div>
+                      <div className="muted" style={{ fontSize: '12px' }}>
+                        {col.station.code || '코드 없음'}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: maxRows }).map((_, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {stationColumns.map((col) => {
+                      const entry = col.entries[rowIndex]
+                      const isCurrent = Boolean(entry?.isCurrent)
+                      const bg = isCurrent
+                        ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
+                        : undefined
+                      const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
+                      return (
+                        <td
+                          key={`${col.station.id}-${rowIndex}`}
+                          style={{
+                            textAlign: 'center',
+                            minWidth: '120px',
+                            backgroundColor: bg,
+                            color: fg,
+                            fontWeight: isCurrent ? 700 : 400
+                          }}
+                        >
+                          {entry ? fmt(entry.value, 2) : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        <p className="muted" style={{ marginTop: '8px' }}>
+          현재 수위가 기존 측정성과 값과 같으면 하늘색, 다르면 빨간색으로 표시됩니다.
+        </p>
+      </section>
+    </div>
+  )
+}
+
+
 export default function App() {
   const APP_STATE_ID = 'main'
 
@@ -1668,6 +2008,7 @@ export default function App() {
   const [relativeErrorYearFilter, setRelativeErrorYearFilter] = useState('전체')
   const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
   const [activeTab, setActiveTab] = useState('management')
+  const [hrfcoApiKey, setHrfcoApiKey] = useState(() => localStorage.getItem(HRFCO_API_KEY_STORAGE_KEY) || '')
 
   useEffect(() => {
     const loadAppState = async () => {
@@ -1803,6 +2144,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(CHART_LEGEND_POS_KEY, JSON.stringify(legendPos))
   }, [legendPos])
+
+  useEffect(() => {
+    localStorage.setItem(HRFCO_API_KEY_STORAGE_KEY, hrfcoApiKey)
+  }, [hrfcoApiKey])
 
   useEffect(() => {
     if (!groups.length) return
@@ -2430,6 +2775,16 @@ export default function App() {
         >
           측정성과 공정률
         </button>
+        <button
+          type="button"
+          className="btn secondary"
+          style={{
+            background: activeTab === 'instrument' ? '#1f6feb' : '#6c757d'
+          }}
+          onClick={() => setActiveTab('instrument')}
+        >
+          계기수위-측정성과
+        </button>
       </div>
 
       <div style={{ display: activeTab === 'management' ? 'block' : 'none' }}>
@@ -2909,6 +3264,14 @@ export default function App() {
 
       <div style={{ display: activeTab === 'process' ? 'block' : 'none' }}>
         <ProcessRatePage groups={groups} onUpdateStation={updateStationAcrossGroups} />
+      </div>
+
+      <div style={{ display: activeTab === 'instrument' ? 'block' : 'none' }}>
+        <CurrentWaterLevelPage
+          groups={groups}
+          hrfcoApiKey={hrfcoApiKey}
+          onHrfcoApiKeyChange={setHrfcoApiKey}
+        />
       </div>
     </div>
   )
