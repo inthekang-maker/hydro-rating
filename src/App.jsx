@@ -601,9 +601,13 @@ const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) 
   return latest
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
+  const clickTime = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+    ? new Date(referenceTime.getTime())
+    : new Date()
+
   if (!trimmedApiKey) {
     throw new Error('API 키가 비어 있습니다.')
   }
@@ -612,15 +616,15 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
   }
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
-  const now = new Date()
 
-  // 최근 업데이트가 7, 17, 27분처럼 조금 늦게 들어와도 잡히도록 충분한 범위를 조회한다.
-  const fallbackWindows = [6, 24, 72] // hours
+  // 버튼을 누른 시각(clickTime) 기준으로, 그 시각까지 가장 최신인 10분 수위를 찾는다.
+  // 7, 17, 27분처럼 게시가 조금 늦게 들어와도 최신값을 잡을 수 있도록 충분히 넓은 범위를 조회한다.
+  const fallbackWindows = [72, 24, 6] // hours
   let latest = null
 
   for (const hours of fallbackWindows) {
-    const start = new Date(now.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(now)}.xml`
+    const start = new Date(clickTime.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(clickTime)}.xml`
 
     try {
       const response = await fetch(url)
@@ -1968,7 +1972,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           }
 
           try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
             if (latest && latest.value !== null && latest.value !== undefined) {
               return [station.id, {
                 currentWater: latest.value,
