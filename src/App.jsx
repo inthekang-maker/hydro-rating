@@ -601,12 +601,10 @@ const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) 
   return latest
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
-  const clickTime = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
-    ? new Date(referenceTime.getTime())
-    : new Date()
+  const now = new Date()
 
   if (!trimmedApiKey) {
     throw new Error('API 키가 비어 있습니다.')
@@ -617,14 +615,15 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
 
-  // 버튼을 누른 시각(clickTime) 기준으로, 그 시각까지 가장 최신인 10분 수위를 찾는다.
-  // 7, 17, 27분처럼 게시가 조금 늦게 들어와도 최신값을 잡을 수 있도록 충분히 넓은 범위를 조회한다.
-  const fallbackWindows = [72, 24, 6] // hours
+  // 버튼을 누른 "현재 시각" 기준으로, 그 시각까지 조회 가능한 모든 10분 수위를 받아
+  // 가장 최신 timestamp 1건을 선택한다.
+  // 업데이트가 몇 분 늦게 반영되더라도 가장 최근 자료를 잡도록 넓은 범위를 먼저 시도한다.
+  const fallbackWindows = [168, 72, 24, 6] // hours
   let latest = null
 
   for (const hours of fallbackWindows) {
-    const start = new Date(clickTime.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(clickTime)}.xml`
+    const start = new Date(now.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(now)}.xml`
 
     try {
       const response = await fetch(url)
@@ -1972,7 +1971,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           }
 
           try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
             if (latest && latest.value !== null && latest.value !== undefined) {
               return [station.id, {
                 currentWater: latest.value,
@@ -2083,7 +2082,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
               <thead>
                 <tr>
                   {stationColumns.map((col) => (
-                    <th key={col.station.id} style={{ width: 'auto', minWidth: '64px', maxWidth: '110px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                    <th key={col.station.id} style={{ width: '1%', minWidth: '56px', maxWidth: '96px', padding: '3px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
                       <div>{col.station.name || '지점 없음'}</div>
                       <div className="muted" style={{ fontSize: '12px' }}>
                         {col.station.code || '코드 없음'}
@@ -2107,10 +2106,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                           key={`${col.station.id}-${rowIndex}`}
                           style={{
                             textAlign: 'center',
-                            width: 'auto',
-                            minWidth: '64px',
-                            maxWidth: '110px',
-                            padding: '4px 4px',
+                            width: '1%',
+                            minWidth: '56px',
+                            maxWidth: '96px',
+                            padding: '3px 4px',
                             whiteSpace: 'nowrap',
                             backgroundColor: bg,
                             color: fg,
