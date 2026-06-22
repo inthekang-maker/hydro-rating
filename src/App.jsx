@@ -1317,6 +1317,14 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       })
     })
 
+    const cumulativePlanTotals = planTotals.map((_, idx) =>
+  sum(planTotals.slice(0, idx + 1))
+)
+
+const cumulativeActualTotals = actualTotals.map((_, idx) =>
+  sum(actualTotals.slice(0, idx + 1))
+)
+
     const monthlyRates = planTotals.map((plan, idx) =>
       plan > 0 ? (actualTotals[idx] / plan) * 100 : null
     )
@@ -1326,14 +1334,18 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       return planSum > 0 ? (actualSum / planSum) * 100 : null
     })
 
-    return {
-      planTotals,
-      actualTotals,
-      monthlyRates,
-      cumulativeRates,
-      planGrandTotal: sum(planTotals),
-      actualGrandTotal: sum(actualTotals)
-    }
+return {
+  planTotals,
+  actualTotals,
+  cumulativePlanTotals,
+  cumulativeActualTotals,
+  monthlyRates,
+  cumulativeRates,
+  planGrandTotal: sum(planTotals),
+  actualGrandTotal: sum(actualTotals),
+  cumulativePlanGrandTotal: sum(planTotals),
+  cumulativeActualGrandTotal: sum(actualTotals)
+}
   }, [stationRows])
 
   const updateProcessPlan = (stationId, monthIndex, value) => {
@@ -1434,6 +1446,17 @@ function ProcessRatePage({ groups, onUpdateStation }) {
                 {renderMonthCells(summary.actualTotals)}
                 <th>{renderGrandTotal(summary.actualGrandTotal)}</th>
               </tr>
+              <tr>
+  <th>누적측정 계획</th>
+  {renderMonthCells(summary.cumulativePlanTotals)}
+  <th>{renderGrandTotal(summary.cumulativePlanGrandTotal)}</th>
+</tr>
+
+<tr>
+  <th>누적측정 실적</th>
+  {renderMonthCells(summary.cumulativeActualTotals)}
+  <th>{renderGrandTotal(summary.cumulativeActualGrandTotal)}</th>
+</tr>
               <tr>
                 <th>월별 공정률</th>
                 {renderMonthCells(summary.monthlyRates, { percent: true })}
