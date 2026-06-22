@@ -481,9 +481,7 @@ const normalizeHrfcoStationName = (value) =>
   String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/\([^)]*\)/g, '')
     .replace(/[\s\-_.·•,()\[\]{}<>/\|:;~`'"!?@#$%^&*=+]/g, '')
-    .replace(/[^0-9a-z가-힣]/g, '')
 
 const loadHrfcoStationInfo = async (apiKey) => {
   const trimmedApiKey = String(apiKey || '').trim()
@@ -561,10 +559,6 @@ const findHrfcoStationCodeByName = async (apiKey, stationName) => {
   )
   if (partial) return partial.code
 
-  const strippedTarget = targetNorm.replace(/\d+$/, '')
-  const strippedMatch = items.find((item) => item.normName.replace(/\d+$/, '') === strippedTarget)
-  if (strippedMatch) return strippedMatch.code
-
   let best = null
   let bestScore = Infinity
   for (const item of items) {
@@ -582,11 +576,11 @@ const findHrfcoStationCodeByName = async (apiKey, stationName) => {
   throw new Error(`지점명 "${targetName}"에 해당하는 코드를 찾지 못했습니다.`)
 }
 
-const extractWaterLevelObservationsFromXml = (xmlText, stationCode, stationName) => {
+const extractLatestHrfcoWaterLevelFromXml = (xmlText, stationCode, stationName) => {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml')
   const xpathResult = doc.evaluate('//*[ymdhm and wl]', doc, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null)
 
-  const observations = []
+  let latest = null
   for (let i = 0; i < xpathResult.snapshotLength; i += 1) {
     const node = xpathResult.snapshotItem(i)
     if (!node) continue
@@ -599,21 +593,27 @@ const extractWaterLevelObservationsFromXml = (xmlText, stationCode, stationName)
     const value = Number(wl)
     if (!Number.isFinite(value)) continue
 
-    observations.push({
-      ymdhm,
-      value: roundTo(value, 2),
-      stationCode,
-      stationName
-    })
+    if (!latest || ymdhm > latest.ymdhm) {
+      latest = { ymdhm, value: roundTo(value, 2), stationCode, stationName }
+    }
   }
 
-  observations.sort((a, b) => a.ymdhm.localeCompare(b.ymdhm))
-  return observations
+  return latest
 }
 
-const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
+const floorToRecentTenMinuteMark = (date) => {
+  const d = new Date(date.getTime() - 7 * 60 * 1000)
+  d.setSeconds(0, 0)
+  d.setMinutes(Math.floor(d.getMinutes() / 10) * 10)
+  return d
+}
+
+const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = new Date()) => {
   const trimmedApiKey = String(apiKey || '').trim()
   const trimmedStationName = String(stationName || '').trim()
+  const now = referenceTime instanceof Date && !Number.isNaN(referenceTime.getTime())
+    ? new Date(referenceTime.getTime())
+    : new Date()
 
   if (!trimmedApiKey) {
     throw new Error('API 키가 비어 있습니다.')
@@ -624,75 +624,50 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName) => {
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
 
-  // 아무 때나 클릭해도 가장 최근에 게시된 10분 수위를 찾도록
-  // 조회 종료 시각을 현재 시각보다 넉넉하게 잡고, 시작 시각은 점점 넓혀서 시도한다.
-  const queryEnd = new Date(Date.now() + 30 * 60 * 1000)
-  const fallbackWindows = [168, 72, 24, 6] // hours
-  const observationMap = new Map()
+  // 클릭 시각에 관계없이, 현재 시각에서 7분을 뺀 뒤 그보다 이전 10분 단위의
+  // 가장 최신 자료를 찾는다. 예: 17:02/17:03 -> 16:50
+  const lookupEnd = floorToRecentTenMinuteMark(now)
+  const fallbackWindows = [96, 72, 24, 6] // hours
+  let latest = null
 
   for (const hours of fallbackWindows) {
-    const start = new Date(queryEnd.getTime() - hours * 60 * 60 * 1000)
-    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(queryEnd)}.xml`
+    const start = new Date(lookupEnd.getTime() - hours * 60 * 60 * 1000)
+    const url = `https://api.hrfco.go.kr/${encodeURIComponent(trimmedApiKey)}/waterlevel/list/10M/${encodeURIComponent(stationCode)}/${formatHrfcoDateTime(start)}/${formatHrfcoDateTime(lookupEnd)}.xml`
 
     try {
       const response = await fetch(url)
       if (!response.ok) continue
 
       const xmlText = await response.text()
-      const observations = extractWaterLevelObservationsFromXml(xmlText, stationCode, trimmedStationName)
-      for (const obs of observations) {
-        observationMap.set(obs.ymdhm, obs)
+      const candidate = extractLatestHrfcoWaterLevelFromXml(xmlText, stationCode, trimmedStationName)
+      if (!candidate) continue
+
+      if (!latest || candidate.ymdhm > latest.ymdhm) {
+        latest = candidate
       }
     } catch {
       // 다음 범위로 계속 시도
     }
+
+    if (latest) break
   }
 
-  const sorted = Array.from(observationMap.values()).sort((a, b) => a.ymdhm.localeCompare(b.ymdhm))
-  const latest = sorted[sorted.length - 1] || null
-  const previous = sorted[sorted.length - 2] || null
-
-  return latest
-    ? {
-        ymdhm: latest.ymdhm,
-        value: latest.value,
-        previousValue: previous ? previous.value : null,
-        stationCode,
-        stationName: trimmedStationName
-      }
-    : { ymdhm: '', value: null, previousValue: null, stationCode, stationName: trimmedStationName }
+  return latest || { ymdhm: '', value: null, stationCode, stationName: trimmedStationName }
 }
 
-const buildCurrentWaterEntries = (station, currentValue, previousValue = null) => {
+const buildCurrentWaterEntries = (station, currentValue) => {
   const historicalValues = (station.measurements || [])
     .map((measurement) => roundTo(measurement.h, 2))
     .filter((value) => value !== null)
     .sort((a, b) => a - b)
 
-  const entries = historicalValues.map((value) => ({
-    value,
-    isCurrent: false,
-    exactMatch: false,
-    trendSymbol: ''
-  }))
+  const entries = historicalValues.map((value) => ({ value, isCurrent: false, exactMatch: false }))
 
   if (currentValue !== null && currentValue !== undefined) {
     const currentRounded = roundTo(currentValue, 2)
     if (currentRounded !== null) {
       const exactMatch = historicalValues.some((value) => value === currentRounded)
-      let trendSymbol = '-'
-      const previousRounded = roundTo(previousValue, 2)
-      if (previousRounded !== null) {
-        if (currentRounded > previousRounded) trendSymbol = '▲'
-        else if (currentRounded < previousRounded) trendSymbol = '▼'
-        else trendSymbol = '-'
-      }
-      entries.push({
-        value: currentRounded,
-        isCurrent: true,
-        exactMatch,
-        trendSymbol
-      })
+      entries.push({ value: currentRounded, isCurrent: true, exactMatch })
     }
   }
 
@@ -1913,11 +1888,6 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const [currentWaterResults, setCurrentWaterResults] = useState({})
   const [isFetching, setIsFetching] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
-  const topScrollRef = useRef(null)
-  const bottomScrollRef = useRef(null)
-  const tableMeasureRef = useRef(null)
-  const scrollSyncLockRef = useRef(false)
-  const [tableContentWidth, setTableContentWidth] = useState(0)
 
   const groupOptions = useMemo(
     () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
@@ -1976,10 +1946,9 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
       return {
         station,
         currentWater: result.currentWater ?? null,
-        previousWater: result.previousWater ?? null,
         currentTime: result.currentTime || '',
         error: result.error || '',
-        entries: buildCurrentWaterEntries(station, result.currentWater, result.previousWater)
+        entries: buildCurrentWaterEntries(station, result.currentWater)
       }
     })
   }, [filteredStations, currentWaterResults])
@@ -1987,43 +1956,6 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const maxRows = useMemo(() => {
     return stationColumns.reduce((max, col) => Math.max(max, col.entries.length), 0)
   }, [stationColumns])
-
-  useEffect(() => {
-    const measure = () => {
-      const width = tableMeasureRef.current?.scrollWidth || 0
-      setTableContentWidth(width)
-    }
-
-    measure()
-    const rafId = window.requestAnimationFrame(measure)
-    window.addEventListener('resize', measure)
-
-    return () => {
-      window.cancelAnimationFrame(rafId)
-      window.removeEventListener('resize', measure)
-    }
-  }, [stationColumns, maxRows])
-
-  const syncHorizontalScroll = (source) => {
-    const topEl = topScrollRef.current
-    const bottomEl = bottomScrollRef.current
-    if (!topEl || !bottomEl || scrollSyncLockRef.current) return
-
-    scrollSyncLockRef.current = true
-    const fromEl = source === 'top' ? topEl : bottomEl
-    const toEl = source === 'top' ? bottomEl : topEl
-    toEl.scrollLeft = fromEl.scrollLeft
-
-    window.requestAnimationFrame(() => {
-      scrollSyncLockRef.current = false
-    })
-  }
-
-  const formatCurrentWaterText = (entry) => {
-    if (!entry) return ''
-    const base = fmt(entry.value, 2)
-    return entry.isCurrent ? `${base} ${entry.trendSymbol || '-'}` : base
-  }
 
   const handleFetchCurrentWater = async () => {
     const apiKey = String(hrfcoApiKey || '').trim()
@@ -2050,11 +1982,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           }
 
           try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName)
+            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
             if (latest && latest.value !== null && latest.value !== undefined) {
               return [station.id, {
                 currentWater: latest.value,
-                previousWater: latest.previousValue ?? null,
                 currentTime: latest.ymdhm,
                 error: ''
               }]
@@ -2158,77 +2089,52 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
           {stationColumns.length === 0 ? (
             <div className="muted">선택된 지점이 없습니다.</div>
           ) : (
-            <>
-              <div
-                ref={topScrollRef}
-                onScroll={() => syncHorizontalScroll('top')}
-                style={{
-                  overflowX: 'auto',
-                  overflowY: 'hidden',
-                  height: '14px',
-                  marginBottom: '6px'
-                }}
-              >
-                <div style={{ width: tableContentWidth ? `${tableContentWidth}px` : '100%', height: '1px' }} />
-              </div>
-
-              <div
-                ref={bottomScrollRef}
-                onScroll={() => syncHorizontalScroll('bottom')}
-                style={{ overflow: 'auto' }}
-              >
-                <table
-                  ref={tableMeasureRef}
-                  className="spreadsheet"
-                  style={{ tableLayout: 'auto', width: 'max-content' }}
-                >
-                  <thead>
-                    <tr>
-                      {stationColumns.map((col) => (
-                        <th key={col.station.id} style={{ width: 'auto', minWidth: '54px', maxWidth: '92px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
-                          <div>{col.station.name || '지점 없음'}</div>
-                          <div className="muted" style={{ fontSize: '12px' }}>
-                            {col.station.code || '코드 없음'}
-                          </div>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.from({ length: maxRows }).map((_, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {stationColumns.map((col) => {
-                          const entry = col.entries[rowIndex]
-                          const isCurrent = Boolean(entry?.isCurrent)
-                          const bg = isCurrent
-                            ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
-                            : undefined
-                          const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
-                          return (
-                            <td
-                              key={`${col.station.id}-${rowIndex}`}
-                              style={{
-                                textAlign: 'center',
-                                width: 'auto',
-                                minWidth: '54px',
-                                maxWidth: '92px',
-                                padding: '4px 4px',
-                                whiteSpace: 'nowrap',
-                                backgroundColor: bg,
-                                color: fg,
-                                fontWeight: isCurrent ? 700 : 400
-                              }}
-                            >
-                              {formatCurrentWaterText(entry)}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content' }}>
+              <thead>
+                <tr>
+                  {stationColumns.map((col) => (
+                    <th key={col.station.id} style={{ width: 'auto', minWidth: '64px', maxWidth: '110px', padding: '4px 4px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.2' }}>
+                      <div>{col.station.name || '지점 없음'}</div>
+                      <div className="muted" style={{ fontSize: '12px' }}>
+                        {col.station.code || '코드 없음'}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: maxRows }).map((_, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {stationColumns.map((col) => {
+                      const entry = col.entries[rowIndex]
+                      const isCurrent = Boolean(entry?.isCurrent)
+                      const bg = isCurrent
+                        ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
+                        : undefined
+                      const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
+                      return (
+                        <td
+                          key={`${col.station.id}-${rowIndex}`}
+                          style={{
+                            textAlign: 'center',
+                            width: 'auto',
+                            minWidth: '64px',
+                            maxWidth: '110px',
+                            padding: '4px 4px',
+                            whiteSpace: 'nowrap',
+                            backgroundColor: bg,
+                            color: fg,
+                            fontWeight: isCurrent ? 700 : 400
+                          }}
+                        >
+                          {entry ? fmt(entry.value, 2) : ''}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
         <p className="muted" style={{ marginTop: '8px' }}>
