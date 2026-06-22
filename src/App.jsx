@@ -477,6 +477,17 @@ const formatHrfcoDateTime = (date) => {
   return `${yyyy}${mm}${dd}${hh}${mi}`
 }
 
+const alignToPreviousTenMinuteMark = (date) => {
+  const aligned = new Date(date.getTime())
+  aligned.setSeconds(0, 0)
+  const minutes = aligned.getMinutes()
+  const remainder = minutes % 10
+  if (remainder !== 0) {
+    aligned.setMinutes(minutes - remainder)
+  }
+  return aligned
+}
+
 const normalizeHrfcoStationName = (value) =>
   String(value || '')
     .trim()
@@ -622,7 +633,9 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
   }
 
   const stationCode = await findHrfcoStationCodeByName(trimmedApiKey, trimmedStationName)
-  const endTime = new Date(now.getTime())
+  // 10분 단위 API 특성상, 현재 시각이 1~9분이어도
+  // 가장 최근의 완료된 10분 수위를 가져오도록 직전 10분 경계로 맞춘다.
+  const endTime = alignToPreviousTenMinuteMark(now)
 
   // 버튼을 누른 시각과 무관하게, 최신 수위가 포함될 수 있도록 넓은 구간을 조회한다.
   const fallbackWindows = [720, 168, 72, 24, 6] // hours
