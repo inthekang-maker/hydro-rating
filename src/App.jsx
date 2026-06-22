@@ -2165,13 +2165,22 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             <div
               ref={topScrollRef}
               style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 4,
+                backgroundColor: '#fff',
                 overflowX: 'auto',
                 overflowY: 'hidden',
                 height: '16px',
-                marginBottom: '6px'
+                marginBottom: '8px'
               }}
             >
-              <div style={{ width: `${Math.max(scrollContentWidth, stationColumns.length * 120)}px`, height: '1px' }} />
+              <div
+                style={{
+                  width: `${Math.max(scrollContentWidth, stationColumns.length * 120)}px`,
+                  height: '1px'
+                }}
+              />
             </div>
 
             <div ref={bodyScrollRef} className="table-wrap" style={{ overflowX: 'auto' }}>
@@ -2182,6 +2191,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                       <th
                         key={col.station.id}
                         style={{
+                          position: 'sticky',
+                          top: '16px',
+                          zIndex: 3,
+                          backgroundColor: '#eef4ff',
                           width: 'auto',
                           minWidth: '72px',
                           maxWidth: '96px',
