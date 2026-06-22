@@ -903,7 +903,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       lines.push(selectedCells.join('\t'))
     }
 
-   const lines = text.replace(/\r/g, '').split('\n')
+    const text = lines.join('\n')
     try {
       await navigator.clipboard.writeText(text)
     } catch {
