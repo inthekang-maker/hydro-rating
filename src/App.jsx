@@ -2711,40 +2711,35 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           <h2>계기수위-측정성과</h2>
           <div className="grid-actions">
             <button
-  className="btn secondary"
-  style={{ background: periodKey === '3h' ? '#1f6feb' : '#6c757d' }}
+  className={periodKey === '3h' ? 'btn' : 'btn secondary'}
   onClick={() => handleLoadPeriod('3h')}
 >
   3시간
 </button>
 
 <button
-  className="btn secondary"
-  style={{ background: periodKey === '6h' ? '#1f6feb' : '#6c757d' }}
+  className={periodKey === '6h' ? 'btn' : 'btn secondary'}
   onClick={() => handleLoadPeriod('6h')}
 >
   6시간
 </button>
 
 <button
-  className="btn secondary"
-  style={{ background: periodKey === '12h' ? '#1f6feb' : '#6c757d' }}
+  className={periodKey === '12h' ? 'btn' : 'btn secondary'}
   onClick={() => handleLoadPeriod('12h')}
 >
   12시간
 </button>
 
 <button
-  className="btn secondary"
-  style={{ background: periodKey === '1d' ? '#1f6feb' : '#6c757d' }}
+  className={periodKey === '1d' ? 'btn' : 'btn secondary'}
   onClick={() => handleLoadPeriod('1d')}
 >
   1일
 </button>
 
 <button
-  className="btn secondary"
-  style={{ background: periodKey === 'all' ? '#1f6feb' : '#6c757d' }}
+  className={periodKey === 'all' ? 'btn' : 'btn secondary'}
   onClick={() => handleLoadPeriod('all')}
 >
   전체
