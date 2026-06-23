@@ -2596,13 +2596,8 @@ const stationColumns = useMemo(
   () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
   [filteredStations, historyRowsByStation]
 )
-
-const graphStation = useMemo(() => {
-  if (stationFilter === '전체') return null
-  return filteredStations.find((station) => station.id === stationFilter) || null
-}, [filteredStations, stationFilter])
-
-const graphYear = new Date().getFullYear()  
+const graphStation = filteredStations.length === 1 ? filteredStations[0] : null
+const graphYear = new Date().getFullYear()
 
 const graphData = useMemo(() => {
   if (!graphStation) return null
@@ -2897,26 +2892,31 @@ const instrumentGraphOptions = useMemo(
        <section className="card">
 
   <section className="card">
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: '12px',
-      marginBottom: '12px'
+   <div
+  style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '12px'
+  }}
+>
+  <h2 style={{ margin: 0 }}>수위 자료</h2>
+
+  <button
+    type="button"
+    className="btn"
+    onClick={() => {
+      if (filteredStations.length !== 1) {
+        window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
+        return
+      }
+      setShowGraph((prev) => !prev)
     }}
   >
-    <h2 style={{ margin: 0 }}>수위 자료</h2>
-
-    <button
-      type="button"
-      className={graphStation ? 'btn' : 'btn secondary'}
-      onClick={() => setShowGraph((prev) => !prev)}
-      disabled={!graphStation}
-    >
-      {showGraph ? '표 보기' : '그래프'}
-    </button>
-  </div>
+    {showGraph ? '표 보기' : '그래프'}
+  </button>
+</div>
   {showGraph && graphStation && graphData && (
   <div
     style={{
