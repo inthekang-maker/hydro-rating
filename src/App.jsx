@@ -2434,19 +2434,13 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
     />
   </label>
 
-  <button
-    type="button"
-    className="btn"
-    onClick={() => {
-      if (filteredStations.length !== 1) {
-        window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
-        return
-      }
-      setShowGraph((prev) => !prev)
-    }}
-  >
-    {showGraph ? '표 보기' : '그래프'}
-  </button>
+<button
+  type="button"
+  className="btn"
+  onClick={() => setShowGraph((prev) => !prev)}
+>
+  {showGraph ? '그래프 숨기기' : '그래프 보기'}
+</button>
 </div>
 
           <div
@@ -2616,7 +2610,7 @@ const graphStation = filteredStations[0] || null
 const graphYear = new Date().getFullYear()
 
 const graphData = useMemo(() => {
-  if (!filteredStations.length) return null
+  if (!graphStation) return null
 
   const rowsMap = historyRowsByStation[graphStation.id] || {}
 
