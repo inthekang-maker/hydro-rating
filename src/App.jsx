@@ -2710,24 +2710,60 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         <div className="section-header">
           <h2>계기수위-측정성과</h2>
           <div className="grid-actions">
-            <button className="btn secondary" onClick={() => handleLoadPeriod('3h')} disabled={historyLoading}>
-              3시간
-            </button>
-            <button className="btn secondary" onClick={() => handleLoadPeriod('6h')} disabled={historyLoading}>
-              6시간
-            </button>
-            <button className="btn secondary" onClick={() => handleLoadPeriod('12h')} disabled={historyLoading}>
-              12시간
-            </button>
-            <button className="btn secondary" onClick={() => handleLoadPeriod('1d')} disabled={historyLoading}>
-              1일
-            </button>
-            <button className="btn" onClick={() => handleLoadPeriod('all')} disabled={historyLoading}>
-              전체
-            </button>
-            <button className="btn secondary" onClick={handleLoadNextMonth} disabled={historyLoading || historyMode !== 'all' || !canLoadMoreAll}>
-              더 불러오기
-            </button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  3시간
+</button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  6시간
+</button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  12시간
+</button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  1일
+</button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  전체
+</button>
+            <button
+  className="btn secondary"
+  style={{
+    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
+  }}
+  onClick={() => handleLoadPeriod('3h')}
+>
+  더 불러오기
+</button>
           </div>
         </div>
 
