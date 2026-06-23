@@ -2532,6 +2532,11 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [groupFilter, setGroupFilter] = useState('전체')
   const [stationFilter, setStationFilter] = useState('전체')
   const [periodKey, setPeriodKey] = useState('3h')
+
+  const getPeriodButtonStyle = (key) => ({
+    background: periodKey === key ? '#1f6feb' : '#6c757d'
+  })
+
   const [historyRowsByStation, setHistoryRowsByStation] = useState({})
   const [historyTimes, setHistoryTimes] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -2539,6 +2544,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [historyMode, setHistoryMode] = useState('period')
   const [nextMonthStart, setNextMonthStart] = useState(() => getMonthStart(getInstrumentYearStart()))
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
+
 
   const periodOptions = useMemo(
     () => [
