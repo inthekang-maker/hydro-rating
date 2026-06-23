@@ -2154,69 +2154,24 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
             >
               시간
             </th>
-           {stationColumns.map((col) => {
-  // 현재 선택된 그래프 지점과 이 컬럼의 지점이 일치하는지 확인 (UI 활성화 표시용)
-  const isSelectedGraph = graphStation?.id === col.station.id;
-
-  return (
-    <th
-      key={col.station.id}
-      style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 2,
-        background: isSelectedGraph ? '#f0f7ff' : '#fff', // 선택 시 배경색 변화로 활성화 표시
-        whiteSpace: 'nowrap',
-        minWidth: '90px',
-        padding: '8px 4px',
-        borderBottom: isSelectedGraph ? '2px solid #1f6feb' : '1px solid #ddd',
-        textAlign: 'center'
-      }}
-    >
-      <div style={{ fontWeight: 'bold', color: isSelectedGraph ? '#1f6feb' : '#111' }}>
-        {col.station.name || '지점명 없음'}
-      </div>
-      <div className="muted" style={{ fontSize: '11px', marginTop: '2px', marginBottom: '6px' }}>
-        {col.station.code || '코드 없음'}
-      </div>
-      
-      {/* 그래프 활성화용 버튼 */}
-      <button
-        type="button"
-        style={{
-          padding: '3px 8px',
-          fontSize: '11px',
-          // 선택되었을 때는 진한 파란색, 선택 안 되었을 때는 연한 회색/파란색으로 시각적 구분 보장
-          backgroundColor: isSelectedGraph ? '#1f6feb' : '#edf2fa',
-          color: isSelectedGraph ? '#fff' : '#1f6feb',
-          border: isSelectedGraph ? '1px solid #1f6feb' : '1px solid #d0e1fd',
-          borderRadius: '4px',
-          cursor: 'pointer',
-          fontWeight: isSelectedGraph ? 'bold' : 'normal',
-          width: '90%',
-          display: 'block',
-          margin: '0 auto'
-        }}
-        onClick={() => {
-          // 중요: 하단 그래프(Scatter 차트)가 정상적으로 인지할 수 있도록 
-          // flat한 전체 지점 목록에서 ID가 일치하는 원본 station 객체를 정확히 찾아 세팅합니다.
-          const actualStation = groups
-            .flatMap(g => g.stations)
-            .find(s => s.id === col.station.id);
-            
-          if (actualStation) {
-            setGraphStation(actualStation);
-          } else {
-            // 예외 방지용 백업
-            setGraphStation(col.station);
-          }
-        }}
-      >
-        {isSelectedGraph ? '● 그래프' : '그래프'}
-      </button>
-    </th>
-  );
-})} 
+            {stationColumns.map((col) => (
+              <th
+                key={col.station.id}
+                style={{
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 3,
+                  background: '#fff',
+                  whiteSpace: 'nowrap',
+                  minWidth: '96px'
+                }}
+              >
+                <div>{col.station.name || '지점 없음'}</div>
+                <div className="muted" style={{ fontSize: '12px' }}>
+                  {col.station.code || '코드 없음'}
+                </div>
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -2468,15 +2423,31 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             </select>
           </label>
 
-          <label>
-            API 키
-            <input
-              type="text"
-              value={hrfcoApiKey}
-              onChange={(e) => onHrfcoApiKeyChange(e.target.value)}
-              placeholder="HRFCO API 키"
-            />
-          </label>
+          <div style={{ display: 'flex', alignItems: 'end', gap: '8px', flexWrap: 'wrap' }}>
+  <label style={{ flex: '1 1 260px' }}>
+    API 키
+    <input
+      type="text"
+      value={hrfcoApiKey}
+      onChange={(e) => onHrfcoApiKeyChange(e.target.value)}
+      placeholder="HRFCO API 키"
+    />
+  </label>
+
+  <button
+    type="button"
+    className="btn"
+    onClick={() => {
+      if (filteredStations.length !== 1) {
+        window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
+        return
+      }
+      setShowGraph((prev) => !prev)
+    }}
+  >
+    {showGraph ? '표 보기' : '그래프'}
+  </button>
+</div>
 
           <div
             className="grid-actions"
@@ -2601,7 +2572,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange, c
   const [historyMode, setHistoryMode] = useState('period')
   const [nextMonthStart, setNextMonthStart] = useState(() => getMonthStart(getInstrumentYearStart()))
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
-  const [showGraph, setShowGraph] = useState(true)
+  const [showGraph, setShowGraph] = useState(false)
   const [instrumentGraphConfig, setInstrumentGraphConfig] = useState(() => ({
   xMin: '2026-01-01T00:00:00',
   xMax: '',
@@ -2935,31 +2906,7 @@ const instrumentGraphOptions = useMemo(
       </section>
 
      <section className="card">
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: '12px',
-      marginBottom: '12px'
-    }}
-  >
-    <h2 style={{ margin: 0 }}>수위 자료</h2>
-
-    <button
-      type="button"
-      className="btn"
-      onClick={() => {
-        if (filteredStations.length !== 1) {
-          window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
-          return
-        }
-        setShowGraph((prev) => !prev)
-      }}
-    >
-      {showGraph ? '표 보기' : '그래프'}
-    </button>
-  </div>
+     <h2>수위 자료</h2>
 
   {graphStation && graphData ? (
   <div
