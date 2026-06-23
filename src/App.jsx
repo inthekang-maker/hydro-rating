@@ -849,6 +849,48 @@ const getPeriodRangeForHrfco = (periodKey, referenceTime = new Date()) => {
   }
 }
 
+
+const HRFCO_TEN_MINUTE_MS = 10 * 60 * 1000
+const INSTRUMENT_PAGE_SIZE = 500
+const INSTRUMENT_ROW_HEIGHT = 34
+const INSTRUMENT_OVERSCAN_ROWS = 30
+
+const getInstrumentAllInitialRange = (referenceTime = new Date()) => {
+  const end = getHrfcoQueryEndTime(referenceTime)
+  const start = floorToTenMinuteSlot(
+    new Date(end.getTime() - (INSTRUMENT_PAGE_SIZE - 1) * HRFCO_TEN_MINUTE_MS)
+  )
+  const yearStart = new Date(end.getFullYear(), 0, 1, 0, 10, 0, 0)
+
+  return { start, end, yearStart }
+}
+
+const getInstrumentAllOlderRange = (currentStart, yearStart) => {
+  if (!(currentStart instanceof Date) || Number.isNaN(currentStart.getTime())) return null
+  const end = floorToTenMinuteSlot(new Date(currentStart.getTime() - HRFCO_TEN_MINUTE_MS))
+  if (end.getTime() < yearStart.getTime()) return null
+  const start = floorToTenMinuteSlot(
+    new Date(end.getTime() - (INSTRUMENT_PAGE_SIZE - 1) * HRFCO_TEN_MINUTE_MS)
+  )
+  return {
+    start: start.getTime() < yearStart.getTime() ? new Date(yearStart.getTime()) : start,
+    end
+  }
+}
+
+const mergeHrfcoRowsAscending = (existingRows, incomingRows) => {
+  const map = new Map()
+  for (const row of Array.isArray(existingRows) ? existingRows : []) {
+    if (!row || !row.ymdhm) continue
+    if (!map.has(row.ymdhm)) map.set(row.ymdhm, row)
+  }
+  for (const row of Array.isArray(incomingRows) ? incomingRows : []) {
+    if (!row || !row.ymdhm) continue
+    if (!map.has(row.ymdhm)) map.set(row.ymdhm, row)
+  }
+  return Array.from(map.values()).sort((a, b) => String(a.ymdhm).localeCompare(String(b.ymdhm)))
+}
+
 function CopyableMatrixTable({
   headers,
   rows,
@@ -2443,9 +2485,12 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [seriesResults, setSeriesResults] = useState({})
   const [isFetching, setIsFetching] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [allRangeStart, setAllRangeStart] = useState(null)
+  const [scrollContentWidth, setScrollContentWidth] = useState(0)
+  const [bodyHeight, setBodyHeight] = useState(0)
+  const [scrollTop, setScrollTop] = useState(0)
   const topScrollRef = useRef(null)
   const bodyScrollRef = useRef(null)
-  const [scrollContentWidth, setScrollContentWidth] = useState(0)
 
   const periodOptions = [
     { key: '3h', label: '3시간' },
@@ -2454,6 +2499,11 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     { key: '1d', label: '1일' },
     { key: 'all', label: '전체' }
   ]
+
+  const yearStart = useMemo(() => {
+    const end = getHrfcoQueryEndTime(new Date())
+    return new Date(end.getFullYear(), 0, 1, 0, 10, 0, 0)
+  }, [])
 
   const groupOptions = useMemo(
     () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
@@ -2535,21 +2585,30 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   }, [stationColumns, periodKey])
 
   const maxRows = allTimes.length
+  const hasMoreAll = Boolean(allRangeStart && allRangeStart.getTime() > yearStart.getTime())
 
   useEffect(() => {
     const measure = () => {
       const body = bodyScrollRef.current
       if (!body) return
       setScrollContentWidth(body.scrollWidth || body.clientWidth || 0)
+      setBodyHeight(body.clientHeight || 0)
     }
 
-    const raf = requestAnimationFrame(measure)
+    measure()
     window.addEventListener('resize', measure)
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('resize', measure)
+
+    let resizeObserver = null
+    if (typeof ResizeObserver !== 'undefined' && bodyScrollRef.current) {
+      resizeObserver = new ResizeObserver(measure)
+      resizeObserver.observe(bodyScrollRef.current)
     }
-  }, [stationColumns, maxRows])
+
+    return () => {
+      window.removeEventListener('resize', measure)
+      if (resizeObserver) resizeObserver.disconnect()
+    }
+  }, [stationColumns, maxRows, periodKey])
 
   useEffect(() => {
     const top = topScrollRef.current
@@ -2581,7 +2640,16 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     }
   }, [stationColumns, maxRows, scrollContentWidth])
 
-  const handleFetchPeriod = async (nextPeriodKey) => {
+  const resetTableScroll = () => {
+    const body = bodyScrollRef.current
+    if (body) {
+      body.scrollTop = 0
+      body.scrollLeft = 0
+    }
+    setScrollTop(0)
+  }
+
+  const loadPeriodData = async (nextPeriodKey) => {
     const apiKey = String(hrfcoApiKey || '').trim()
     if (!apiKey) {
       window.alert('API 키를 입력해 주세요.')
@@ -2594,10 +2662,43 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
     setPeriodKey(nextPeriodKey)
     setIsFetching(true)
-    const { start, end, label } = getPeriodRangeForHrfco(nextPeriodKey, new Date())
-    setStatusMessage(`${label} 자료를 조회하는 중입니다...`)
+    setStatusMessage('')
+    setAllRangeStart(null)
+
+    const now = new Date()
 
     try {
+      if (nextPeriodKey === 'all') {
+        const { start, end } = getInstrumentAllInitialRange(now)
+        setStatusMessage('전체 자료의 최근 500행을 불러오는 중입니다...')
+
+        const results = await mapWithConcurrency(filteredStations, 4, async (station) => {
+          const stationName = String(station.name || '').trim()
+          if (!stationName) {
+            return [station.id, { rows: [], error: '지점명 없음' }]
+          }
+
+          try {
+            const rows = await fetchHrfcoWaterLevelRows(apiKey, stationName, start, end)
+            return [station.id, { rows, error: '' }]
+          } catch (error) {
+            return [station.id, {
+              rows: [],
+              error: error instanceof Error ? error.message : '조회 실패'
+            }]
+          }
+        })
+
+        setSeriesResults(Object.fromEntries(results))
+        setAllRangeStart(start)
+        setStatusMessage('전체 자료의 최근 500행을 불러왔습니다. 더 불러오기를 누르면 이전 자료를 추가할 수 있습니다.')
+        resetTableScroll()
+        return
+      }
+
+      const { start, end, label } = getPeriodRangeForHrfco(nextPeriodKey, now)
+      setStatusMessage(`${label} 자료를 조회하는 중입니다...`)
+
       const results = await mapWithConcurrency(filteredStations, 4, async (station) => {
         const stationName = String(station.name || '').trim()
         if (!stationName) {
@@ -2615,16 +2716,113 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         }
       })
 
-      setSeriesResults((prev) => ({
-        ...prev,
-        ...Object.fromEntries(results)
-      }))
+      setSeriesResults(Object.fromEntries(results))
       setStatusMessage(`${label} 조회가 완료되었습니다.`)
+      resetTableScroll()
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : '조회 실패')
     } finally {
       setIsFetching(false)
     }
+  }
+
+  const loadMoreAll = async () => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      window.alert('API 키를 입력해 주세요.')
+      return
+    }
+    if (filteredStations.length === 0) {
+      window.alert('선택된 지점이 없습니다.')
+      return
+    }
+    if (!allRangeStart) return
+
+    const range = getInstrumentAllOlderRange(allRangeStart, yearStart)
+    if (!range) {
+      setStatusMessage('올해 시작 시점까지 모두 불러왔습니다.')
+      return
+    }
+
+    setIsFetching(true)
+    setStatusMessage('이전 자료를 추가로 불러오는 중입니다...')
+
+    const beforeScrollTop = bodyScrollRef.current?.scrollTop || 0
+    const existingTimes = new Set(allTimes)
+
+    try {
+      const results = await mapWithConcurrency(filteredStations, 4, async (station) => {
+        const stationName = String(station.name || '').trim()
+        if (!stationName) {
+          return [station.id, { rows: [], error: '지점명 없음' }]
+        }
+
+        try {
+          const rows = await fetchHrfcoWaterLevelRows(apiKey, stationName, range.start, range.end)
+          return [station.id, { rows, error: '' }]
+        } catch (error) {
+          return [station.id, {
+            rows: [],
+            error: error instanceof Error ? error.message : '조회 실패'
+          }]
+        }
+      })
+
+      const resultMap = Object.fromEntries(results)
+      const incomingTimes = new Set()
+      Object.values(resultMap).forEach((entry) => {
+        ;(entry?.rows || []).forEach((row) => {
+          if (row?.ymdhm) incomingTimes.add(row.ymdhm)
+        })
+      })
+      const insertedTimeCount = Array.from(incomingTimes).filter((ymdhm) => !existingTimes.has(ymdhm)).length
+
+      setSeriesResults((prev) => {
+        const next = { ...prev }
+        filteredStations.forEach((station) => {
+          const incoming = resultMap[station.id] || { rows: [], error: '' }
+          const previous = prev[station.id] || { rows: [], error: '' }
+          next[station.id] = {
+            ...previous,
+            rows: mergeHrfcoRowsAscending(previous.rows, incoming.rows),
+            error: incoming.error || previous.error || ''
+          }
+        })
+        return next
+      })
+
+      setAllRangeStart(range.start)
+      setStatusMessage('이전 자료를 추가했습니다.')
+
+      window.requestAnimationFrame(() => {
+        const body = bodyScrollRef.current
+        if (!body) return
+        if (insertedTimeCount > 0) {
+          body.scrollTop = beforeScrollTop + insertedTimeCount * INSTRUMENT_ROW_HEIGHT
+          setScrollTop(body.scrollTop)
+        }
+      })
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : '추가 조회 실패')
+    } finally {
+      setIsFetching(false)
+    }
+  }
+
+  const virtualizeAll = periodKey === 'all' && allTimes.length > 200
+  const visibleRowCount = Math.max(1, Math.ceil((bodyHeight || 560) / INSTRUMENT_ROW_HEIGHT))
+  const startIndex = virtualizeAll
+    ? Math.max(0, Math.floor(scrollTop / INSTRUMENT_ROW_HEIGHT) - INSTRUMENT_OVERSCAN_ROWS)
+    : 0
+  const endIndex = virtualizeAll
+    ? Math.min(allTimes.length, startIndex + visibleRowCount + INSTRUMENT_OVERSCAN_ROWS * 2)
+    : allTimes.length
+  const visibleTimes = virtualizeAll ? allTimes.slice(startIndex, endIndex) : allTimes
+  const topSpacerHeight = virtualizeAll ? startIndex * INSTRUMENT_ROW_HEIGHT : 0
+  const bottomSpacerHeight = virtualizeAll ? Math.max(0, (allTimes.length - endIndex) * INSTRUMENT_ROW_HEIGHT) : 0
+
+  const handleBodyScroll = (event) => {
+    setScrollTop(event.currentTarget.scrollTop)
   }
 
   return (
@@ -2684,7 +2882,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                 className="btn secondary"
                 disabled={isFetching}
                 style={{ background: periodKey === option.key ? '#1f6feb' : undefined }}
-                onClick={() => handleFetchPeriod(option.key)}
+                onClick={() => loadPeriodData(option.key)}
               >
                 {isFetching && periodKey === option.key ? '조회 중...' : option.label}
               </button>
@@ -2695,6 +2893,13 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         <div className="muted" style={{ marginTop: '8px' }}>
           선택된 지점 수: {filteredStations.length}개
         </div>
+        {periodKey === 'all' ? (
+          <div className="grid-actions" style={{ marginTop: '8px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button className="btn secondary" onClick={loadMoreAll} disabled={isFetching || !hasMoreAll}>
+              {isFetching ? '불러오는 중...' : hasMoreAll ? '더 불러오기' : '더 이상 없음'}
+            </button>
+          </div>
+        ) : null}
         {statusMessage ? (
           <div className="muted" style={{ marginTop: '4px' }}>
             {statusMessage}
@@ -2731,6 +2936,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
               ref={bodyScrollRef}
               className="table-wrap"
               style={{ overflow: 'auto', maxHeight: '70vh' }}
+              onScroll={handleBodyScroll}
             >
               <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content' }}>
                 <thead>
@@ -2775,7 +2981,12 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                   </tr>
                 </thead>
                 <tbody>
-                  {allTimes.map((ymdhm) => (
+                  {virtualizeAll && topSpacerHeight > 0 ? (
+                    <tr aria-hidden="true">
+                      <td colSpan={stationColumns.length + 1} style={{ height: `${topSpacerHeight}px`, padding: 0, border: 0 }} />
+                    </tr>
+                  ) : null}
+                  {visibleTimes.map((ymdhm) => (
                     <tr key={ymdhm}>
                       <td
                         style={{
@@ -2810,13 +3021,18 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                       })}
                     </tr>
                   ))}
+                  {virtualizeAll && bottomSpacerHeight > 0 ? (
+                    <tr aria-hidden="true">
+                      <td colSpan={stationColumns.length + 1} style={{ height: `${bottomSpacerHeight}px`, padding: 0, border: 0 }} />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
           </>
         )}
         <p className="muted" style={{ marginTop: '8px' }}>
-          3시간·6시간·12시간·1일은 최근 시간부터 내림차순으로 표시하고, 전체는 올해 1월 1일 00:10부터 오름차순으로 표시합니다.
+          3시간·6시간·12시간·1일은 최근 시간부터 내림차순으로 표시하고, 전체는 최근 500행부터 불러와 더 불러보기로 이전 자료를 추가합니다.
         </p>
       </section>
     </div>
