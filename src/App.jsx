@@ -2889,7 +2889,7 @@ const instrumentGraphOptions = useMemo(
         ) : null}
       </section>
 
-      <section className="card">
+    <section className="card">
   <div
     style={{
       display: 'flex',
@@ -2949,7 +2949,7 @@ const instrumentGraphOptions = useMemo(
   <p className="muted" style={{ marginTop: '8px' }}>
     3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순, 전체는 2026-01-01 00:10부터 월 단위로 오름차순 표시합니다.
   </p>
-</section>
+</section>  
     </div>
   )
 }
