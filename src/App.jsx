@@ -2556,7 +2556,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange, c
   const [historyMode, setHistoryMode] = useState('period')
   const [nextMonthStart, setNextMonthStart] = useState(() => getMonthStart(getInstrumentYearStart()))
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
-  const [showGraph, setShowGraph] = useState(false)
+  const [showGraph, setShowGraph] = useState(true)
   const [instrumentGraphConfig, setInstrumentGraphConfig] = useState(() => ({
   xMin: '2026-01-01T00:00:00',
   xMax: '',
@@ -2916,23 +2916,23 @@ const instrumentGraphOptions = useMemo(
     </button>
   </div>
 
-  {showGraph && graphStation && graphData ? (
-    <div
-      style={{
-        height: '650px',
-        marginBottom: '20px',
-        border: '1px solid rgba(0,0,0,0.12)',
-        borderRadius: '10px',
-        padding: '10px'
-      }}
-    >
-      <Scatter data={graphData} options={instrumentGraphOptions} />
-    </div>
-  ) : (
-    <div className="muted" style={{ marginBottom: '20px' }}>
-      지점을 1개 선택한 뒤 그래프를 눌러 주세요.
-    </div>
-  )}
+  {graphStation && graphData ? (
+  <div
+    style={{
+      height: '650px',
+      marginBottom: '20px',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: '10px',
+      padding: '10px'
+    }}
+  >
+    <Scatter data={graphData} options={instrumentGraphOptions} />
+  </div>
+) : (
+  <div className="muted" style={{ marginBottom: '20px' }}>
+    지점을 1개 선택한 뒤 수위 자료를 불러오세요.
+  </div>
+)}
 
   {stationColumns.length === 0 ? (
     <div className="muted">선택된 지점이 없습니다.</div>
