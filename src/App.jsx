@@ -1926,6 +1926,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const [currentWaterResults, setCurrentWaterResults] = useState({})
   const [isFetching, setIsFetching] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [currentWaterBaseTime, setCurrentWaterBaseTime] = useState('')
   const topScrollRef = useRef(null)
   const bodyScrollRef = useRef(null)
   const [scrollContentWidth, setScrollContentWidth] = useState(0)
@@ -2061,6 +2062,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 
     setIsFetching(true)
     setStatusMessage('현재 수위를 조회하는 중입니다...')
+    setCurrentWaterBaseTime('')
 
     try {
       const results = await Promise.all(
@@ -2074,15 +2076,17 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 
           try {
             const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
-            if (latest && latest.current && latest.current.value !== null && latest.current.value !== undefined) {
-              return [station.id, {
-                currentWater: latest.current.value,
-                currentTime: latest.current.ymdhm,
-                previousWater: latest.previous?.value ?? null,
-                previousTime: latest.previous?.ymdhm ?? '',
-                error: ''
-              }]
+            if (latest && latest.value !== null && latest.value !== undefined) {
+            if (!currentWaterBaseTime && latest.ymdhm) {
+            setCurrentWaterBaseTime(latest.ymdhm)
             }
+
+           return [station.id, {
+           currentWater: latest.value,
+           currentTime: latest.ymdhm,
+           error: ''
+           }]
+           }
 
             return [station.id, {
               ...previous,
@@ -2112,7 +2116,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   return (
     <div>
       <section className="card">
-        <h2>계기수위-측정성과</h2>
+        <h2>빈수위 찾기</h2>
         <div className="row">
           <label>
             그룹
@@ -2159,11 +2163,20 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             />
           </label>
 
-          <div className="grid-actions" style={{ alignSelf: 'end' }}>
-            <button className="btn" onClick={handleFetchCurrentWater} disabled={isFetching}>
-              {isFetching ? '조회 중...' : '현재 수위'}
-            </button>
-          </div>
+          <div
+  className="grid-actions"
+  style={{ alignSelf: 'end', display: 'flex', alignItems: 'center', gap: '8px' }}
+>
+  <button className="btn" onClick={handleFetchCurrentWater} disabled={isFetching}>
+    {isFetching ? '조회 중...' : '현재 수위'}
+  </button>
+
+  {currentWaterBaseTime ? (
+    <span className="muted" style={{ fontSize: '14px' }}>
+      {`${currentWaterBaseTime.slice(0, 4)}-${currentWaterBaseTime.slice(4, 6)}-${currentWaterBaseTime.slice(6, 8)} ${currentWaterBaseTime.slice(8, 10)}:${currentWaterBaseTime.slice(10, 12)} 기준`}
+    </span>
+  ) : null}
+</div>
         </div>
 
         <div className="muted" style={{ marginTop: '8px' }}>
@@ -3017,7 +3030,7 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div>
-          <h1>수위-유량 곡선식 관리 PWA</h1>
+          <h1>지점별 자료 관리 PWA</h1>
           <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
         <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
@@ -3059,7 +3072,7 @@ export default function App() {
           }}
           onClick={() => setActiveTab('instrument')}
         >
-          계기수위-측정성과
+          빈수위 찾기
         </button>
       </div>
 
