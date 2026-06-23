@@ -1931,6 +1931,12 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const bodyScrollRef = useRef(null)
   const [scrollContentWidth, setScrollContentWidth] = useState(0)
 
+  const formatYmdhm = (ymdhm) => {
+  const s = String(ymdhm || '')
+  if (s.length < 12) return ''
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)} ${s.slice(8, 10)}:${s.slice(10, 12)}`
+}
+  
   const groupOptions = useMemo(
     () => ['전체', ...groups.map((group) => group.name || '그룹 없음')],
     [groups]
@@ -2064,53 +2070,66 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
     setStatusMessage('현재 수위를 조회하는 중입니다...')
     setCurrentWaterBaseTime('')
 
-    try {
-      const results = await Promise.all(
-        filteredStations.map(async (station) => {
-          const stationName = String(station.name || '').trim()
-          const previous = currentWaterResults[station.id] || { currentWater: null, currentTime: '', previousWater: null, previousTime: '', error: '' }
+   setIsFetching(true)
+setStatusMessage('현재 수위를 조회하는 중입니다...')
+setCurrentWaterBaseTime('')
 
-          if (!stationName) {
-            return [station.id, { ...previous, error: '지점명 없음' }]
-          }
+try {
+  const results = await Promise.all(
+    filteredStations.map(async (station) => {
+      const stationName = String(station.name || '').trim()
+      const previous = currentWaterResults[station.id] || {
+        currentWater: null,
+        currentTime: '',
+        previousWater: null,
+        previousTime: '',
+        error: ''
+      }
 
-          try {
-            const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
-            if (latest && latest.value !== null && latest.value !== undefined) {
-            if (!currentWaterBaseTime && latest.ymdhm) {
-            setCurrentWaterBaseTime(latest.ymdhm)
-            }
+      if (!stationName) {
+        return [station.id, { ...previous, error: '지점명 없음' }]
+      }
 
-           return [station.id, {
-           currentWater: latest.value,
-           currentTime: latest.ymdhm,
-           error: ''
-           }]
-           }
+      try {
+        const latest = await fetchLatestHrfcoWaterLevel(apiKey, stationName, new Date())
+        if (latest && latest.current && latest.current.value !== null && latest.current.value !== undefined) {
+          return [station.id, {
+            currentWater: latest.current.value,
+            currentTime: latest.current.ymdhm,
+            previousWater: latest.previous?.value ?? null,
+            previousTime: latest.previous?.ymdhm ?? '',
+            error: ''
+          }]
+        }
 
-            return [station.id, {
-              ...previous,
-              error: '최근 수위를 찾지 못했습니다.'
-            }]
-          } catch (error) {
-            return [station.id, {
-              ...previous,
-              error: error instanceof Error ? error.message : '조회 실패'
-            }]
-          }
-        })
-      )
+        return [station.id, {
+          ...previous,
+          error: '최근 수위를 찾지 못했습니다.'
+        }]
+      } catch (error) {
+        return [station.id, {
+          ...previous,
+          error: error instanceof Error ? error.message : '조회 실패'
+        }]
+      }
+    })
+  )
 
-      setCurrentWaterResults((prev) => ({
-        ...prev,
-        ...Object.fromEntries(results)
-      }))
-      setStatusMessage('현재 수위 조회가 완료되었습니다.')
-    } catch (error) {
-      setStatusMessage(error instanceof Error ? error.message : '현재 수위 조회 실패')
-    } finally {
-      setIsFetching(false)
-    }
+  const firstSuccess = results.find(([, data]) => data?.currentTime)
+  if (firstSuccess?.[1]?.currentTime) {
+    setCurrentWaterBaseTime(firstSuccess[1].currentTime)
+  }
+
+  setCurrentWaterResults((prev) => ({
+    ...prev,
+    ...Object.fromEntries(results)
+  }))
+  setStatusMessage('현재 수위 조회가 완료되었습니다.')
+} catch (error) {
+  setStatusMessage(error instanceof Error ? error.message : '현재 수위 조회 실패')
+} finally {
+  setIsFetching(false)
+} 
   }
 
   return (
@@ -2163,7 +2182,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             />
           </label>
 
-          <div
+         <div
   className="grid-actions"
   style={{ alignSelf: 'end', display: 'flex', alignItems: 'center', gap: '8px' }}
 >
@@ -2173,10 +2192,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 
   {currentWaterBaseTime ? (
     <span className="muted" style={{ fontSize: '14px' }}>
-      {`${currentWaterBaseTime.slice(0, 4)}-${currentWaterBaseTime.slice(4, 6)}-${currentWaterBaseTime.slice(6, 8)} ${currentWaterBaseTime.slice(8, 10)}:${currentWaterBaseTime.slice(10, 12)} 기준`}
+      {`${formatYmdhm(currentWaterBaseTime)} 기준`}
     </span>
   ) : null}
-</div>
+</div> 
         </div>
 
         <div className="muted" style={{ marginTop: '8px' }}>
