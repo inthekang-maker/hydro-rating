@@ -2712,58 +2712,46 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           <div className="grid-actions">
             <button
   className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
+  style={{ background: periodKey === '3h' ? '#1f6feb' : '#6c757d' }}
   onClick={() => handleLoadPeriod('3h')}
 >
   3시간
 </button>
-            <button
+
+<button
   className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
-  onClick={() => handleLoadPeriod('3h')}
+  style={{ background: periodKey === '6h' ? '#1f6feb' : '#6c757d' }}
+  onClick={() => handleLoadPeriod('6h')}
 >
   6시간
 </button>
-            <button
+
+<button
   className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
-  onClick={() => handleLoadPeriod('3h')}
+  style={{ background: periodKey === '12h' ? '#1f6feb' : '#6c757d' }}
+  onClick={() => handleLoadPeriod('12h')}
 >
   12시간
 </button>
-            <button
+
+<button
   className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
-  onClick={() => handleLoadPeriod('3h')}
+  style={{ background: periodKey === '1d' ? '#1f6feb' : '#6c757d' }}
+  onClick={() => handleLoadPeriod('1d')}
 >
   1일
 </button>
-            <button
+
+<button
   className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
-  onClick={() => handleLoadPeriod('3h')}
+  style={{ background: periodKey === 'all' ? '#1f6feb' : '#6c757d' }}
+  onClick={() => handleLoadPeriod('all')}
 >
   전체
 </button>
-            <button
-  className="btn secondary"
-  style={{
-    background: periodKey === '3h' ? '#1f6feb' : '#6c757d'
-  }}
-  onClick={() => handleLoadPeriod('3h')}
->
-  더 불러오기
-</button>
+            <button className="btn secondary" onClick={handleLoadNextMonth} disabled={historyLoading || historyMode !== 'all' || !canLoadMoreAll}>
+              더 불러오기
+            </button>
           </div>
         </div>
 
