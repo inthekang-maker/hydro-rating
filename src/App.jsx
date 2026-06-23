@@ -2592,12 +2592,17 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange, c
     [groups, groupFilter, classificationFilter, stationFilter]
   )
 
-  const stationColumns = useMemo(
-    () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
-    [filteredStations, historyRowsByStation]
-  )
-const graphStation = filteredStations.length === 1 ? filteredStations[0] : null
-const graphYear = new Date().getFullYear()
+const stationColumns = useMemo(
+  () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
+  [filteredStations, historyRowsByStation]
+)
+
+const graphStation = useMemo(() => {
+  if (stationFilter === '전체') return null
+  return filteredStations.find((station) => station.id === stationFilter) || null
+}, [filteredStations, stationFilter])
+
+const graphYear = new Date().getFullYear()  
 
 const graphData = useMemo(() => {
   if (!graphStation) return null
@@ -2895,13 +2900,13 @@ const instrumentGraphOptions = useMemo(
   <h2>수위 자료</h2>
 
   <button
-    type="button"
-    className={graphStation ? 'btn' : 'btn secondary'}
-    onClick={() => setShowGraph((prev) => !prev)}
-    disabled={!graphStation}
-  >
-    {showGraph ? '표 보기' : '그래프'}
-  </button>
+  type="button"
+  className={graphStation ? 'btn' : 'btn secondary'}
+  onClick={() => setShowGraph((prev) => !prev)}
+  disabled={!graphStation || historyTimes.length === 0}
+>
+  {showGraph ? '표 보기' : '그래프'}
+</button>
 </div>
   {showGraph && graphStation && graphData && (
   <div
