@@ -2155,23 +2155,49 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
               시간
             </th>
             {stationColumns.map((col) => (
-              <th
-                key={col.station.id}
-                style={{
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 3,
-                  background: '#fff',
-                  whiteSpace: 'nowrap',
-                  minWidth: '96px'
-                }}
-              >
-                <div>{col.station.name || '지점 없음'}</div>
-                <div className="muted" style={{ fontSize: '12px' }}>
-                  {col.station.code || '코드 없음'}
-                </div>
-              </th>
-            ))}
+  <th
+    key={col.station.id}
+    style={{
+      position: 'sticky',
+      top: 0,
+      zIndex: 2,
+      background: '#fff',
+      whiteSpace: 'nowrap',
+      minWidth: '90px',
+      padding: '6px 4px',
+      textAlign: 'center'
+    }}
+  >
+    <div style={{ fontWeight: 'bold' }}>{col.station.name || '지점명 없음'}</div>
+    <div className="muted" style={{ fontSize: '11px', marginTop: '2px', marginBottom: '4px' }}>
+      {col.station.code || '코드 없음'}
+    </div>
+    
+    {/* 이미지 요청사항: 수위 자료 옆/아래에 그래프 버튼 추가 */}
+    <button
+      type="button"
+      className="btn primary"
+      style={{
+        padding: '2px 8px',
+        fontSize: '11px',
+        backgroundColor: '#1f6feb',
+        color: '#fff',
+        border: 'none',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontWeight: 'normal'
+      }}
+      onClick={() => {
+        // 이 지점을 그래프 컴포넌트의 대상 지점으로 설정하는 핵심 로직
+        if (typeof setGraphStation === 'function') {
+          setGraphStation(col.station);
+        }
+      }}
+    >
+      그래프
+    </button>
+  </th>
+))} 
           </tr>
         </thead>
         <tbody>
