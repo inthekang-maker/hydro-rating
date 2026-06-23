@@ -2892,16 +2892,17 @@ const instrumentGraphOptions = useMemo(
        <section className="card">
 
   <div className="section-header">
-    <h2>수위 자료</h2>
+  <h2>수위 자료</h2>
 
-    <button
-      className="btn secondary"
-      onClick={() => setShowGraph((prev) => !prev)}
-      disabled={!graphStation}
-    >
-      {showGraph ? '표 보기' : '그래프'}
-    </button>
-  </div>
+  <button
+    type="button"
+    className={graphStation ? 'btn' : 'btn secondary'}
+    onClick={() => setShowGraph((prev) => !prev)}
+    disabled={!graphStation}
+  >
+    {showGraph ? '표 보기' : '그래프'}
+  </button>
+</div>
   {showGraph && graphStation && graphData && (
   <div
     style={{
