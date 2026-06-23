@@ -2612,11 +2612,11 @@ const stationColumns = useMemo(
   () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
   [filteredStations, historyRowsByStation]
 )
-const graphStation = filteredStations.length === 1 ? filteredStations[0] : null
+const graphStation = filteredStations[0] || null
 const graphYear = new Date().getFullYear()
 
 const graphData = useMemo(() => {
-  if (!graphStation) return null
+  if (!filteredStations.length) return null
 
   const rowsMap = historyRowsByStation[graphStation.id] || {}
 
@@ -2892,6 +2892,13 @@ const instrumentGraphOptions = useMemo(
               placeholder="HRFCO API 키"
             />
           </label>
+          <button
+  type="button"
+  className="btn"
+  onClick={() => setShowGraph((prev) => !prev)}
+>
+  {showGraph ? '그래프 숨기기' : '그래프 보기'}
+</button>
         </div>
 
         <div className="muted" style={{ marginTop: '8px' }}>
@@ -2908,7 +2915,7 @@ const instrumentGraphOptions = useMemo(
      <section className="card">
      <h2>수위 자료</h2>
 
-  {graphStation && graphData ? (
+  {showGraph ? (
   <div
     style={{
       height: '650px',
