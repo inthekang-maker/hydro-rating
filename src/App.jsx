@@ -2154,50 +2154,69 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
             >
               시간
             </th>
-            {stationColumns.map((col) => (
-  <th
-    key={col.station.id}
-    style={{
-      position: 'sticky',
-      top: 0,
-      zIndex: 2,
-      background: '#fff',
-      whiteSpace: 'nowrap',
-      minWidth: '90px',
-      padding: '6px 4px',
-      textAlign: 'center'
-    }}
-  >
-    <div style={{ fontWeight: 'bold' }}>{col.station.name || '지점명 없음'}</div>
-    <div className="muted" style={{ fontSize: '11px', marginTop: '2px', marginBottom: '4px' }}>
-      {col.station.code || '코드 없음'}
-    </div>
-    
-    {/* 이미지 요청사항: 수위 자료 옆/아래에 그래프 버튼 추가 */}
-    <button
-      type="button"
-      className="btn primary"
+           {stationColumns.map((col) => {
+  // 현재 선택된 그래프 지점과 이 컬럼의 지점이 일치하는지 확인 (UI 활성화 표시용)
+  const isSelectedGraph = graphStation?.id === col.station.id;
+
+  return (
+    <th
+      key={col.station.id}
       style={{
-        padding: '2px 8px',
-        fontSize: '11px',
-        backgroundColor: '#1f6feb',
-        color: '#fff',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        fontWeight: 'normal'
-      }}
-      onClick={() => {
-        // 이 지점을 그래프 컴포넌트의 대상 지점으로 설정하는 핵심 로직
-        if (typeof setGraphStation === 'function') {
-          setGraphStation(col.station);
-        }
+        position: 'sticky',
+        top: 0,
+        zIndex: 2,
+        background: isSelectedGraph ? '#f0f7ff' : '#fff', // 선택 시 배경색 변화로 활성화 표시
+        whiteSpace: 'nowrap',
+        minWidth: '90px',
+        padding: '8px 4px',
+        borderBottom: isSelectedGraph ? '2px solid #1f6feb' : '1px solid #ddd',
+        textAlign: 'center'
       }}
     >
-      그래프
-    </button>
-  </th>
-))} 
+      <div style={{ fontWeight: 'bold', color: isSelectedGraph ? '#1f6feb' : '#111' }}>
+        {col.station.name || '지점명 없음'}
+      </div>
+      <div className="muted" style={{ fontSize: '11px', marginTop: '2px', marginBottom: '6px' }}>
+        {col.station.code || '코드 없음'}
+      </div>
+      
+      {/* 그래프 활성화용 버튼 */}
+      <button
+        type="button"
+        style={{
+          padding: '3px 8px',
+          fontSize: '11px',
+          // 선택되었을 때는 진한 파란색, 선택 안 되었을 때는 연한 회색/파란색으로 시각적 구분 보장
+          backgroundColor: isSelectedGraph ? '#1f6feb' : '#edf2fa',
+          color: isSelectedGraph ? '#fff' : '#1f6feb',
+          border: isSelectedGraph ? '1px solid #1f6feb' : '1px solid #d0e1fd',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontWeight: isSelectedGraph ? 'bold' : 'normal',
+          width: '90%',
+          display: 'block',
+          margin: '0 auto'
+        }}
+        onClick={() => {
+          // 중요: 하단 그래프(Scatter 차트)가 정상적으로 인지할 수 있도록 
+          // flat한 전체 지점 목록에서 ID가 일치하는 원본 station 객체를 정확히 찾아 세팅합니다.
+          const actualStation = groups
+            .flatMap(g => g.stations)
+            .find(s => s.id === col.station.id);
+            
+          if (actualStation) {
+            setGraphStation(actualStation);
+          } else {
+            // 예외 방지용 백업
+            setGraphStation(col.station);
+          }
+        }}
+      >
+        {isSelectedGraph ? '● 그래프' : '그래프'}
+      </button>
+    </th>
+  );
+})} 
           </tr>
         </thead>
         <tbody>
