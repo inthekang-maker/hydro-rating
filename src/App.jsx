@@ -4,16 +4,19 @@ import {
   Chart as ChartJS,
   LinearScale,
   LogarithmicScale,
+  TimeScale,
   PointElement,
   LineElement,
   Tooltip,
   Legend
 } from 'chart.js'
+import 'chartjs-adapter-date-fns'
 import { Scatter } from 'react-chartjs-2'
 
 ChartJS.register(
   LinearScale,
   LogarithmicScale,
+  TimeScale,
   PointElement,
   LineElement,
   Tooltip,
@@ -1926,6 +1929,20 @@ const formatYmdhm = (ymdhm) => {
   return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)} ${s.slice(8, 10)}:${s.slice(10, 12)}`
 }
 
+const parseYmdhmToDate = (ymdhm) => {
+  const s = String(ymdhm || '')
+  if (s.length < 12) return null
+
+  const year = Number(s.slice(0, 4))
+  const month = Number(s.slice(4, 6)) - 1
+  const day = Number(s.slice(6, 8))
+  const hour = Number(s.slice(8, 10))
+  const minute = Number(s.slice(10, 12))
+
+  const d = new Date(year, month, day, hour, minute, 0, 0)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 const formatMonthLabel = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
@@ -2527,7 +2544,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   )
 }
 
-function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
+function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange, chartConfig })  {
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
   const [stationFilter, setStationFilter] = useState('전체')
@@ -2539,6 +2556,13 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [historyMode, setHistoryMode] = useState('period')
   const [nextMonthStart, setNextMonthStart] = useState(() => getMonthStart(getInstrumentYearStart()))
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
+  const [showGraph, setShowGraph] = useState(false)
+  const [instrumentGraphConfig, setInstrumentGraphConfig] = useState(() => ({
+  xMin: '2026-01-01T00:00:00',
+  xMax: '',
+  yMin: '',
+  yMax: ''
+}))
 
   const periodOptions = useMemo(
     () => [
@@ -2572,6 +2596,88 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
     [filteredStations, historyRowsByStation]
   )
+const graphStation = filteredStations.length === 1 ? filteredStations[0] : null
+const graphYear = new Date().getFullYear()
+
+const graphData = useMemo(() => {
+  if (!graphStation) return null
+
+  const rowsMap = historyRowsByStation[graphStation.id] || {}
+
+  const hrfcoPoints = Object.entries(rowsMap)
+    .map(([ymdhm, value]) => ({
+      x: parseYmdhmToDate(ymdhm),
+      y: num(value)
+    }))
+    .filter((point) => point.x && point.y !== null)
+    .sort((a, b) => a.x.getTime() - b.x.getTime())
+
+  const measurementPoints = (graphStation.measurements || [])
+    .map((measurement) => ({
+      x: parseDateTime(measurement.datetime),
+      y: num(measurement.h)
+    }))
+    .filter(
+      (point) =>
+        point.x &&
+        point.y !== null &&
+        point.x.getFullYear() === graphYear
+    )
+    .sort((a, b) => a.x.getTime() - b.x.getTime())
+
+  return {
+    datasets: [
+      {
+        label: `${graphStation.name || '지점'} 계기수위`,
+        data: hrfcoPoints,
+        showLine: true,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        borderWidth: 2,
+        borderColor: '#16a34a',
+        backgroundColor: '#16a34a',
+        parsing: false
+      },
+      {
+        label: `${graphYear}년 측정성과`,
+        data: measurementPoints,
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        borderWidth: 1,
+        borderColor: '#db2777',
+        backgroundColor: '#db2777',
+        pointStyle: 'rectRot',
+        parsing: false
+      }
+    ]
+  }
+}, [graphStation, historyRowsByStation, graphYear])
+
+const instrumentGraphOptions = useMemo(
+  () => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'nearest', intersect: false },
+    scales: {
+      x: {
+        type: 'time',
+        min: instrumentGraphConfig.xMin ? new Date(instrumentGraphConfig.xMin) : new Date('2026-01-01T00:00:00'),
+        max: instrumentGraphConfig.xMax ? new Date(instrumentGraphConfig.xMax) : undefined,
+        time: { unit: 'day' },
+        title: { display: true, text: '시간' }
+      },
+      y: {
+        type: 'linear',
+        min: instrumentGraphConfig.yMin === '' ? undefined : Number(instrumentGraphConfig.yMin),
+        max: instrumentGraphConfig.yMax === '' ? undefined : Number(instrumentGraphConfig.yMax),
+        title: { display: true, text: '수위(h)' }
+      }
+    },
+    plugins: { legend: { display: true } }
+  }),
+  [instrumentGraphConfig]
+)
 
   const currentMonthStart = useMemo(() => getMonthStart(new Date()), [])
   const canLoadMoreAll = historyMode === 'all' && nextMonthStart <= currentMonthStart
@@ -2783,8 +2889,35 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         ) : null}
       </section>
 
-      <section className="card">
-        <h2>수위 자료</h2>
+       <section className="card">
+
+  <div className="section-header">
+    <h2>수위 자료</h2>
+
+    <button
+      className="btn secondary"
+      onClick={() => setShowGraph((prev) => !prev)}
+      disabled={!graphStation}
+    >
+      {showGraph ? '표 보기' : '그래프'}
+    </button>
+  </div>
+  {showGraph && graphStation && graphData && (
+  <div
+    style={{
+      height: '650px',
+      marginBottom: '20px',
+      border: '1px solid rgba(0,0,0,0.12)',
+      borderRadius: '10px',
+      padding: '10px'
+    }}
+  >
+    <Scatter
+      data={graphData}
+      options={instrumentGraphOptions}
+    />
+  </div>
+)}
         {stationColumns.length === 0 ? (
           <div className="muted">선택된 지점이 없습니다.</div>
         ) : historyTimes.length === 0 ? (
@@ -4103,10 +4236,11 @@ export default function App() {
 
         <div style={{ display: instrumentSubTab === 'history' ? 'block' : 'none' }}>
           <InstrumentMeasurementPage
-            groups={groups}
-            hrfcoApiKey={hrfcoApiKey}
-            onHrfcoApiKeyChange={setHrfcoApiKey}
-          />
+  groups={groups}
+  hrfcoApiKey={hrfcoApiKey}
+  onHrfcoApiKeyChange={setHrfcoApiKey}
+  chartConfig={chartConfig}
+/>
         </div>
       </div>
     </div>
