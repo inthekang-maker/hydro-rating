@@ -2889,65 +2889,67 @@ const instrumentGraphOptions = useMemo(
         ) : null}
       </section>
 
-       <section className="card">
-
-  <section className="card">
-   <div
-  style={{
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '12px'
-  }}
->
-  <h2 style={{ margin: 0 }}>수위 자료</h2>
-
-  <button
-    type="button"
-    className="btn"
-    onClick={() => {
-      if (filteredStations.length !== 1) {
-        window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
-        return
-      }
-      setShowGraph((prev) => !prev)
-    }}
-  >
-    {showGraph ? '표 보기' : '그래프'}
-  </button>
-</div>
-  {showGraph && graphStation && graphData && (
+      <section className="card">
   <div
     style={{
-      height: '650px',
-      marginBottom: '20px',
-      border: '1px solid rgba(0,0,0,0.12)',
-      borderRadius: '10px',
-      padding: '10px'
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: '12px',
+      marginBottom: '12px'
     }}
   >
-    <Scatter
-      data={graphData}
-      options={instrumentGraphOptions}
-    />
+    <h2 style={{ margin: 0 }}>수위 자료</h2>
+
+    <button
+      type="button"
+      className="btn"
+      onClick={() => {
+        if (filteredStations.length !== 1) {
+          window.alert('그래프는 지점을 1개만 선택했을 때 사용할 수 있습니다.')
+          return
+        }
+        setShowGraph((prev) => !prev)
+      }}
+    >
+      {showGraph ? '표 보기' : '그래프'}
+    </button>
   </div>
-)}
-        {stationColumns.length === 0 ? (
-          <div className="muted">선택된 지점이 없습니다.</div>
-        ) : historyTimes.length === 0 ? (
-          <div className="muted">조회 버튼을 눌러 수위 자료를 불러오세요.</div>
-        ) : (
-          <VirtualizedHistoryTable
-            stationColumns={stationColumns}
-            times={historyTimes}
-            ascending={historyMode === 'all'}
-          />
-        )}
-        <p className="muted" style={{ marginTop: '8px' }}>
-          3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순, 전체는 2026-01-01 00:10부터 월 단위로 오름차순 표시합니다.
-        </p>
-      </section>
+
+  {showGraph && graphStation && graphData ? (
+    <div
+      style={{
+        height: '650px',
+        marginBottom: '20px',
+        border: '1px solid rgba(0,0,0,0.12)',
+        borderRadius: '10px',
+        padding: '10px'
+      }}
+    >
+      <Scatter data={graphData} options={instrumentGraphOptions} />
+    </div>
+  ) : (
+    <div className="muted" style={{ marginBottom: '20px' }}>
+      지점을 1개 선택한 뒤 그래프를 눌러 주세요.
+    </div>
+  )}
+
+  {stationColumns.length === 0 ? (
+    <div className="muted">선택된 지점이 없습니다.</div>
+  ) : historyTimes.length === 0 ? (
+    <div className="muted">조회 버튼을 눌러 수위 자료를 불러오세요.</div>
+  ) : (
+    <VirtualizedHistoryTable
+      stationColumns={stationColumns}
+      times={historyTimes}
+      ascending={historyMode === 'all'}
+    />
+  )}
+
+  <p className="muted" style={{ marginTop: '8px' }}>
+    3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순, 전체는 2026-01-01 00:10부터 월 단위로 오름차순 표시합니다.
+  </p>
+</section>
     </div>
   )
 }
