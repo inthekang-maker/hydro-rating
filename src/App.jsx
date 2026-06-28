@@ -2039,34 +2039,47 @@ const INSTRUMENT_CHART_PERIOD_OPTIONS = [
   {
     key: 'all',
     label: '전체 기간',
-    start: new Date(2026, 0, 1, 0, 10, 0, 0),
-    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+    startText: '2026-01-01T00:10',
+    endText: '2027-01-01T00:00'
   },
   {
     key: 'q1',
     label: '1분기',
-    start: new Date(2026, 0, 1, 0, 10, 0, 0),
-    end: new Date(2026, 3, 1, 0, 0, 0, 0)
+    startText: '2026-01-01T00:10',
+    endText: '2026-04-01T00:00'
   },
   {
     key: 'q2',
     label: '2분기',
-    start: new Date(2026, 3, 1, 0, 10, 0, 0),
-    end: new Date(2026, 6, 1, 0, 0, 0, 0)
+    startText: '2026-04-01T00:10',
+    endText: '2026-07-01T00:00'
   },
   {
     key: 'q3',
     label: '3분기',
-    start: new Date(2026, 6, 1, 0, 10, 0, 0),
-    end: new Date(2026, 9, 1, 0, 0, 0, 0)
+    startText: '2026-07-01T00:10',
+    endText: '2026-10-01T00:00'
   },
   {
     key: 'q4',
     label: '4분기',
-    start: new Date(2026, 9, 1, 0, 10, 0, 0),
-    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+    startText: '2026-10-01T00:10',
+    endText: '2027-01-01T00:00'
+  },
+  {
+    key: 'custom',
+    label: '사용자 지정 기간',
+    startText: null,
+    endText: null
   }
 ]
+
+const createInstrumentChartPresetRange = (option) => ({
+  key: option.key,
+  label: option.label,
+  start: option.startText ? parseDateTime(option.startText) : null,
+  end: option.endText ? parseDateTime(option.endText) : null
+})
 
 const parseInstrumentChartDateTime = (value) => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
@@ -2118,7 +2131,7 @@ const parseYmdhmToDate = (ymdhm) => {
 const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime) => {
   const preset = INSTRUMENT_CHART_PERIOD_OPTIONS.find((option) => option.key === periodKey)
   if (periodKey !== 'custom') {
-    return preset || INSTRUMENT_CHART_PERIOD_OPTIONS[0]
+    return createInstrumentChartPresetRange(preset || INSTRUMENT_CHART_PERIOD_OPTIONS[0])
   }
 
   const start = parseInstrumentChartDateTime(customStartTime)
@@ -3316,7 +3329,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         </div>
 
-        <div className="row" style={{ alignItems: 'flex-start' }}>
+        <div className="row" style={{ alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap' }}>
           <div style={{ minWidth: '220px' }}>
             <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
               기간 선택
@@ -3336,13 +3349,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             ))}
           </div>
 
-          <div style={{ minWidth: '260px', display: 'grid', gap: '10px' }}>
+          <div style={{ minWidth: '300px', display: 'grid', gap: '10px' }}>
             <label>
               시작시간
               <input
                 type="datetime-local"
                 value={chartCustomStartTime}
                 onChange={(e) => setChartCustomStartTime(e.target.value)}
+                disabled={chartPeriodKey !== 'custom'}
               />
             </label>
 
@@ -3352,8 +3366,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                 type="datetime-local"
                 value={chartCustomEndTime}
                 onChange={(e) => setChartCustomEndTime(e.target.value)}
+                disabled={chartPeriodKey !== 'custom'}
               />
             </label>
+
+            <div className="muted" style={{ fontSize: '12px', lineHeight: 1.4 }}>
+              사용자 지정 기간을 선택하면 시작/종료 시간을 직접 입력할 수 있습니다.
+              현재 선택한 기간은 아래 차트 생성 시 적용됩니다.
+            </div>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
