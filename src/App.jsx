@@ -2033,6 +2033,202 @@ const buildInstrumentStationOptions = (groups, groupFilter) => {
   return ['전체', ...flattened]
 }
 
+const INSTRUMENT_CHART_BASE_YEAR = 2026
+
+const INSTRUMENT_CHART_PERIOD_OPTIONS = [
+  {
+    key: 'all',
+    label: '전체 기간',
+    start: new Date(2026, 0, 1, 0, 10, 0, 0),
+    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+  },
+  {
+    key: 'q1',
+    label: '1분기',
+    start: new Date(2026, 0, 1, 0, 10, 0, 0),
+    end: new Date(2026, 3, 1, 0, 0, 0, 0)
+  },
+  {
+    key: 'q2',
+    label: '2분기',
+    start: new Date(2026, 3, 1, 0, 10, 0, 0),
+    end: new Date(2026, 6, 1, 0, 0, 0, 0)
+  },
+  {
+    key: 'q3',
+    label: '3분기',
+    start: new Date(2026, 6, 1, 0, 10, 0, 0),
+    end: new Date(2026, 9, 1, 0, 0, 0, 0)
+  },
+  {
+    key: 'q4',
+    label: '4분기',
+    start: new Date(2026, 9, 1, 0, 10, 0, 0),
+    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+  }
+]
+
+const parseInstrumentChartDateTime = (value) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return new Date(value.getTime())
+  }
+
+  return parseDateTime(value)
+}
+
+const formatChartLinearTick = (value) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return `${value}`
+  const date = new Date(n)
+  if (Number.isNaN(date.getTime())) return `${value}`
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+const formatChartTooltipDateTime = (value) => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return `${value}`
+  const date = new Date(n)
+  if (Number.isNaN(date.getTime())) return `${value}`
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
+}
+
+const parseYmdhmToDate = (ymdhm) => {
+  const s = String(ymdhm || '')
+  if (s.length < 12) return null
+
+  const yyyy = Number(s.slice(0, 4))
+  const mm = Number(s.slice(4, 6))
+  const dd = Number(s.slice(6, 8))
+  const hh = Number(s.slice(8, 10))
+  const mi = Number(s.slice(10, 12))
+
+  if (![yyyy, mm, dd, hh, mi].every((n) => Number.isFinite(n))) return null
+  const date = new Date(yyyy, mm - 1, dd, hh, mi, 0, 0)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime) => {
+  const preset = INSTRUMENT_CHART_PERIOD_OPTIONS.find((option) => option.key === periodKey)
+  if (periodKey !== 'custom') {
+    return preset || INSTRUMENT_CHART_PERIOD_OPTIONS[0]
+  }
+
+  const start = parseInstrumentChartDateTime(customStartTime)
+  const end = parseInstrumentChartDateTime(customEndTime)
+  if (!start || !end) return null
+
+  return {
+    key: 'custom',
+    label: `${formatDateTimeDisplay(start)} ~ ${formatDateTimeDisplay(end)}`,
+    start,
+    end
+  }
+}
+
+const buildInstrumentWaterLevelChartOptions = (range) => {
+  const min = range?.start instanceof Date && !Number.isNaN(range.start.getTime())
+    ? range.start.getTime()
+    : undefined
+  const max = range?.end instanceof Date && !Number.isNaN(range.end.getTime())
+    ? range.end.getTime()
+    : undefined
+
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'nearest',
+      intersect: false
+    },
+    scales: {
+      x: {
+        type: 'linear',
+        min,
+        max,
+        title: {
+          display: true,
+          text: '시간',
+          color: '#111',
+          font: {
+            size: 14,
+            weight: '700'
+          }
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.14)',
+          lineWidth: 1
+        },
+        ticks: {
+          color: '#222',
+          callback: (value) => formatChartLinearTick(value)
+        }
+      },
+      y: {
+        type: 'linear',
+        title: {
+          display: true,
+          text: '수위 h(m)',
+          color: '#111',
+          font: {
+            size: 14,
+            weight: '700'
+          }
+        },
+        grid: {
+          color: 'rgba(0,0,0,0.14)',
+          lineWidth: 1
+        },
+        ticks: {
+          color: '#222',
+          callback: (value) => formatTick(value)
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'right',
+        labels: {
+          usePointStyle: true,
+          boxWidth: 12,
+          boxHeight: 12
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const x = ctx.parsed.x
+            const y = ctx.parsed.y
+            return `${ctx.dataset.label}: ${formatChartTooltipDateTime(x)} / h=${fmt(y, 3)}`
+          }
+        }
+      }
+    }
+  }
+}
+
+function InstrumentWaterLevelChart({ title, subtitle, datasets, range, height = 460 }) {
+  const options = useMemo(() => buildInstrumentWaterLevelChartOptions(range), [range])
+
+  return (
+    <div className="subcard" style={{ marginBottom: '16px' }}>
+      <h3 style={{ marginBottom: '6px' }}>{title}</h3>
+      {subtitle ? <p className="muted" style={{ marginBottom: '10px' }}>{subtitle}</p> : null}
+      <div style={{ height: `${height}px` }}>
+        <Scatter data={{ datasets }} options={options} />
+      </div>
+    </div>
+  )
+}
+
 const runWithConcurrency = async (items, limit, worker) => {
   const safeItems = Array.isArray(items) ? items : []
   if (safeItems.length === 0) return []
@@ -2551,6 +2747,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyMode, setHistoryMode] = useState('period')
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
+  const [chartPeriodKey, setChartPeriodKey] = useState('all')
+  const [chartCustomStartTime, setChartCustomStartTime] = useState('')
+  const [chartCustomEndTime, setChartCustomEndTime] = useState('')
+  const [chartSeparateCharts, setChartSeparateCharts] = useState(false)
+  const [chartLoading, setChartLoading] = useState(false)
+  const [chartStatus, setChartStatus] = useState('')
+  const [generatedCharts, setGeneratedCharts] = useState([])
+  const [generatedChartLabel, setGeneratedChartLabel] = useState('')
 
   const periodOptions = useMemo(
     () => [
@@ -2764,6 +2968,170 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     )
   }
 
+  const chartPeriodRange = useMemo(
+    () => getInstrumentChartPeriodRange(chartPeriodKey, chartCustomStartTime, chartCustomEndTime),
+    [chartPeriodKey, chartCustomStartTime, chartCustomEndTime]
+  )
+
+  const chartPeriodOptions = INSTRUMENT_CHART_PERIOD_OPTIONS
+
+  const buildInstrumentChartDatasets = useMemo(() => {
+    const chartColorPalette = [...YEAR_COLORS, ...CURVE_COLORS, '#0ea5e9', '#f97316']
+    const measurementPointColor = '#d946ef'
+
+    const makeLineDataset = (station, stationIndex, points) => {
+      const color = chartColorPalette[stationIndex % chartColorPalette.length]
+      return {
+        label: `${station.name || '지점 없음'} 수위`,
+        data: points,
+        showLine: true,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        borderWidth: 2.5,
+        borderColor: color,
+        backgroundColor: color,
+        parsing: false
+      }
+    }
+
+    const makeMeasurementDataset = (station, points) => ({
+      label: `${station.name || '지점 없음'} 측정성과`,
+      data: points,
+      showLine: false,
+      pointRadius: 5,
+      pointHoverRadius: 6,
+      borderWidth: 1,
+      borderColor: measurementPointColor,
+      backgroundColor: measurementPointColor,
+      pointStyle: 'rectRot',
+      parsing: false
+    })
+
+    const buildStationPoints = (station, rowsByStation, range) => {
+      const rawWaterRows = rowsByStation?.[station.id] || {}
+      const waterPoints = Object.entries(rawWaterRows)
+        .map(([ymdhm, value]) => {
+          const date = parseYmdhmToDate(ymdhm)
+          const n = Number(value)
+          if (!date || !Number.isFinite(n)) return null
+          if (range?.start && range?.end && (date < range.start || date > range.end)) return null
+          return { x: date.getTime(), y: n }
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.x - b.x)
+
+      const measurementPoints = (station.measurements || [])
+        .map((measurement) => {
+          const date = parseInstrumentChartDateTime(measurement.datetime)
+          const y = num(measurement.h)
+          if (!date || y === null) return null
+          if (range?.start && range?.end && (date < range.start || date > range.end)) return null
+          return { x: date.getTime(), y }
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.x - b.x)
+
+      return { waterPoints, measurementPoints }
+    }
+
+    return { makeLineDataset, makeMeasurementDataset, buildStationPoints }
+  }, [])
+
+  const generateInstrumentCharts = async () => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      window.alert('API 키를 입력해 주세요.')
+      return
+    }
+    if (filteredStations.length === 0) {
+      window.alert('선택된 지점이 없습니다.')
+      return
+    }
+
+    if (!chartPeriodRange || !chartPeriodRange.start || !chartPeriodRange.end) {
+      window.alert('차트 기간을 올바르게 입력해 주세요.')
+      return
+    }
+
+    if (chartPeriodRange.start > chartPeriodRange.end) {
+      window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
+      return
+    }
+
+    setChartLoading(true)
+    setChartStatus('차트 자료를 불러오는 중입니다...')
+
+    try {
+      const result = await fetchHistorySlice(chartPeriodRange.start, chartPeriodRange.end, true)
+      const rowsByStation = result.rowsByStation || {}
+      const charts = []
+      const datasetBuilder = buildInstrumentChartDatasets
+
+      if (chartSeparateCharts) {
+        filteredStations.forEach((station, stationIndex) => {
+          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(station, rowsByStation, chartPeriodRange)
+          const datasets = []
+
+          if (waterPoints.length > 0) {
+            datasets.push(datasetBuilder.makeLineDataset(station, stationIndex, waterPoints))
+          }
+
+          if (measurementPoints.length > 0) {
+            datasets.push(datasetBuilder.makeMeasurementDataset(station, measurementPoints))
+          }
+
+          if (datasets.length > 0) {
+            charts.push({
+              id: station.id,
+              title: `${station.name || '지점 없음'} ${station.code ? `(${station.code})` : ''}`.trim(),
+              subtitle: `${chartPeriodRange.label} · ${station.groupName || ''}`.trim(),
+              range: chartPeriodRange,
+              datasets,
+              height: 460
+            })
+          }
+        })
+      } else {
+        const datasets = []
+        filteredStations.forEach((station, stationIndex) => {
+          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(station, rowsByStation, chartPeriodRange)
+
+          if (waterPoints.length > 0) {
+            datasets.push(datasetBuilder.makeLineDataset(station, stationIndex, waterPoints))
+          }
+
+          if (measurementPoints.length > 0) {
+            datasets.push(datasetBuilder.makeMeasurementDataset(station, measurementPoints))
+          }
+        })
+
+        if (datasets.length > 0) {
+          charts.push({
+            id: 'combined',
+            title: `수위 그래프 ${chartPeriodRange.label ? `(${chartPeriodRange.label})` : ''}`.trim(),
+            subtitle: `${filteredStations.length}개 지점`,
+            range: chartPeriodRange,
+            datasets,
+            height: 620
+          })
+        }
+      }
+
+      setGeneratedCharts(charts)
+      setGeneratedChartLabel(chartPeriodRange.label)
+      setChartStatus(
+        charts.length > 0
+          ? `차트 생성 완료${result.failCount > 0 ? ` (수위 자료 조회 실패 ${result.failCount}개 지점)` : ''}`
+          : '해당 기간에 생성할 차트 자료가 없습니다.'
+      )
+    } catch (error) {
+      setChartStatus(error instanceof Error ? error.message : '차트 생성 실패')
+      setGeneratedCharts([])
+    } finally {
+      setChartLoading(false)
+    }
+  }
+
   const sectionColumns = [
     { key: 'name', label: '구간명' },
     { key: 'hMin', label: '적용수위 시작' },
@@ -2936,6 +3304,98 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         <p className="muted" style={{ marginTop: '8px' }}>
           3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순으로 불러오고, 전체는 올해 1월 1일 00:10부터 현재 시각까지 월 단위로 자동으로 이어서 불러옵니다. 사용자 지정 기간은 시작 시간과 종료 시간을 입력해 조회합니다.
         </p>
+      </section>
+
+      <section className="card">
+        <div className="section-header">
+          <h2>차트 생성</h2>
+          <div className="grid-actions">
+            <button className="btn secondary" onClick={generateInstrumentCharts} disabled={chartLoading}>
+              {chartLoading ? '생성 중...' : '차트 생성'}
+            </button>
+          </div>
+        </div>
+
+        <div className="row" style={{ alignItems: 'flex-start' }}>
+          <div style={{ minWidth: '220px' }}>
+            <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
+              기간 선택
+            </div>
+            {chartPeriodOptions.map((option) => (
+              <label key={option.key} style={{ display: 'block', marginBottom: '6px' }}>
+                <input
+                  type="radio"
+                  name="instrument-chart-period"
+                  value={option.key}
+                  checked={chartPeriodKey === option.key}
+                  onChange={() => setChartPeriodKey(option.key)}
+                  style={{ marginRight: '6px' }}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
+
+          <div style={{ minWidth: '260px', display: 'grid', gap: '10px' }}>
+            <label>
+              시작시간
+              <input
+                type="datetime-local"
+                value={chartCustomStartTime}
+                onChange={(e) => setChartCustomStartTime(e.target.value)}
+              />
+            </label>
+
+            <label>
+              종료시간
+              <input
+                type="datetime-local"
+                value={chartCustomEndTime}
+                onChange={(e) => setChartCustomEndTime(e.target.value)}
+              />
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="checkbox"
+                checked={chartSeparateCharts}
+                onChange={(e) => setChartSeparateCharts(e.target.checked)}
+              />
+              각각 차트 생성
+            </label>
+          </div>
+        </div>
+
+        <div className="muted" style={{ marginTop: '8px' }}>
+          전체 기간: 2026-01-01 00:10 ~ 2027-01-01 00:00 · 1분기: 2026-01-01 00:10 ~ 2026-04-01 00:00 · 2분기: 2026-04-01 00:10 ~ 2026-07-01 00:00 · 3분기: 2026-07-01 00:10 ~ 2026-10-01 00:00 · 4분기: 2026-10-01 00:10 ~ 2027-01-01 00:00
+        </div>
+
+        {generatedChartLabel ? (
+          <div className="muted" style={{ marginTop: '4px' }}>
+            선택 기간: {generatedChartLabel}
+          </div>
+        ) : null}
+
+        {chartStatus ? (
+          <div className="muted" style={{ marginTop: '4px' }}>
+            {chartStatus}
+          </div>
+        ) : null}
+
+        {generatedCharts.length > 0 ? (
+          <div style={{ marginTop: '14px' }}>
+            {generatedCharts.map((chart) => (
+              <InstrumentWaterLevelChart
+                key={chart.id}
+                title={chart.title}
+                subtitle={chart.subtitle}
+                datasets={chart.datasets}
+                range={chart.range}
+                height={chart.height}
+              />
+            ))}
+          </div>
+        ) : null}
       </section>
     </div>
   )
