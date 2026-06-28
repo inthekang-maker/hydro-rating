@@ -2888,7 +2888,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             시작 시간
             <input
               type="datetime-local"
-              step="600"
               value={customStartTime}
               onChange={(e) => setCustomStartTime(e.target.value)}
             />
@@ -2898,7 +2897,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             종료 시간
             <input
               type="datetime-local"
-              step="600"
               value={customEndTime}
               onChange={(e) => setCustomEndTime(e.target.value)}
             />
