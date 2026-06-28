@@ -3138,7 +3138,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         spanGaps: true,
         pointRadius: 0,
         pointHoverRadius: 0,
-        borderWidth: 1.5,
+        borderWidth: 1,
         borderColor: color,
         backgroundColor: color,
         parsing: false,
@@ -3409,6 +3409,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             시작 시간
             <input
               type="datetime-local"
+              step="600"
               value={customStartTime}
               onChange={(e) => setCustomStartTime(e.target.value)}
             />
@@ -3418,6 +3419,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             종료 시간
             <input
               type="datetime-local"
+              step="600"
               value={customEndTime}
               onChange={(e) => setCustomEndTime(e.target.value)}
             />
