@@ -2179,13 +2179,15 @@ const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime
   }
 }
 
-const buildInstrumentWaterLevelChartOptions = (range) => {
+const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
   const min = range?.start instanceof Date && !Number.isNaN(range.start.getTime())
     ? range.start.getTime()
     : undefined
   const max = range?.end instanceof Date && !Number.isNaN(range.end.getTime())
     ? range.end.getTime()
     : undefined
+  const yMin = safeScaleNumber(yMinValue, 'linear')
+  const yMax = safeScaleNumber(yMaxValue, 'linear')
 
   return {
     responsive: true,
@@ -2219,6 +2221,8 @@ const buildInstrumentWaterLevelChartOptions = (range) => {
       },
       y: {
         type: 'linear',
+        min: yMin,
+        max: yMax,
         title: {
           display: true,
           text: '수위 h(m)',
@@ -2261,15 +2265,36 @@ const buildInstrumentWaterLevelChartOptions = (range) => {
   }
 }
 
-function InstrumentWaterLevelChart({ title, subtitle, datasets, range, height = 460 }) {
-  const options = useMemo(() => buildInstrumentWaterLevelChartOptions(range), [range])
+function InstrumentWaterLevelChart({
+  title,
+  subtitle,
+  datasets,
+  range,
+  height = 460,
+  yMin,
+  yMax,
+  zoomX = 1,
+  zoomY = 1
+}) {
+  const options = useMemo(
+    () => buildInstrumentWaterLevelChartOptions(range, yMin, yMax),
+    [range, yMin, yMax]
+  )
 
   return (
     <div className="subcard" style={{ marginBottom: '16px' }}>
       <h3 style={{ marginBottom: '6px' }}>{title}</h3>
       {subtitle ? <p className="muted" style={{ marginBottom: '10px' }}>{subtitle}</p> : null}
-      <div style={{ height: `${height}px` }}>
-        <Scatter data={{ datasets }} options={options} />
+      <div style={{ overflow: 'auto' }}>
+        <div
+          style={{
+            width: `${Math.max(100, Math.round(zoomX * 100))}%`,
+            minWidth: '100%',
+            height: `${Math.max(320, Math.round(height * zoomY))}px`
+          }}
+        >
+          <Scatter data={{ datasets }} options={options} />
+        </div>
       </div>
     </div>
   )
@@ -2801,6 +2826,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [chartStatus, setChartStatus] = useState('')
   const [generatedCharts, setGeneratedCharts] = useState([])
   const [generatedChartLabel, setGeneratedChartLabel] = useState('')
+  const [instrumentChartYMin, setInstrumentChartYMin] = useState('')
+  const [instrumentChartYMax, setInstrumentChartYMax] = useState('')
+  const [instrumentChartZoomX, setInstrumentChartZoomX] = useState(1)
+  const [instrumentChartZoomY, setInstrumentChartZoomY] = useState(1)
 
   const periodOptions = useMemo(
     () => [
@@ -3440,6 +3469,32 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         </div>
 
+        <div className="chart-settings">
+          <div className="chart-setting-card">
+            <h3>축 설정</h3>
+            <div className="chart-setting-grid">
+              <label>
+                Y축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMin}
+                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
+                />
+              </label>
+              <label>
+                Y축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMax}
+                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: '220px' }}>
             <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
@@ -3508,6 +3563,44 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         ) : null}
 
+        <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span className="muted" style={{ minWidth: '44px' }}>가로</span>
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX((prev) => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}>-</button>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.25"
+              value={instrumentChartZoomX}
+              onChange={(e) => setInstrumentChartZoomX(Number(e.target.value))}
+              aria-label="계기수위 그래프 가로 확대/축소"
+              style={{ flex: '1 1 220px', minWidth: '180px' }}
+            />
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX((prev) => Math.min(3, Number((prev + 0.25).toFixed(2))))}>+</button>
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX(1)}>기본</button>
+            <span className="muted">{instrumentChartZoomX.toFixed(2)}x</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span className="muted" style={{ minWidth: '44px' }}>세로</span>
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY((prev) => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}>-</button>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.25"
+              value={instrumentChartZoomY}
+              onChange={(e) => setInstrumentChartZoomY(Number(e.target.value))}
+              aria-label="계기수위 그래프 세로 확대/축소"
+              style={{ flex: '1 1 220px', minWidth: '180px' }}
+            />
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY((prev) => Math.min(3, Number((prev + 0.25).toFixed(2))))}>+</button>
+            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY(1)}>기본</button>
+            <span className="muted">{instrumentChartZoomY.toFixed(2)}x</span>
+          </div>
+        </div>
+
         {generatedCharts.length > 0 ? (
           <div style={{ marginTop: '14px' }}>
             {generatedCharts.map((chart) => (
@@ -3518,6 +3611,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                 datasets={chart.datasets}
                 range={chart.range}
                 height={chart.height}
+                yMin={instrumentChartYMin}
+                yMax={instrumentChartYMax}
+                zoomX={instrumentChartZoomX}
+                zoomY={instrumentChartZoomY}
               />
             ))}
           </div>
@@ -3601,6 +3698,10 @@ export default function App() {
   const [chartConfig, setChartConfig] = useState(() => {
     const saved = localStorage.getItem(CHART_CONFIG_KEY)
     const fallback = {
+      xType: 'logarithmic',
+      xMin: '0.1',
+      xMax: '10000',
+      yType: 'logarithmic',
       yMin: '0.1',
       yMax: '10'
     }
@@ -3609,6 +3710,10 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved)
         return {
+          xType: parsed?.xType ?? fallback.xType,
+          xMin: parsed?.xMin ?? fallback.xMin,
+          xMax: parsed?.xMax ?? fallback.xMax,
+          yType: parsed?.yType ?? fallback.yType,
           yMin: parsed?.yMin ?? fallback.yMin,
           yMax: parsed?.yMax ?? fallback.yMax
         }
@@ -4172,6 +4277,9 @@ export default function App() {
       },
       scales: {
         x: {
+          type: chartConfig.xType,
+          min: safeScaleNumber(chartConfig.xMin, chartConfig.xType),
+          max: safeScaleNumber(chartConfig.xMax, chartConfig.xType),
           title: {
             display: true,
             text: '유량 Q(m³/s)',
@@ -4191,8 +4299,9 @@ export default function App() {
           }
         },
         y: {
-          min: safeScaleNumber(chartConfig.yMin),
-          max: safeScaleNumber(chartConfig.yMax),
+          type: chartConfig.yType,
+          min: safeScaleNumber(chartConfig.yMin, chartConfig.yType),
+          max: safeScaleNumber(chartConfig.yMax, chartConfig.yType),
           title: {
             display: true,
             text: '수위 h(m)',
@@ -4569,6 +4678,52 @@ export default function App() {
           <div className="chart-setting-card">
             <h3>축 설정</h3>
             <div className="chart-setting-grid">
+              <label>
+                X축 종류
+                <select
+                  value={chartConfig.xType}
+                  onChange={(e) =>
+                    setChartConfig((prev) => ({ ...prev, xType: e.target.value }))
+                  }
+                >
+                  <option value="logarithmic">logarithmic</option>
+                  <option value="linear">linear</option>
+                </select>
+              </label>
+              <label>
+                X축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={chartConfig.xMin}
+                  onChange={(e) =>
+                    setChartConfig((prev) => ({ ...prev, xMin: e.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                X축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={chartConfig.xMax}
+                  onChange={(e) =>
+                    setChartConfig((prev) => ({ ...prev, xMax: e.target.value }))
+                  }
+                />
+              </label>
+              <label>
+                Y축 종류
+                <select
+                  value={chartConfig.yType}
+                  onChange={(e) =>
+                    setChartConfig((prev) => ({ ...prev, yType: e.target.value }))
+                  }
+                >
+                  <option value="logarithmic">logarithmic</option>
+                  <option value="linear">linear</option>
+                </select>
+              </label>
               <label>
                 Y축 최소
                 <input
