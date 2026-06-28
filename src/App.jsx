@@ -2002,13 +2002,19 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       )
     : []
 
+  const selectedStationIds = Array.isArray(stationFilter)
+    ? stationFilter
+    : stationFilter === '전체' || !stationFilter
+      ? null
+      : [stationFilter]
+
   return flattened
     .filter((station) => groupFilter === '전체' || station.groupName === groupFilter)
     .filter((station) => {
       const classification = station.classification || '일반 지점'
       return classificationFilter === '전체' || classification === classificationFilter
     })
-    .filter((station) => stationFilter === '전체' || station.id === stationFilter)
+    .filter((station) => !selectedStationIds || selectedStationIds.includes(station.id))
     .sort((a, b) => {
       if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
       return a.stationIndex - b.stationIndex
@@ -2179,15 +2185,13 @@ const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime
   }
 }
 
-const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
+const buildInstrumentWaterLevelChartOptions = (range) => {
   const min = range?.start instanceof Date && !Number.isNaN(range.start.getTime())
     ? range.start.getTime()
     : undefined
   const max = range?.end instanceof Date && !Number.isNaN(range.end.getTime())
     ? range.end.getTime()
     : undefined
-  const yMin = safeScaleNumber(yMinValue, 'linear')
-  const yMax = safeScaleNumber(yMaxValue, 'linear')
 
   return {
     responsive: true,
@@ -2221,8 +2225,6 @@ const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
       },
       y: {
         type: 'linear',
-        min: yMin,
-        max: yMax,
         title: {
           display: true,
           text: '수위 h(m)',
@@ -2265,36 +2267,15 @@ const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
   }
 }
 
-function InstrumentWaterLevelChart({
-  title,
-  subtitle,
-  datasets,
-  range,
-  height = 460,
-  yMin,
-  yMax,
-  zoomX = 1,
-  zoomY = 1
-}) {
-  const options = useMemo(
-    () => buildInstrumentWaterLevelChartOptions(range, yMin, yMax),
-    [range, yMin, yMax]
-  )
+function InstrumentWaterLevelChart({ title, subtitle, datasets, range, height = 460 }) {
+  const options = useMemo(() => buildInstrumentWaterLevelChartOptions(range), [range])
 
   return (
     <div className="subcard" style={{ marginBottom: '16px' }}>
       <h3 style={{ marginBottom: '6px' }}>{title}</h3>
       {subtitle ? <p className="muted" style={{ marginBottom: '10px' }}>{subtitle}</p> : null}
-      <div style={{ overflow: 'auto' }}>
-        <div
-          style={{
-            width: `${Math.max(100, Math.round(zoomX * 100))}%`,
-            minWidth: '100%',
-            height: `${Math.max(320, Math.round(height * zoomY))}px`
-          }}
-        >
-          <Scatter data={{ datasets }} options={options} />
-        </div>
+      <div style={{ height: `${height}px` }}>
+        <Scatter data={{ datasets }} options={options} />
       </div>
     </div>
   )
@@ -2668,20 +2649,72 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
             </select>
           </label>
 
-          <label>
-            지점
-            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-              {stationOptions.map((stationOption) =>
-                stationOption === '전체' ? (
-                  <option key="전체" value="전체">전체</option>
-                ) : (
-                  <option key={stationOption.id} value={stationOption.id}>
-                    {stationOption.label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
+          <div style={{ minWidth: '320px' }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px' }}>지점</div>
+            <div
+              style={{
+                border: '1px solid rgba(0,0,0,0.18)',
+                borderRadius: '8px',
+                background: '#fff',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                padding: '4px'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => toggleStationSelection('전체')}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  marginBottom: '4px',
+                  backgroundColor: allVisibleSelected ? '#2563eb' : '#f8fafc',
+                  color: allVisibleSelected ? '#fff' : '#111',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                전체
+              </button>
+
+              {stationOptions
+                .filter((stationOption) => stationOption !== '전체')
+                .map((stationOption) => {
+                  const selected = selectedStationIds.includes(stationOption.id)
+                  return (
+                    <button
+                      key={stationOption.id}
+                      type="button"
+                      onClick={() => toggleStationSelection(stationOption.id)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        marginBottom: '4px',
+                        backgroundColor: selected ? '#2563eb' : '#fff',
+                        color: selected ? '#fff' : '#111',
+                        cursor: 'pointer',
+                        fontWeight: selected ? 700 : 400,
+                        whiteSpace: 'normal',
+                        lineHeight: '1.25'
+                      }}
+                    >
+                      {stationOption.label}
+                    </button>
+                  )
+                })}
+            </div>
+            <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+              선택된 지점 수: {filteredStations.length}개
+            </div>
+          </div>
 
           <label>
             API 키
@@ -2807,7 +2840,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
-  const [stationFilter, setStationFilter] = useState('전체')
+  const [stationFilter, setStationFilter] = useState([])
   const [periodKey, setPeriodKey] = useState('3h')
   const [customStartTime, setCustomStartTime] = useState('')
   const [customEndTime, setCustomEndTime] = useState('')
@@ -2826,10 +2859,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [chartStatus, setChartStatus] = useState('')
   const [generatedCharts, setGeneratedCharts] = useState([])
   const [generatedChartLabel, setGeneratedChartLabel] = useState('')
-  const [instrumentChartYMin, setInstrumentChartYMin] = useState('')
-  const [instrumentChartYMax, setInstrumentChartYMax] = useState('')
-  const [instrumentChartZoomX, setInstrumentChartZoomX] = useState(1)
-  const [instrumentChartZoomY, setInstrumentChartZoomY] = useState(1)
 
   const periodOptions = useMemo(
     () => [
@@ -2847,18 +2876,72 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
+  const allStationOptions = useMemo(() => buildInstrumentStationOptions(groups, '전체'), [groups])
   const stationOptions = useMemo(() => buildInstrumentStationOptions(groups, groupFilter), [groups, groupFilter])
+  const allStationIds = useMemo(
+    () => allStationOptions.filter((option) => option !== '전체').map((option) => option.id),
+    [allStationOptions]
+  )
+  const stationFilterInitializedRef = useRef(false)
 
   useEffect(() => {
-    if (stationFilter === '전체') return
-    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
-    if (!exists) setStationFilter('전체')
-  }, [stationOptions, stationFilter])
+    if (!stationFilterInitializedRef.current) {
+      if (allStationIds.length > 0) {
+        stationFilterInitializedRef.current = true
+        setStationFilter(allStationIds)
+      }
+      return
+    }
+
+    setStationFilter((prev) => {
+      const current = Array.isArray(prev) ? prev : []
+      const next = current.filter((id) => allStationIds.includes(id))
+      return next.length === current.length ? prev : next
+    })
+  }, [allStationIds])
 
   const filteredStations = useMemo(
     () => buildInstrumentFilteredStations(groups, groupFilter, classificationFilter, stationFilter),
     [groups, groupFilter, classificationFilter, stationFilter]
   )
+
+  const selectedStationIds = useMemo(() => {
+    if (!Array.isArray(stationFilter)) return []
+    return stationFilter
+  }, [stationFilter])
+
+  const selectedVisibleStationIds = useMemo(
+    () => stationOptions.filter((option) => option !== '전체').map((option) => option.id),
+    [stationOptions]
+  )
+
+  const allVisibleSelected =
+    selectedVisibleStationIds.length > 0 &&
+    selectedVisibleStationIds.every((id) => selectedStationIds.includes(id))
+
+  const toggleStationSelection = (stationId) => {
+    if (stationId === '전체') {
+      setStationFilter((prev) => {
+        const current = Array.isArray(prev) ? prev : []
+        const visibleIds = selectedVisibleStationIds
+        const visibleSelectedCount = visibleIds.filter((id) => current.includes(id)).length
+        if (visibleIds.length > 0 && visibleSelectedCount === visibleIds.length) {
+          return current.filter((id) => !visibleIds.includes(id))
+        }
+        const merged = new Set([...current, ...visibleIds])
+        return Array.from(merged)
+      })
+      return
+    }
+
+    setStationFilter((prev) => {
+      const current = Array.isArray(prev) ? prev : []
+      if (current.includes(stationId)) {
+        return current.filter((id) => id !== stationId)
+      }
+      return [...current, stationId]
+    })
+  }
 
   const stationColumns = useMemo(
     () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
@@ -3150,8 +3233,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       label: `${station.name || '지점 없음'} 측정성과`,
       data: points,
       showLine: false,
-      pointRadius: 8,
-      pointHoverRadius: 10,
+      pointRadius: 5,
+      pointHoverRadius: 6,
       borderWidth: 1,
       borderColor: measurementPointColor,
       backgroundColor: measurementPointColor,
@@ -3374,20 +3457,72 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             </select>
           </label>
 
-          <label>
-            지점
-            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-              {stationOptions.map((stationOption) =>
-                stationOption === '전체' ? (
-                  <option key="전체" value="전체">전체</option>
-                ) : (
-                  <option key={stationOption.id} value={stationOption.id}>
-                    {stationOption.label}
-                  </option>
-                )
-              )}
-            </select>
-          </label>
+          <div style={{ minWidth: '320px' }}>
+            <div style={{ fontWeight: 600, marginBottom: '4px' }}>지점</div>
+            <div
+              style={{
+                border: '1px solid rgba(0,0,0,0.18)',
+                borderRadius: '8px',
+                background: '#fff',
+                maxHeight: '260px',
+                overflowY: 'auto',
+                padding: '4px'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => toggleStationSelection('전체')}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  marginBottom: '4px',
+                  backgroundColor: allVisibleSelected ? '#2563eb' : '#f8fafc',
+                  color: allVisibleSelected ? '#fff' : '#111',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                전체
+              </button>
+
+              {stationOptions
+                .filter((stationOption) => stationOption !== '전체')
+                .map((stationOption) => {
+                  const selected = selectedStationIds.includes(stationOption.id)
+                  return (
+                    <button
+                      key={stationOption.id}
+                      type="button"
+                      onClick={() => toggleStationSelection(stationOption.id)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        border: 'none',
+                        borderRadius: '6px',
+                        marginBottom: '4px',
+                        backgroundColor: selected ? '#2563eb' : '#fff',
+                        color: selected ? '#fff' : '#111',
+                        cursor: 'pointer',
+                        fontWeight: selected ? 700 : 400,
+                        whiteSpace: 'normal',
+                        lineHeight: '1.25'
+                      }}
+                    >
+                      {stationOption.label}
+                    </button>
+                  )
+                })}
+            </div>
+            <div className="muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+              선택된 지점 수: {filteredStations.length}개
+            </div>
+          </div>
 
           <label>
             API 키
@@ -3537,70 +3672,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         ) : null}
 
-        <div className="chart-settings">
-          <div className="chart-setting-card">
-            <h3>축 설정</h3>
-            <div className="chart-setting-grid">
-              <label>
-                Y축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMin}
-                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
-                />
-              </label>
-              <label>
-                Y축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMax}
-                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span className="muted" style={{ minWidth: '44px' }}>가로</span>
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX((prev) => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}>-</button>
-            <input
-              type="range"
-              min="0.5"
-              max="3"
-              step="0.25"
-              value={instrumentChartZoomX}
-              onChange={(e) => setInstrumentChartZoomX(Number(e.target.value))}
-              aria-label="계기수위 그래프 가로 확대/축소"
-              style={{ flex: '1 1 220px', minWidth: '180px' }}
-            />
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX((prev) => Math.min(3, Number((prev + 0.25).toFixed(2))))}>+</button>
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomX(1)}>기본</button>
-            <span className="muted">{instrumentChartZoomX.toFixed(2)}x</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span className="muted" style={{ minWidth: '44px' }}>세로</span>
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY((prev) => Math.max(0.5, Number((prev - 0.25).toFixed(2))))}>-</button>
-            <input
-              type="range"
-              min="0.5"
-              max="3"
-              step="0.25"
-              value={instrumentChartZoomY}
-              onChange={(e) => setInstrumentChartZoomY(Number(e.target.value))}
-              aria-label="계기수위 그래프 세로 확대/축소"
-              style={{ flex: '1 1 220px', minWidth: '180px' }}
-            />
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY((prev) => Math.min(3, Number((prev + 0.25).toFixed(2))))}>+</button>
-            <button type="button" className="btn secondary" onClick={() => setInstrumentChartZoomY(1)}>기본</button>
-            <span className="muted">{instrumentChartZoomY.toFixed(2)}x</span>
-          </div>
-        </div>
-
         {generatedCharts.length > 0 ? (
           <div style={{ marginTop: '14px' }}>
             {generatedCharts.map((chart) => (
@@ -3611,10 +3682,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                 datasets={chart.datasets}
                 range={chart.range}
                 height={chart.height}
-                yMin={instrumentChartYMin}
-                yMax={instrumentChartYMax}
-                zoomX={instrumentChartZoomX}
-                zoomY={instrumentChartZoomY}
               />
             ))}
           </div>
@@ -3697,7 +3764,21 @@ export default function App() {
 
   const [chartConfig, setChartConfig] = useState(() => {
     const saved = localStorage.getItem(CHART_CONFIG_KEY)
-    const fallback = {
+    if (saved) {
+      try {
+        return JSON.parse(saved)
+      } catch {
+        return {
+          xType: 'logarithmic',
+          xMin: '0.1',
+          xMax: '10000',
+          yType: 'logarithmic',
+          yMin: '0.1',
+          yMax: '10'
+        }
+      }
+    }
+    return {
       xType: 'logarithmic',
       xMin: '0.1',
       xMax: '10000',
@@ -3705,24 +3786,6 @@ export default function App() {
       yMin: '0.1',
       yMax: '10'
     }
-
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved)
-        return {
-          xType: parsed?.xType ?? fallback.xType,
-          xMin: parsed?.xMin ?? fallback.xMin,
-          xMax: parsed?.xMax ?? fallback.xMax,
-          yType: parsed?.yType ?? fallback.yType,
-          yMin: parsed?.yMin ?? fallback.yMin,
-          yMax: parsed?.yMax ?? fallback.yMax
-        }
-      } catch {
-        return fallback
-      }
-    }
-
-    return fallback
   })
 
   const [legendPos, setLegendPos] = useState(() => {
