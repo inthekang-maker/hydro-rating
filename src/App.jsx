@@ -3469,32 +3469,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         </div>
 
-        <div className="chart-settings">
-          <div className="chart-setting-card">
-            <h3>축 설정</h3>
-            <div className="chart-setting-grid">
-              <label>
-                Y축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMin}
-                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
-                />
-              </label>
-              <label>
-                Y축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMax}
-                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: '220px' }}>
             <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
@@ -3562,6 +3536,32 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             {chartStatus}
           </div>
         ) : null}
+
+        <div className="chart-settings">
+          <div className="chart-setting-card">
+            <h3>축 설정</h3>
+            <div className="chart-setting-grid">
+              <label>
+                Y축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMin}
+                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
+                />
+              </label>
+              <label>
+                Y축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMax}
+                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
 
         <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
