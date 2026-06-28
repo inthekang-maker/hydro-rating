@@ -3469,32 +3469,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         </div>
 
-        <div className="chart-settings">
-          <div className="chart-setting-card">
-            <h3>축 설정</h3>
-            <div className="chart-setting-grid">
-              <label>
-                Y축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMin}
-                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
-                />
-              </label>
-              <label>
-                Y축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMax}
-                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
-
         <div className="row" style={{ alignItems: 'flex-start' }}>
           <div style={{ minWidth: '220px' }}>
             <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
@@ -3547,10 +3521,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
         </div>
 
-        <div className="muted" style={{ marginTop: '8px' }}>
-          전체기간: 2026-01-01 00:10 ~ 2027-01-01 00:00 · 1분기: 2026-01-01 00:10 ~ 2026-04-01 00:00 · 2분기: 2026-04-01 00:10 ~ 2026-07-01 00:00 · 3분기: 2026-07-01 00:10 ~ 2026-10-01 00:00 · 4분기: 2026-10-01 00:10 ~ 2027-01-01 00:00 · 사용자 지정 기간은 아래 시작/종료 시간을 사용합니다.
-        </div>
-
         {generatedChartLabel ? (
           <div className="muted" style={{ marginTop: '4px' }}>
             선택 기간: {generatedChartLabel}
@@ -3562,6 +3532,33 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             {chartStatus}
           </div>
         ) : null}
+
+        <div className="chart-settings">
+          <div className="chart-setting-card">
+            <h3>축 설정</h3>
+            <div className="chart-setting-grid">
+              <label>
+                Y축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMin}
+                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
+                />
+              </label>
+              <label>
+                Y축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={instrumentChartYMax}
+                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+
 
         <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
