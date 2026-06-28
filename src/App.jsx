@@ -2764,10 +2764,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     )
   }
 
-  const currentGroupName = selectedGroup?.name || ''
-  const currentStationName = selectedStation?.name || ''
-  const currentStationCode = selectedStation?.code || ''
-
   const sectionColumns = [
     { key: 'name', label: '구간명' },
     { key: 'hMin', label: '적용수위 시작' },
