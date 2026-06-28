@@ -3138,7 +3138,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         spanGaps: true,
         pointRadius: 0,
         pointHoverRadius: 0,
-        borderWidth: 2.5,
+        borderWidth: 1.5,
         borderColor: color,
         backgroundColor: color,
         parsing: false,
