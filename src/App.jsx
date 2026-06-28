@@ -1941,6 +1941,16 @@ const formatDateTimeDisplay = (date) => {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
+const formatDateTimeLocal = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
 const cloneDate = (date) => new Date(date.getTime())
 
 const getInstrumentReferenceDate = (referenceTime = new Date()) => {
@@ -3093,30 +3103,39 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   }
 
   const handleLoadCustomPeriod = async () => {
-    const startTime = parseDateTime(customStartTime)
-    const endTime = parseDateTime(customEndTime)
+  const startTimeRaw = parseDateTime(customStartTime)
+  const endTimeRaw = parseDateTime(customEndTime)
 
-    if (!startTime || !endTime) {
-      window.alert('시작 시간과 종료 시간을 모두 입력해 주세요.')
-      return
-    }
-    if (startTime > endTime) {
-      window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
-      return
-    }
-
-    setHistoryMode('period')
-    setPeriodKey('custom')
-    resetHistory()
-    await applyHistorySlice(
-      startTime,
-      endTime,
-      'custom',
-      false,
-      false,
-      `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
-    )
+  if (!startTimeRaw || !endTimeRaw) {
+    window.alert('시작 시간과 종료 시간을 모두 입력해 주세요.')
+    return
   }
+
+  const startTime = floorToTenMinuteSlot(startTimeRaw)
+  const endTime = floorToTenMinuteSlot(endTimeRaw)
+
+  if (!startTime || !endTime) {
+    window.alert('시간 형식이 올바르지 않습니다.')
+    return
+  }
+
+  if (startTime > endTime) {
+    window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
+    return
+  }
+
+  setHistoryMode('period')
+  setPeriodKey('custom')
+  resetHistory()
+  await applyHistorySlice(
+    startTime,
+    endTime,
+    'custom',
+    false,
+    false,
+    `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
+  )
+}
 
   const chartPeriodRange = useMemo(
     () => getInstrumentChartPeriodRange(chartPeriodKey, chartCustomStartTime, chartCustomEndTime),
@@ -3406,24 +3425,40 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </div>
 
           <label style={{ minWidth: '240px' }}>
-            시작 시간
-            <input
-              type="datetime-local"
-              step="600"
-              value={customStartTime}
-              onChange={(e) => setCustomStartTime(e.target.value)}
-            />
-          </label>
+  시작 시간
+  <input
+    type="datetime-local"
+    step="600"
+    value={customStartTime}
+    onChange={(e) => {
+      const d = parseDateTime(e.target.value)
+      if (!d) {
+        setCustomStartTime('')
+        return
+      }
+      const rounded = floorToTenMinuteSlot(d)
+      setCustomStartTime(formatDateTimeLocal(rounded))
+    }}
+  />
+</label>
 
-          <label style={{ minWidth: '240px' }}>
-            종료 시간
-            <input
-              type="datetime-local"
-              step="600"
-              value={customEndTime}
-              onChange={(e) => setCustomEndTime(e.target.value)}
-            />
-          </label>
+<label style={{ minWidth: '240px' }}>
+  종료 시간
+  <input
+    type="datetime-local"
+    step="600"
+    value={customEndTime}
+    onChange={(e) => {
+      const d = parseDateTime(e.target.value)
+      if (!d) {
+        setCustomEndTime('')
+        return
+      }
+      const rounded = floorToTenMinuteSlot(d)
+      setCustomEndTime(formatDateTimeLocal(rounded))
+    }}
+  />
+</label>
 
           <div className="grid-actions" style={{ alignSelf: 'end' }}>
             <button className="btn secondary" onClick={handleLoadCustomPeriod} disabled={historyLoading}>
@@ -3493,24 +3528,42 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
           <div style={{ minWidth: '260px', display: 'grid', gap: '10px' }}>
             <label>
-              시작시간
-              <input
-                type="datetime-local"
-                value={chartCustomStartTime}
-                onChange={(e) => setChartCustomStartTime(e.target.value)}
-                disabled={chartPeriodKey !== 'custom'}
-              />
-            </label>
+  시작시간
+  <input
+    type="datetime-local"
+    step="600"
+    value={chartCustomStartTime}
+    onChange={(e) => {
+      const d = parseDateTime(e.target.value)
+      if (!d) {
+        setChartCustomStartTime('')
+        return
+      }
+      const rounded = floorToTenMinuteSlot(d)
+      setChartCustomStartTime(formatDateTimeLocal(rounded))
+    }}
+    disabled={chartPeriodKey !== 'custom'}
+  />
+</label>
 
-            <label>
-              종료시간
-              <input
-                type="datetime-local"
-                value={chartCustomEndTime}
-                onChange={(e) => setChartCustomEndTime(e.target.value)}
-                disabled={chartPeriodKey !== 'custom'}
-              />
-            </label>
+<label>
+  종료시간
+  <input
+    type="datetime-local"
+    step="600"
+    value={chartCustomEndTime}
+    onChange={(e) => {
+      const d = parseDateTime(e.target.value)
+      if (!d) {
+        setChartCustomEndTime('')
+        return
+      }
+      const rounded = floorToTenMinuteSlot(d)
+      setChartCustomEndTime(formatDateTimeLocal(rounded))
+    }}
+    disabled={chartPeriodKey !== 'custom'}
+  />
+</label>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
