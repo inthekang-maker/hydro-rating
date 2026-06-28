@@ -2883,6 +2883,81 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     }
   }
 
+  const fetchInstrumentChartHistorySlice = async (startTime, endTime) => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      throw new Error('API 키를 입력해 주세요.')
+    }
+    if (filteredStations.length === 0) {
+      throw new Error('선택된 지점이 없습니다.')
+    }
+
+    const ranges = splitInstrumentChartRangeByMonth(startTime, endTime)
+    if (ranges.length === 0) {
+      throw new Error('차트 기간을 올바르게 입력해 주세요.')
+    }
+
+    const results = await runWithConcurrency(filteredStations, 3, async (station) => {
+      const rowMap = new Map()
+
+      for (const range of ranges) {
+        try {
+          const rows = await fetchHrfcoWaterLevelRowsBetween(
+            apiKey,
+            station.name,
+            range.start,
+            range.end
+          )
+          ;(rows || []).forEach((row) => {
+            if (!rowMap.has(row.ymdhm)) {
+              rowMap.set(row.ymdhm, row.value)
+            }
+          })
+        } catch {
+          // 월 단위 중 일부가 실패해도 나머지 구간은 계속 시도한다.
+        }
+      }
+
+      if (rowMap.size === 0) {
+        throw new Error('수위 자료를 찾지 못했습니다.')
+      }
+
+      return {
+        stationId: station.id,
+        rows: Array.from(rowMap.entries()).map(([ymdhm, value]) => ({
+          ymdhm,
+          value
+        }))
+      }
+    })
+
+    const rowsByStation = {}
+    const times = []
+    let failCount = 0
+
+    results.forEach((result, index) => {
+      const station = filteredStations[index]
+      if (!result || result.error || !station) {
+        failCount += 1
+        rowsByStation[station?.id || `missing-${index}`] = {}
+        return
+      }
+
+      const map = {}
+      ;(result.rows || []).forEach((row) => {
+        map[row.ymdhm] = row.value
+        times.push(row.ymdhm)
+      })
+      rowsByStation[result.stationId] = map
+    })
+
+    return {
+      rowsByStation,
+      times: sortYmdhmList(times, true),
+      failCount
+    }
+  }
+
   const applyHistorySlice = async (startTime, endTime, mode, ascending = false, append = false, sliceLabel = '') => {
     setHistoryLoading(true)
     setHistoryStatus(`${sliceLabel || '수위 자료'}를 조회하는 중입니다...`)
@@ -3087,6 +3162,11 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   }, [])
 
   const generateInstrumentCharts = async () => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      window.alert('API 키를 입력해 주세요.')
+      return
+    }
     if (filteredStations.length === 0) {
       window.alert('선택된 지점이 없습니다.')
       return
@@ -3102,30 +3182,18 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       return
     }
 
-    const hasLoadedHistory = Object.values(historyRowsByStation || {}).some(
-      (rowsMap) => rowsMap && Object.keys(rowsMap).length > 0
-    )
-
-    if (!hasLoadedHistory || historyTimes.length === 0) {
-      window.alert('먼저 수위 자료를 불러와 주세요.')
-      return
-    }
-
     setChartLoading(true)
-    setChartStatus('저장된 수위 자료로 차트를 생성하는 중입니다...')
+    setChartStatus('차트 자료를 불러오는 중입니다...')
 
     try {
+      const result = await fetchInstrumentChartHistorySlice(chartPeriodRange.start, chartPeriodRange.end)
+      const rowsByStation = result.rowsByStation || {}
       const charts = []
       const datasetBuilder = buildInstrumentChartDatasets
-      const rowsByStation = historyRowsByStation || {}
 
       if (chartSeparateCharts) {
         filteredStations.forEach((station, stationIndex) => {
-          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(
-            station,
-            rowsByStation,
-            chartPeriodRange
-          )
+          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(station, rowsByStation, chartPeriodRange)
           const datasets = []
 
           if (waterPoints.length > 0) {
@@ -3150,11 +3218,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       } else {
         const datasets = []
         filteredStations.forEach((station, stationIndex) => {
-          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(
-            station,
-            rowsByStation,
-            chartPeriodRange
-          )
+          const { waterPoints, measurementPoints } = datasetBuilder.buildStationPoints(station, rowsByStation, chartPeriodRange)
 
           if (waterPoints.length > 0) {
             datasets.push(datasetBuilder.makeLineDataset(station, stationIndex, waterPoints))
@@ -3181,8 +3245,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       setGeneratedChartLabel(chartPeriodRange.label)
       setChartStatus(
         charts.length > 0
-          ? '차트 생성 완료 (저장된 수위 자료 사용)'
-          : '저장된 수위 자료로 생성할 차트가 없습니다.'
+          ? `차트 생성 완료${result.failCount > 0 ? ` (수위 자료 조회 실패 ${result.failCount}개 지점)` : ''}`
+          : '해당 기간에 생성할 차트 자료가 없습니다.'
       )
     } catch (error) {
       setChartStatus(error instanceof Error ? error.message : '차트 생성 실패')
@@ -3536,28 +3600,24 @@ export default function App() {
 
   const [chartConfig, setChartConfig] = useState(() => {
     const saved = localStorage.getItem(CHART_CONFIG_KEY)
-    if (saved) {
-      try {
-        return JSON.parse(saved)
-      } catch {
-        return {
-          xType: 'logarithmic',
-          xMin: '0.1',
-          xMax: '10000',
-          yType: 'logarithmic',
-          yMin: '0.1',
-          yMax: '10'
-        }
-      }
-    }
-    return {
-      xType: 'logarithmic',
-      xMin: '0.1',
-      xMax: '10000',
-      yType: 'logarithmic',
+    const fallback = {
       yMin: '0.1',
       yMax: '10'
     }
+
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        return {
+          yMin: parsed?.yMin ?? fallback.yMin,
+          yMax: parsed?.yMax ?? fallback.yMax
+        }
+      } catch {
+        return fallback
+      }
+    }
+
+    return fallback
   })
 
   const [legendPos, setLegendPos] = useState(() => {
@@ -4112,9 +4172,6 @@ export default function App() {
       },
       scales: {
         x: {
-          type: chartConfig.xType,
-          min: safeScaleNumber(chartConfig.xMin, chartConfig.xType),
-          max: safeScaleNumber(chartConfig.xMax, chartConfig.xType),
           title: {
             display: true,
             text: '유량 Q(m³/s)',
@@ -4134,9 +4191,8 @@ export default function App() {
           }
         },
         y: {
-          type: chartConfig.yType,
-          min: safeScaleNumber(chartConfig.yMin, chartConfig.yType),
-          max: safeScaleNumber(chartConfig.yMax, chartConfig.yType),
+          min: safeScaleNumber(chartConfig.yMin),
+          max: safeScaleNumber(chartConfig.yMax),
           title: {
             display: true,
             text: '수위 h(m)',
@@ -4513,52 +4569,6 @@ export default function App() {
           <div className="chart-setting-card">
             <h3>축 설정</h3>
             <div className="chart-setting-grid">
-              <label>
-                X축 종류
-                <select
-                  value={chartConfig.xType}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xType: e.target.value }))
-                  }
-                >
-                  <option value="logarithmic">logarithmic</option>
-                  <option value="linear">linear</option>
-                </select>
-              </label>
-              <label>
-                X축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.xMin}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xMin: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                X축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.xMax}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xMax: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Y축 종류
-                <select
-                  value={chartConfig.yType}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, yType: e.target.value }))
-                  }
-                >
-                  <option value="logarithmic">logarithmic</option>
-                  <option value="linear">linear</option>
-                </select>
-              </label>
               <label>
                 Y축 최소
                 <input
