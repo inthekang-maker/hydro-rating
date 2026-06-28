@@ -3142,7 +3142,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         borderColor: color,
         backgroundColor: color,
         parsing: false,
-        order: 1
+        order: 2
       }
     }
 
@@ -3157,7 +3157,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       backgroundColor: measurementPointColor,
       pointStyle: 'rectRot',
       parsing: false,
-      order: 2
+      order: 1
     })
 
     const buildStationPoints = (station, rowsByStation, range) => {
