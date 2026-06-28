@@ -1931,6 +1931,16 @@ const formatMonthLabel = (date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
+const formatDateTimeDisplay = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
+}
+
 const cloneDate = (date) => new Date(date.getTime())
 
 const getInstrumentReferenceDate = (referenceTime = new Date()) => {
@@ -2532,19 +2542,15 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [groupFilter, setGroupFilter] = useState('전체')
   const [stationFilter, setStationFilter] = useState('전체')
   const [periodKey, setPeriodKey] = useState('3h')
-
-  const getPeriodButtonStyle = (key) => ({
-    background: periodKey === key ? '#1f6feb' : '#6c757d'
-  })
+  const [customStartTime, setCustomStartTime] = useState('')
+  const [customEndTime, setCustomEndTime] = useState('')
 
   const [historyRowsByStation, setHistoryRowsByStation] = useState({})
   const [historyTimes, setHistoryTimes] = useState([])
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyMode, setHistoryMode] = useState('period')
-  const [nextMonthStart, setNextMonthStart] = useState(() => getMonthStart(getInstrumentYearStart()))
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
-
 
   const periodOptions = useMemo(
     () => [
@@ -2552,7 +2558,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       { key: '6h', label: '6시간', hours: 6 },
       { key: '12h', label: '12시간', hours: 12 },
       { key: '1d', label: '1일', hours: 24 },
-      { key: 'all', label: '전체', hours: null }
+      { key: 'all', label: '전체', hours: null },
+      { key: 'custom', label: '사용자 지정 기간', hours: null }
     ],
     []
   )
@@ -2579,16 +2586,77 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     [filteredStations, historyRowsByStation]
   )
 
-  const currentMonthStart = useMemo(() => getMonthStart(new Date()), [])
-  const canLoadMoreAll = historyMode === 'all' && nextMonthStart <= currentMonthStart
-
   const resetHistory = () => {
     setHistoryRowsByStation({})
     setHistoryTimes([])
     setHistoryLoadedLabel('')
   }
 
-  const loadHistorySlice = async (startTime, endTime, mode, ascending = false, append = false, sliceLabel = '') => {
+  const fetchHistorySlice = async (startTime, endTime, ascending = false) => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      throw new Error('API 키를 입력해 주세요.')
+    }
+    if (filteredStations.length === 0) {
+      throw new Error('선택된 지점이 없습니다.')
+    }
+
+    const results = await runWithConcurrency(filteredStations, 3, async (station) => {
+      const rows = await fetchHrfcoWaterLevelRowsBetween(apiKey, station.name, startTime, endTime)
+      return { stationId: station.id, rows }
+    })
+
+    const rowsByStation = {}
+    const times = []
+    let failCount = 0
+
+    results.forEach((result, index) => {
+      const station = filteredStations[index]
+      if (!result || result.error || !station) {
+        failCount += 1
+        rowsByStation[station?.id || `missing-${index}`] = {}
+        return
+      }
+
+      const map = {}
+      ;(result.rows || []).forEach((row) => {
+        map[row.ymdhm] = row.value
+        times.push(row.ymdhm)
+      })
+      rowsByStation[result.stationId] = map
+    })
+
+    return {
+      rowsByStation,
+      times: sortYmdhmList(times, ascending),
+      failCount
+    }
+  }
+
+  const applyHistorySlice = async (startTime, endTime, mode, ascending = false, append = false, sliceLabel = '') => {
+    setHistoryLoading(true)
+    setHistoryStatus(`${sliceLabel || '수위 자료'}를 조회하는 중입니다...`)
+
+    try {
+      const result = await fetchHistorySlice(startTime, endTime, ascending)
+      const label = sliceLabel || '조회'
+
+      setPeriodKey(mode)
+      setHistoryMode(mode === 'all' ? 'all' : 'period')
+      setHistoryRowsByStation((prev) => (append ? mergeRowsByStation(prev, result.rowsByStation) : result.rowsByStation))
+      setHistoryTimes((prev) => (append ? sortYmdhmList([...prev, ...result.times], ascending) : result.times))
+      setHistoryLoadedLabel(sliceLabel)
+      setHistoryStatus(`${label} 완료${result.failCount > 0 ? ` (실패 ${result.failCount}개 지점)` : ''}`)
+      return true
+    } catch (error) {
+      setHistoryStatus(error instanceof Error ? error.message : '수위 자료 조회 실패')
+      return false
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const loadAllHistoryUntilCurrent = async () => {
     const apiKey = String(hrfcoApiKey || '').trim()
     if (!apiKey) {
       window.alert('API 키를 입력해 주세요.')
@@ -2599,47 +2667,54 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       return false
     }
 
+    const referenceTime = new Date()
+    const yearStart = getInstrumentYearStart(referenceTime)
+    const currentMonthStart = getMonthStart(referenceTime)
+
+    const monthStarts = []
+    for (let cursor = getMonthStart(yearStart); cursor <= currentMonthStart; cursor = addMonths(cursor, 1)) {
+      monthStarts.push(new Date(cursor.getTime()))
+    }
+
     setHistoryLoading(true)
-    setHistoryStatus(`${sliceLabel || '수위 자료'}를 조회하는 중입니다...`)
+    setHistoryMode('all')
+    setPeriodKey('all')
+    resetHistory()
+    setHistoryStatus('전체 자료를 월별로 불러오는 중입니다...')
 
     try {
-      const results = await runWithConcurrency(filteredStations, 3, async (station) => {
-        const rows = await fetchHrfcoWaterLevelRowsBetween(apiKey, station.name, startTime, endTime)
-        return { stationId: station.id, rows }
-      })
-
-      const rowsByStation = {}
-      const times = []
+      const aggregatedRowsByStation = {}
+      const aggregatedTimes = []
       let failCount = 0
 
-      results.forEach((result, index) => {
-        const station = filteredStations[index]
-        if (!result || result.error || !station) {
-          failCount += 1
-          rowsByStation[station?.id || `missing-${index}`] = {}
-          return
-        }
+      for (let i = 0; i < monthStarts.length; i += 1) {
+        const monthStart = monthStarts[i]
+        const monthEnd = getMonthEnd(monthStart, referenceTime)
+        setHistoryStatus(`${formatMonthLabel(monthStart)} 자료를 불러오는 중입니다...`)
 
-        const map = {}
-        ;(result.rows || []).forEach((row) => {
-          map[row.ymdhm] = row.value
-          times.push(row.ymdhm)
+        const result = await fetchHistorySlice(monthStart, monthEnd, true)
+        failCount += result.failCount
+
+        Object.entries(result.rowsByStation).forEach(([stationId, rowsMap]) => {
+          aggregatedRowsByStation[stationId] = {
+            ...(aggregatedRowsByStation[stationId] || {}),
+            ...rowsMap
+          }
         })
-        rowsByStation[result.stationId] = map
-      })
+        aggregatedTimes.push(...result.times)
+      }
 
-      const mergedTimes = sortYmdhmList(times, ascending)
-      setPeriodKey(mode)
-      setHistoryMode(mode === 'all' ? 'all' : 'period')
-      setHistoryRowsByStation((prev) => (append ? mergeRowsByStation(prev, rowsByStation) : rowsByStation))
-      setHistoryTimes((prev) => (append ? sortYmdhmList([...prev, ...mergedTimes], ascending) : mergedTimes))
-      setHistoryLoadedLabel(sliceLabel)
-      setHistoryStatus(
-        `${sliceLabel || '조회'} 완료${failCount > 0 ? ` (실패 ${failCount}개 지점)` : ''}`
+      setHistoryRowsByStation(aggregatedRowsByStation)
+      setHistoryTimes(sortYmdhmList(aggregatedTimes, true))
+      setHistoryLoadedLabel(
+        monthStarts.length > 0
+          ? `${formatMonthLabel(monthStarts[0])} ~ ${formatMonthLabel(monthStarts[monthStarts.length - 1])} 자료`
+          : '전체 자료'
       )
+      setHistoryStatus(`전체 자료 불러오기 완료${failCount > 0 ? ` (실패 ${failCount}개 지점)` : ''}`)
       return true
     } catch (error) {
-      setHistoryStatus(error instanceof Error ? error.message : '수위 자료 조회 실패')
+      setHistoryStatus(error instanceof Error ? error.message : '전체 자료 조회 실패')
       return false
     } finally {
       setHistoryLoading(false)
@@ -2651,23 +2726,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     if (!selected) return
 
     if (selected.key === 'all') {
-      const yearStart = getInstrumentYearStart(new Date())
-      const monthStart = getMonthStart(yearStart)
-      const monthEnd = getMonthEnd(monthStart, new Date())
-      setHistoryMode('all')
-      setPeriodKey('all')
-      resetHistory()
-      const ok = await loadHistorySlice(
-        monthStart,
-        monthEnd,
-        'all',
-        true,
-        false,
-        `${formatMonthLabel(monthStart)} 자료`
-      )
-      if (ok) {
-        setNextMonthStart(addMonths(monthStart, 1))
-      }
+      await loadAllHistoryUntilCurrent()
       return
     }
 
@@ -2676,33 +2735,63 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     setHistoryMode('period')
     setPeriodKey(selected.key)
     resetHistory()
-    await loadHistorySlice(queryStart, queryEnd, selected.key, false, false, `${selected.label} 자료`)
+    await applyHistorySlice(queryStart, queryEnd, selected.key, false, false, `${selected.label} 자료`)
   }
 
-  const handleLoadNextMonth = async () => {
-    if (historyMode !== 'all') {
-      await handleLoadPeriod('all')
+  const handleLoadCustomPeriod = async () => {
+    const startTime = parseDateTime(customStartTime)
+    const endTime = parseDateTime(customEndTime)
+
+    if (!startTime || !endTime) {
+      window.alert('시작 시간과 종료 시간을 모두 입력해 주세요.')
       return
     }
-    if (!canLoadMoreAll) {
-      setHistoryStatus('현재 달까지 모두 불러왔습니다.')
+    if (startTime > endTime) {
+      window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
       return
     }
 
-    const monthStart = nextMonthStart
-    const monthEnd = getMonthEnd(monthStart, new Date())
-    const ok = await loadHistorySlice(
-      monthStart,
-      monthEnd,
-      'all',
-      true,
-      true,
-      `${formatMonthLabel(monthStart)} 자료`
+    setHistoryMode('period')
+    setPeriodKey('custom')
+    resetHistory()
+    await applyHistorySlice(
+      startTime,
+      endTime,
+      'custom',
+      false,
+      false,
+      `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
     )
-    if (ok) {
-      setNextMonthStart(addMonths(monthStart, 1))
-    }
   }
+
+  const currentGroupName = selectedGroup?.name || ''
+  const currentStationName = selectedStation?.name || ''
+  const currentStationCode = selectedStation?.code || ''
+
+  const sectionColumns = [
+    { key: 'name', label: '구간명' },
+    { key: 'hMin', label: '적용수위 시작' },
+    { key: 'hMax', label: '적용수위 끝' },
+    { key: 'a', label: 'A' },
+    { key: 'b', label: 'B' },
+    { key: 'c', label: 'C' },
+    { key: 'lowNote', label: '저수위 외삽' },
+    { key: 'highNote', label: '고수위 외삽' },
+    { key: 'periodStart', label: '적용시작' },
+    { key: 'periodEnd', label: '적용종료' }
+  ]
+
+  const measurementColumns = [
+    { key: 'datetime', label: '측정일시' },
+    { key: 'h', label: '수위(h)' },
+    { key: 'q', label: '유량(Q)' },
+    { key: 'device', label: '측정장비' },
+    { key: 'exclude', label: '제외' },
+    { key: 'tide', label: '배수영향' },
+    { key: 'vegetation', label: '조위영향' },
+    { key: 'construction', label: '식생영향' },
+    { key: 'partialOpen', label: '공사영향' }
+  ]
 
   return (
     <div>
@@ -2711,41 +2800,38 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           <h2>계기수위-측정성과</h2>
           <div className="grid-actions">
             <button
-  className={periodKey === '3h' ? 'btn' : 'btn secondary'}
-  onClick={() => handleLoadPeriod('3h')}
->
-  3시간
-</button>
+              className={periodKey === '3h' ? 'btn' : 'btn secondary'}
+              onClick={() => handleLoadPeriod('3h')}
+            >
+              3시간
+            </button>
 
-<button
-  className={periodKey === '6h' ? 'btn' : 'btn secondary'}
-  onClick={() => handleLoadPeriod('6h')}
->
-  6시간
-</button>
+            <button
+              className={periodKey === '6h' ? 'btn' : 'btn secondary'}
+              onClick={() => handleLoadPeriod('6h')}
+            >
+              6시간
+            </button>
 
-<button
-  className={periodKey === '12h' ? 'btn' : 'btn secondary'}
-  onClick={() => handleLoadPeriod('12h')}
->
-  12시간
-</button>
+            <button
+              className={periodKey === '12h' ? 'btn' : 'btn secondary'}
+              onClick={() => handleLoadPeriod('12h')}
+            >
+              12시간
+            </button>
 
-<button
-  className={periodKey === '1d' ? 'btn' : 'btn secondary'}
-  onClick={() => handleLoadPeriod('1d')}
->
-  1일
-</button>
+            <button
+              className={periodKey === '1d' ? 'btn' : 'btn secondary'}
+              onClick={() => handleLoadPeriod('1d')}
+            >
+              1일
+            </button>
 
-<button
-  className={periodKey === 'all' ? 'btn' : 'btn secondary'}
-  onClick={() => handleLoadPeriod('all')}
->
-  전체
-</button>
-            <button className="btn secondary" onClick={handleLoadNextMonth} disabled={historyLoading || historyMode !== 'all' || !canLoadMoreAll}>
-              더 불러오기
+            <button
+              className={periodKey === 'all' ? 'btn' : 'btn secondary'}
+              onClick={() => handleLoadPeriod('all')}
+            >
+              전체
             </button>
           </div>
         </div>
@@ -2797,6 +2883,36 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           </label>
         </div>
 
+        <div className="row" style={{ marginTop: '12px', alignItems: 'end' }}>
+          <div className="muted" style={{ minWidth: '120px', fontWeight: 600, paddingBottom: '2px' }}>
+            사용자 지정 기간
+          </div>
+
+          <label style={{ minWidth: '240px' }}>
+            시작 시간
+            <input
+              type="datetime-local"
+              value={customStartTime}
+              onChange={(e) => setCustomStartTime(e.target.value)}
+            />
+          </label>
+
+          <label style={{ minWidth: '240px' }}>
+            종료 시간
+            <input
+              type="datetime-local"
+              value={customEndTime}
+              onChange={(e) => setCustomEndTime(e.target.value)}
+            />
+          </label>
+
+          <div className="grid-actions" style={{ alignSelf: 'end' }}>
+            <button className="btn secondary" onClick={handleLoadCustomPeriod} disabled={historyLoading}>
+              기간 불러오기
+            </button>
+          </div>
+        </div>
+
         <div className="muted" style={{ marginTop: '8px' }}>
           선택된 지점 수: {filteredStations.length}개 · 현재 탭: {periodMap[periodKey]?.label || '미선택'}
           {historyLoadedLabel ? ` · 불러온 구간: ${historyLoadedLabel}` : ''}
@@ -2822,7 +2938,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           />
         )}
         <p className="muted" style={{ marginTop: '8px' }}>
-          3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순, 전체는 2026-01-01 00:10부터 월 단위로 오름차순 표시합니다.
+          3시간, 6시간, 12시간, 1일은 최근 시각 기준 내림차순으로 불러오고, 전체는 올해 1월 1일 00:10부터 현재 시각까지 월 단위로 자동으로 이어서 불러옵니다. 사용자 지정 기간은 시작 시간과 종료 시간을 입력해 조회합니다.
         </p>
       </section>
     </div>
