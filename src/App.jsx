@@ -2039,32 +2039,32 @@ const INSTRUMENT_CHART_PERIOD_OPTIONS = [
   {
     key: 'all',
     label: '전체기간',
-    start: new Date(2026, 1, 1, 0, 10, 0, 0),
-    end: new Date(2027, 1, 1, 0, 0, 0, 0)
+    start: new Date(2026, 0, 1, 0, 10, 0, 0),
+    end: new Date(2027, 0, 1, 0, 0, 0, 0)
   },
   {
     key: 'q1',
     label: '1분기',
-    start: new Date(2026, 1, 1, 0, 10, 0, 0),
-    end: new Date(2026, 4, 1, 0, 0, 0, 0)
+    start: new Date(2026, 0, 1, 0, 10, 0, 0),
+    end: new Date(2026, 3, 1, 0, 0, 0, 0)
   },
   {
     key: 'q2',
     label: '2분기',
-    start: new Date(2026, 4, 1, 0, 10, 0, 0),
-    end: new Date(2026, 7, 1, 0, 0, 0, 0)
+    start: new Date(2026, 3, 1, 0, 10, 0, 0),
+    end: new Date(2026, 6, 1, 0, 0, 0, 0)
   },
   {
     key: 'q3',
     label: '3분기',
-    start: new Date(2026, 7, 1, 0, 10, 0, 0),
-    end: new Date(2026, 10, 1, 0, 0, 0, 0)
+    start: new Date(2026, 6, 1, 0, 10, 0, 0),
+    end: new Date(2026, 9, 1, 0, 0, 0, 0)
   },
   {
     key: 'q4',
     label: '4분기',
-    start: new Date(2026, 10, 1, 0, 10, 0, 0),
-    end: new Date(2027, 1, 1, 0, 0, 0, 0)
+    start: new Date(2026, 9, 1, 0, 10, 0, 0),
+    end: new Date(2027, 0, 1, 0, 0, 0, 0)
   }
 ]
 
