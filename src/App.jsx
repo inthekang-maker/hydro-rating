@@ -2829,13 +2829,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             >
               전체
             </button>
-
-            <button
-              className={periodKey === 'custom' ? 'btn' : 'btn secondary'}
-              onClick={handleLoadCustomPeriod}
-            >
-              기간 불러오기
-            </button>
           </div>
         </div>
 
