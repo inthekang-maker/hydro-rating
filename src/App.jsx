@@ -2035,36 +2035,39 @@ const buildInstrumentStationOptions = (groups, groupFilter) => {
 
 const INSTRUMENT_CHART_BASE_YEAR = 2026
 
+const makeInstrumentDate = (year, monthIndex, day, hour, minute) =>
+  new Date(year, monthIndex, day, hour, minute, 0, 0)
+
 const INSTRUMENT_CHART_PERIOD_OPTIONS = [
   {
     key: 'all',
     label: '전체기간',
-    start: new Date(2026, 0, 1, 0, 10, 0, 0),
-    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+    start: makeInstrumentDate(2026, 0, 1, 0, 10),
+    end: makeInstrumentDate(2027, 0, 1, 0, 0)
   },
   {
     key: 'q1',
     label: '1분기',
-    start: new Date(2026, 0, 1, 0, 10, 0, 0),
-    end: new Date(2026, 3, 1, 0, 0, 0, 0)
+    start: makeInstrumentDate(2026, 0, 1, 0, 10),
+    end: makeInstrumentDate(2026, 3, 1, 0, 0)
   },
   {
     key: 'q2',
     label: '2분기',
-    start: new Date(2026, 3, 1, 0, 10, 0, 0),
-    end: new Date(2026, 6, 1, 0, 0, 0, 0)
+    start: makeInstrumentDate(2026, 3, 1, 0, 10),
+    end: makeInstrumentDate(2026, 6, 1, 0, 0)
   },
   {
     key: 'q3',
     label: '3분기',
-    start: new Date(2026, 6, 1, 0, 10, 0, 0),
-    end: new Date(2026, 9, 1, 0, 0, 0, 0)
+    start: makeInstrumentDate(2026, 6, 1, 0, 10),
+    end: makeInstrumentDate(2026, 9, 1, 0, 0)
   },
   {
     key: 'q4',
     label: '4분기',
-    start: new Date(2026, 9, 1, 0, 10, 0, 0),
-    end: new Date(2027, 0, 1, 0, 0, 0, 0)
+    start: makeInstrumentDate(2026, 9, 1, 0, 10),
+    end: makeInstrumentDate(2027, 0, 1, 0, 0)
   }
 ]
 
@@ -2118,6 +2121,38 @@ const parseYmdhmToDate = (ymdhm) => {
   if (![yyyy, mm, dd, hh, mi].every((n) => Number.isFinite(n))) return null
   const date = new Date(yyyy, mm - 1, dd, hh, mi, 0, 0)
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+const splitInstrumentChartRangeByMonth = (startTime, endTime) => {
+  const start = parseInstrumentChartDateTime(startTime)
+  const end = parseInstrumentChartDateTime(endTime)
+  if (!start || !end || start > end) return []
+
+  const ranges = []
+  let cursor = new Date(start.getTime())
+
+  while (cursor < end) {
+    const nextMonthStart = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0
+    )
+    const chunkEnd = nextMonthStart < end ? nextMonthStart : new Date(end.getTime())
+
+    ranges.push({
+      start: new Date(cursor.getTime()),
+      end: new Date(chunkEnd.getTime())
+    })
+
+    if (chunkEnd.getTime() === end.getTime()) break
+    cursor = chunkEnd
+  }
+
+  return ranges
 }
 
 const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime) => {
@@ -2848,6 +2883,81 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     }
   }
 
+  const fetchInstrumentChartHistorySlice = async (startTime, endTime) => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      throw new Error('API 키를 입력해 주세요.')
+    }
+    if (filteredStations.length === 0) {
+      throw new Error('선택된 지점이 없습니다.')
+    }
+
+    const ranges = splitInstrumentChartRangeByMonth(startTime, endTime)
+    if (ranges.length === 0) {
+      throw new Error('차트 기간을 올바르게 입력해 주세요.')
+    }
+
+    const results = await runWithConcurrency(filteredStations, 3, async (station) => {
+      const rowMap = new Map()
+
+      for (const range of ranges) {
+        try {
+          const rows = await fetchHrfcoWaterLevelRowsBetween(
+            apiKey,
+            station.name,
+            range.start,
+            range.end
+          )
+          ;(rows || []).forEach((row) => {
+            if (!rowMap.has(row.ymdhm)) {
+              rowMap.set(row.ymdhm, row.value)
+            }
+          })
+        } catch {
+          // 월 단위 중 일부가 실패해도 나머지 구간은 계속 시도한다.
+        }
+      }
+
+      if (rowMap.size === 0) {
+        throw new Error('수위 자료를 찾지 못했습니다.')
+      }
+
+      return {
+        stationId: station.id,
+        rows: Array.from(rowMap.entries()).map(([ymdhm, value]) => ({
+          ymdhm,
+          value
+        }))
+      }
+    })
+
+    const rowsByStation = {}
+    const times = []
+    let failCount = 0
+
+    results.forEach((result, index) => {
+      const station = filteredStations[index]
+      if (!result || result.error || !station) {
+        failCount += 1
+        rowsByStation[station?.id || `missing-${index}`] = {}
+        return
+      }
+
+      const map = {}
+      ;(result.rows || []).forEach((row) => {
+        map[row.ymdhm] = row.value
+        times.push(row.ymdhm)
+      })
+      rowsByStation[result.stationId] = map
+    })
+
+    return {
+      rowsByStation,
+      times: sortYmdhmList(times, true),
+      failCount
+    }
+  }
+
   const applyHistorySlice = async (startTime, endTime, mode, ascending = false, append = false, sliceLabel = '') => {
     setHistoryLoading(true)
     setHistoryStatus(`${sliceLabel || '수위 자료'}를 조회하는 중입니다...`)
@@ -3076,7 +3186,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     setChartStatus('차트 자료를 불러오는 중입니다...')
 
     try {
-      const result = await fetchHistorySlice(chartPeriodRange.start, chartPeriodRange.end, true)
+      const result = await fetchInstrumentChartHistorySlice(chartPeriodRange.start, chartPeriodRange.end)
       const rowsByStation = result.rowsByStation || {}
       const charts = []
       const datasetBuilder = buildInstrumentChartDatasets
