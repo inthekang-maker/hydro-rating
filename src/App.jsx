@@ -3438,8 +3438,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             사용자 지정 기간
           </div>
 
-          <label style={{ minWidth: '240px' }}>
-  시작 시간
+          <label style={{ minWidth: '220px' }}>
+  시작시간
   <input
     type="datetime-local"
     step="600"
@@ -3456,8 +3456,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   />
 </label>
 
-<label style={{ minWidth: '240px' }}>
-  종료 시간
+<label style={{ minWidth: '220px' }}>
+  종료시간
   <input
     type="datetime-local"
     step="600"
@@ -3575,6 +3575,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       setChartCustomStartTime(formatDateTimeLocal(rounded))
     }}
     disabled={chartPeriodKey !== 'custom'}
+     style={{
+    width: '220px'
+  }}
   />
 </label>
 
@@ -3594,6 +3597,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       setChartCustomEndTime(formatDateTimeLocal(rounded))
     }}
     disabled={chartPeriodKey !== 'custom'}
+    style={{
+    width: '220px'
+  }}
   />
 </label>
 
