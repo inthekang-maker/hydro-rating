@@ -1682,10 +1682,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
-  const [stationDraftIds, setStationDraftIds] = useState([])
-  const [stationSelectedIds, setStationSelectedIds] = useState([])
-  const [stationPickerOpen, setStationPickerOpen] = useState(false)
-  const hasInitializedStationSelection = useRef(false)
+  const [stationFilter, setStationFilter] = useState('전체')
 
   const monthLabels = useMemo(
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
@@ -1705,7 +1702,7 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   )
 
   const stationOptions = useMemo(() => {
-    return groups.flatMap((group, groupIndex) => {
+    const flattened = groups.flatMap((group, groupIndex) => {
       if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
       return (group.stations || []).map((station, stationIndex) => ({
         id: station.id,
@@ -1716,21 +1713,15 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         stationIndex
       }))
     })
+
+    return ['전체', ...flattened]
   }, [groups, groupFilter])
 
-
   useEffect(() => {
-    const validIds = new Set(stationOptions.map((s) => s.id))
-    setStationDraftIds((prev) => prev.filter((id) => validIds.has(id)))
-    setStationSelectedIds((prev) => prev.filter((id) => validIds.has(id)))
-
-    if (!hasInitializedStationSelection.current && stationOptions.length > 0) {
-      const ids = stationOptions.map((s) => s.id)
-      setStationDraftIds(ids)
-      setStationSelectedIds(ids)
-      hasInitializedStationSelection.current = true
-    }
-  }, [stationOptions])
+    if (stationFilter === '전체') return
+    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
+    if (!exists) setStationFilter('전체')
+  }, [stationOptions, stationFilter])
 
   const filteredStations = useMemo(() => {
     const flattened = groups.flatMap((group, groupIndex) =>
@@ -1749,15 +1740,12 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         const classification = station.classification || '일반 지점'
         return classificationFilter === '전체' || classification === classificationFilter
       })
-      .filter((station) => {
-  if (stationSelectedIds.length === 0) return false
-  return stationSelectedIds.includes(station.id)
-})
+      .filter((station) => stationFilter === '전체' || station.id === stationFilter)
       .sort((a, b) => {
         if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
         return a.stationIndex - b.stationIndex
       })
-  }, [groups, groupFilter, classificationFilter, stationSelectedIds])
+  }, [groups, groupFilter, classificationFilter, stationFilter])
 
   const stationRows = useMemo(() => {
     return filteredStations.map((station) => {
@@ -1889,101 +1877,19 @@ const summary = useMemo(() => {
   </label>
 
   <label>
-  지점
-  <button
-    type="button"
-    className="btn secondary"
-    onClick={() => {
-      setStationDraftIds(stationSelectedIds)
-      setStationPickerOpen((prev) => !prev)
-    }}
-  >
-    {stationSelectedIds.length === 0
-      ? '선택 없음'
-      : stationSelectedIds.length === stationOptions.length
-        ? '전체 선택됨'
-        : `${stationSelectedIds.length}개 선택됨`}
-  </button>
-</label>
-
-{stationPickerOpen ? (
-  <div
-    style={{
-      marginTop: '8px',
-      border: '1px solid #d0d7de',
-      borderRadius: '8px',
-      padding: '8px',
-      background: '#fff',
-      maxHeight: '260px',
-      overflowY: 'auto'
-    }}
-  >
-    <div className="grid-actions" style={{ marginBottom: '8px' }}>
-      <button
-        type="button"
-        className="btn secondary"
-        onClick={() => setStationDraftIds(stationOptions.map((s) => s.id))}
-      >
-        전체 선택
-      </button>
-
-      <button
-        type="button"
-        className="btn secondary"
-        onClick={() => setStationDraftIds([])}
-      >
-        선택 해제
-      </button>
-    </div>
-
-    <div style={{ display: 'grid', gap: '4px' }}>
-      {stationOptions.map((station) => {
-        const checked = stationDraftIds.includes(station.id)
-
-        return (
-          <button
-            key={station.id}
-            type="button"
-            onClick={() => {
-              setStationDraftIds((prev) =>
-                prev.includes(station.id)
-                  ? prev.filter((id) => id !== station.id)
-                  : [...prev, station.id]
-              )
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              width: '100%',
-              textAlign: 'left',
-              padding: '6px 8px',
-              border: '1px solid #ddd',
-              borderRadius: '6px',
-              background: checked ? '#e8f1ff' : '#fff'
-            }}
-          >
-            <input type="checkbox" readOnly checked={checked} />
-            <span>{station.label}</span>
-          </button>
+    지점
+    <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
+      {stationOptions.map((stationOption) =>
+        stationOption === '전체' ? (
+          <option key="전체" value="전체">전체</option>
+        ) : (
+          <option key={stationOption.id} value={stationOption.id}>
+            {stationOption.label}
+          </option>
         )
-      })}
-    </div>
-
-    <div className="grid-actions" style={{ marginTop: '8px' }}>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => {
-          setStationSelectedIds(stationDraftIds)
-          setStationPickerOpen(false)
-        }}
-      >
-        확인
-      </button>
-    </div>
-  </div>
-) : null}
+      )}
+    </select>
+  </label>
 
   <div className="muted" style={{ alignSelf: 'end' }}>
     기준 연도: {currentYear}년
@@ -2106,7 +2012,7 @@ const sortYmdhmList = (values, ascending = true) => {
   return ascending ? unique : unique.reverse()
 }
 
-const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilter, stationFilter) => {
+const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilter, stationSelection) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) =>
         (group.stations || []).map((station, stationIndex) => ({
@@ -2125,13 +2031,18 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       const classification = station.classification || '일반 지점'
       return classificationFilter === '전체' || classification === classificationFilter
     })
-    .filter((station) => stationFilter === '전체' || station.id === stationFilter)
+    .filter((station) => {
+      if (Array.isArray(stationSelection)) {
+        if (stationSelection.length === 0) return false
+        return stationSelection.includes(station.id)
+      }
+      return stationSelection === '전체' || station.id === stationSelection
+    })
     .sort((a, b) => {
       if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
       return a.stationIndex - b.stationIndex
     })
 }
-
 const buildInstrumentStationOptions = (groups, groupFilter) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) => {
@@ -2924,7 +2835,10 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
-  const [stationFilter, setStationFilter] = useState('전체')
+  const [stationDraftIds, setStationDraftIds] = useState([])
+  const [stationSelectedIds, setStationSelectedIds] = useState([])
+  const [stationPickerOpen, setStationPickerOpen] = useState(false)
+  const stationSelectionInitializedRef = useRef(false)
   const [periodKey, setPeriodKey] = useState('3h')
   const [customStartTime, setCustomStartTime] = useState('')
   const [customEndTime, setCustomEndTime] = useState('')
@@ -2965,20 +2879,67 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
-  const stationOptions = useMemo(() => buildInstrumentStationOptions(groups, groupFilter), [groups, groupFilter])
-
-  useEffect(() => {
-    if (stationFilter === '전체') return
-    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
-    if (!exists) setStationFilter('전체')
-  }, [stationOptions, stationFilter])
-
-  const filteredStations = useMemo(
-    () => buildInstrumentFilteredStations(groups, groupFilter, classificationFilter, stationFilter),
-    [groups, groupFilter, classificationFilter, stationFilter]
+  const stationOptions = useMemo(
+    () => buildInstrumentStationOptions(groups, groupFilter).filter((item) => item !== '전체'),
+    [groups, groupFilter]
   )
 
-  const stationColumns = useMemo(
+  useEffect(() => {
+    const validIds = new Set(stationOptions.map((s) => s.id))
+    setStationDraftIds((prev) => prev.filter((id) => validIds.has(id)))
+    setStationSelectedIds((prev) => prev.filter((id) => validIds.has(id)))
+  }, [stationOptions])
+
+  useEffect(() => {
+    if (stationSelectionInitializedRef.current) return
+    if (stationOptions.length === 0) return
+
+    const ids = stationOptions.map((s) => s.id)
+    setStationSelectedIds(ids)
+    setStationDraftIds(ids)
+    stationSelectionInitializedRef.current = true
+  }, [stationOptions])
+
+  const filteredStations = useMemo(
+    () =>
+      buildInstrumentFilteredStations(
+        groups,
+        groupFilter,
+        classificationFilter,
+        stationSelectedIds
+      ),
+    [groups, groupFilter, classificationFilter, stationSelectedIds]
+  )
+
+  const handleStationPickerToggle = () => {
+    if (stationPickerOpen) {
+      setStationPickerOpen(false)
+      return
+    }
+    setStationDraftIds(stationSelectedIds)
+    setStationPickerOpen(true)
+  }
+
+  const toggleStationDraft = (stationId) => {
+    setStationDraftIds((prev) =>
+      prev.includes(stationId) ? prev.filter((id) => id !== stationId) : [...prev, stationId]
+    )
+  }
+
+  const selectAllStations = () => {
+    setStationDraftIds(stationOptions.map((station) => station.id))
+  }
+
+  const clearAllStations = () => {
+    setStationDraftIds([])
+  }
+
+  const confirmStationSelection = () => {
+    setStationSelectedIds(stationDraftIds)
+    setStationPickerOpen(false)
+  }
+
+const stationColumns = useMemo(
     () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
     [filteredStations, historyRowsByStation]
   )
@@ -3503,20 +3464,86 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
           <label>
             지점
-            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-              {stationOptions.map((stationOption) =>
-                stationOption === '전체' ? (
-                  <option key="전체" value="전체">전체</option>
-                ) : (
-                  <option key={stationOption.id} value={stationOption.id}>
-                    {stationOption.label}
-                  </option>
-                )
-              )}
-            </select>
+            <button
+              type="button"
+              className="btn secondary"
+              onClick={handleStationPickerToggle}
+              disabled={stationOptions.length === 0}
+            >
+              {stationOptions.length === 0
+                ? '지점 없음'
+                : stationSelectedIds.length === 0
+                  ? '선택 없음'
+                  : stationSelectedIds.length === stationOptions.length
+                    ? '전체 선택됨'
+                    : `${stationSelectedIds.length}개 선택됨`}
+            </button>
           </label>
 
-          <label>
+          {stationPickerOpen ? (
+            <div
+              style={{
+                border: '1px solid #d0d7de',
+                borderRadius: '8px',
+                padding: '10px',
+                background: '#fff',
+                marginTop: '8px',
+                maxWidth: '520px'
+              }}
+            >
+              <div className="grid-actions" style={{ marginBottom: '8px' }}>
+                <button type="button" className="btn secondary" onClick={selectAllStations}>
+                  전체 선택
+                </button>
+                <button type="button" className="btn secondary" onClick={clearAllStations}>
+                  선택 해제
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '4px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
+                  paddingRight: '2px'
+                }}
+              >
+                {stationOptions.map((station) => {
+                  const checked = stationDraftIds.includes(station.id)
+                  return (
+                    <button
+                      key={station.id}
+                      type="button"
+                      onClick={() => toggleStationDraft(station.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '6px 8px',
+                        border: '1px solid #d0d7de',
+                        borderRadius: '6px',
+                        background: checked ? '#e8f1ff' : '#fff'
+                      }}
+                    >
+                      <input type="checkbox" readOnly checked={checked} />
+                      <span>{station.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="grid-actions" style={{ marginTop: '8px' }}>
+                <button type="button" className="btn" onClick={confirmStationSelection}>
+                  확인
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+<label>
             API 키
             <input
               type="text"
