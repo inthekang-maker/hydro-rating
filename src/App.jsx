@@ -3558,7 +3558,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   </div>
 </div>
 
-          <div style={{ minWidth: '260px', display: 'grid', gap: '10px' }}>
+          <div style={{ minWidth: '220px', display: 'grid', gap: '10px' }}>
             <label>
   시작시간
   <input
