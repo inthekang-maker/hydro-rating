@@ -1941,6 +1941,41 @@ const formatDateTimeDisplay = (date) => {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
+const formatDateTimeDisplay = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
+}
+
+const formatDateTimeLocal = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
+  const yyyy = String(date.getFullYear())
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mi = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
+}
+
+const getChartDefaultRange = () => {
+  const today6 = new Date()
+  today6.setHours(6, 0, 0, 0)
+
+  const yesterday6 = new Date(today6)
+  yesterday6.setDate(today6.getDate() - 1)
+
+  return {
+    start: formatDateTimeLocal(yesterday6),
+    end: formatDateTimeLocal(today6)
+  }
+}
+
+const cloneDate = (date) => new Date(date.getTime())
+
 const formatDateTimeLocal = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
   const yyyy = String(date.getFullYear())
@@ -2829,8 +2864,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [historyMode, setHistoryMode] = useState('period')
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
   const [chartPeriodKey, setChartPeriodKey] = useState('all')
-  const [chartCustomStartTime, setChartCustomStartTime] = useState('2026-01-01T00:10')
-  const [chartCustomEndTime, setChartCustomEndTime] = useState('2027-01-01T00:00')
+  const defaultChartRange = getChartDefaultRange()
+  const [chartCustomStartTime, setChartCustomStartTime] = useState(defaultChartRange.start)
+  const [chartCustomEndTime, setChartCustomEndTime] = useState(defaultChartRange.end)
   const [chartSeparateCharts, setChartSeparateCharts] = useState(false)
   const [chartLoading, setChartLoading] = useState(false)
   const [chartStatus, setChartStatus] = useState('')
