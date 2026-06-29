@@ -3526,17 +3526,26 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
               기간 선택
             </div>
             {chartPeriodOptions.map((option) => (
-              <label key={option.key} style={{ display: 'block', marginBottom: '6px' }}>
-                <input
-                  type="radio"
-                  name="instrument-chart-period"
-                  value={option.key}
-                  checked={chartPeriodKey === option.key}
-                  onChange={() => setChartPeriodKey(option.key)}
-                  style={{ marginRight: '6px' }}
-                />
-                {option.label}
-              </label>
+            <label
+  key={option.key}
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '8px',
+    cursor: 'pointer'
+  }}
+>
+  <input
+    type="radio"
+    name="instrument-chart-period"
+    value={option.key}
+    checked={chartPeriodKey === option.key}
+    onChange={() => setChartPeriodKey(option.key)}
+    style={{ margin: 0 }}
+  />
+  <span>{option.label}</span>
+</label>  
             ))}
           </div>
 
