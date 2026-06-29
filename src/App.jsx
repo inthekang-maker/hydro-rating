@@ -1941,16 +1941,6 @@ const formatDateTimeDisplay = (date) => {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
-const formatDateTimeDisplay = (date) => {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
-  const yyyy = String(date.getFullYear())
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const hh = String(date.getHours()).padStart(2, '0')
-  const mi = String(date.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
-}
-
 const formatDateTimeLocal = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
   const yyyy = String(date.getFullYear())
@@ -1972,18 +1962,6 @@ const getChartDefaultRange = () => {
     start: formatDateTimeLocal(yesterday6),
     end: formatDateTimeLocal(today6)
   }
-}
-
-const cloneDate = (date) => new Date(date.getTime())
-
-const formatDateTimeLocal = (date) => {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return ''
-  const yyyy = String(date.getFullYear())
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const hh = String(date.getHours()).padStart(2, '0')
-  const mi = String(date.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
 }
 
 const cloneDate = (date) => new Date(date.getTime())
