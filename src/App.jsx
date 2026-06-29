@@ -3453,6 +3453,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       const rounded = floorToTenMinuteSlot(d)
       setCustomStartTime(formatDateTimeLocal(rounded))
     }}
+     style={{
+      width: '220px',
+      maxWidth: '100%'
+    }}
   />
 </label>
 
@@ -3470,6 +3474,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       }
       const rounded = floorToTenMinuteSlot(d)
       setCustomEndTime(formatDateTimeLocal(rounded))
+    }}
+     style={{
+      width: '220px',
+      maxWidth: '100%'
     }}
   />
 </label>
