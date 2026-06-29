@@ -1682,7 +1682,9 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   const currentYear = new Date().getFullYear()
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
-  const [stationFilter, setStationFilter] = useState('전체')
+  const [stationDraftIds, setStationDraftIds] = useState([])
+const [stationSelectedIds, setStationSelectedIds] = useState([])
+const [stationPickerOpen, setStationPickerOpen] = useState(false)
 
   const monthLabels = useMemo(
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
@@ -1718,10 +1720,10 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   }, [groups, groupFilter])
 
   useEffect(() => {
-    if (stationFilter === '전체') return
-    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
-    if (!exists) setStationFilter('전체')
-  }, [stationOptions, stationFilter])
+  const validIds = new Set(stationOptions.map((s) => s.id))
+  setStationDraftIds((prev) => prev.filter((id) => validIds.has(id)))
+  setStationSelectedIds((prev) => prev.filter((id) => validIds.has(id)))
+}, [stationOptions])
 
   const filteredStations = useMemo(() => {
     const flattened = groups.flatMap((group, groupIndex) =>
@@ -1740,7 +1742,10 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         const classification = station.classification || '일반 지점'
         return classificationFilter === '전체' || classification === classificationFilter
       })
-      .filter((station) => stationFilter === '전체' || station.id === stationFilter)
+      .filter((station) => {
+  if (stationSelectedIds.length === 0) return false
+  return stationSelectedIds.includes(station.id)
+})
       .sort((a, b) => {
         if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
         return a.stationIndex - b.stationIndex
@@ -1877,19 +1882,101 @@ const summary = useMemo(() => {
   </label>
 
   <label>
-    지점
-    <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-      {stationOptions.map((stationOption) =>
-        stationOption === '전체' ? (
-          <option key="전체" value="전체">전체</option>
-        ) : (
-          <option key={stationOption.id} value={stationOption.id}>
-            {stationOption.label}
-          </option>
+  지점
+  <button
+    type="button"
+    className="btn secondary"
+    onClick={() => {
+      setStationDraftIds(stationSelectedIds)
+      setStationPickerOpen((prev) => !prev)
+    }}
+  >
+    {stationSelectedIds.length === 0
+      ? '선택 없음'
+      : stationSelectedIds.length === stationOptions.length
+        ? '전체 선택됨'
+        : `${stationSelectedIds.length}개 선택됨`}
+  </button>
+</label>
+
+{stationPickerOpen ? (
+  <div
+    style={{
+      marginTop: '8px',
+      border: '1px solid #d0d7de',
+      borderRadius: '8px',
+      padding: '8px',
+      background: '#fff',
+      maxHeight: '260px',
+      overflowY: 'auto'
+    }}
+  >
+    <div className="grid-actions" style={{ marginBottom: '8px' }}>
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={() => setStationDraftIds(stationOptions.map((s) => s.id))}
+      >
+        전체 선택
+      </button>
+
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={() => setStationDraftIds([])}
+      >
+        선택 해제
+      </button>
+    </div>
+
+    <div style={{ display: 'grid', gap: '4px' }}>
+      {stationOptions.map((station) => {
+        const checked = stationDraftIds.includes(station.id)
+
+        return (
+          <button
+            key={station.id}
+            type="button"
+            onClick={() => {
+              setStationDraftIds((prev) =>
+                prev.includes(station.id)
+                  ? prev.filter((id) => id !== station.id)
+                  : [...prev, station.id]
+              )
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              width: '100%',
+              textAlign: 'left',
+              padding: '6px 8px',
+              border: '1px solid #ddd',
+              borderRadius: '6px',
+              background: checked ? '#e8f1ff' : '#fff'
+            }}
+          >
+            <input type="checkbox" readOnly checked={checked} />
+            <span>{station.label}</span>
+          </button>
         )
-      )}
-    </select>
-  </label>
+      })}
+    </div>
+
+    <div className="grid-actions" style={{ marginTop: '8px' }}>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          setStationSelectedIds(stationDraftIds)
+          setStationPickerOpen(false)
+        }}
+      >
+        확인
+      </button>
+    </div>
+  </div>
+) : null}
 
   <div className="muted" style={{ alignSelf: 'end' }}>
     기준 연도: {currentYear}년
@@ -2031,7 +2118,10 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       const classification = station.classification || '일반 지점'
       return classificationFilter === '전체' || classification === classificationFilter
     })
-    .filter((station) => stationFilter === '전체' || station.id === stationFilter)
+    .filter((station) => {
+  if (stationSelectedIds.length === 0) return false
+  return stationSelectedIds.includes(station.id)
+})
     .sort((a, b) => {
       if (a.groupIndex !== b.groupIndex) return a.groupIndex - b.groupIndex
       return a.stationIndex - b.stationIndex
@@ -2513,20 +2603,31 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-    () => buildInstrumentStationOptions(groups, groupFilter),
-    [groups, groupFilter]
-  )
+  () =>
+    buildInstrumentStationOptions(groups, groupFilter).filter(
+      (s) => s !== '전체'
+    ),
+  [groups, groupFilter]
+)
 
-  useEffect(() => {
-    if (stationFilter === '전체') return
-    const exists = stationOptions.some((option) => option !== '전체' && option.id === stationFilter)
-    if (!exists) setStationFilter('전체')
-  }, [stationOptions, stationFilter])
+useEffect(() => {
+  if (stationSelectedIds.length === 0 && stationOptions.length > 0) {
+    const ids = stationOptions.map((s) => s.id)
+    setStationSelectedIds(ids)
+    setStationDraftIds(ids)
+  }
+}, [stationOptions, stationSelectedIds.length])
 
   const filteredStations = useMemo(
-    () => buildInstrumentFilteredStations(groups, groupFilter, classificationFilter, stationFilter),
-    [groups, groupFilter, classificationFilter, stationFilter]
-  )
+  () =>
+    buildInstrumentFilteredStations(
+      groups,
+      groupFilter,
+      classificationFilter,
+      stationSelectedIds
+    ),
+  [groups, groupFilter, classificationFilter, stationSelectedIds]
+)
 
   const stationColumns = useMemo(() => {
     return filteredStations.map((station) => {
