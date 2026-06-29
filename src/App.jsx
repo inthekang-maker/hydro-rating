@@ -1853,7 +1853,6 @@ const summary = useMemo(() => {
 
   return (
     <div>
-      <style>{stationPickerStyles}</style>
       <section className="card">
         <h2>측정성과 공정률</h2>
         <div className="row">
@@ -3399,101 +3398,6 @@ const stationColumns = useMemo(
     { key: 'partialOpen', label: '공사영향' }
   ]
 
-  const stationPickerStyles = `
-    .station-picker-panel {
-      border: 1px solid #d0d7de;
-      border-radius: 12px;
-      padding: 12px;
-      background: #fff;
-      margin-top: 8px;
-      max-width: 520px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .station-picker-actions,
-    .station-picker-confirm {
-      margin-bottom: 8px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .station-picker-list {
-      display: grid;
-      gap: 6px;
-      max-height: 240px;
-      overflow-y: auto;
-      padding-right: 2px;
-    }
-
-    .station-picker-item {
-      display: grid;
-      grid-template-columns: 18px minmax(0, 1fr);
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      text-align: left;
-      padding: 8px 10px;
-      border: 1px solid #d0d7de;
-      border-radius: 8px;
-      background: #fff;
-      cursor: pointer;
-      box-sizing: border-box;
-    }
-
-    .station-picker-item.is-selected {
-      background: #e8f1ff;
-    }
-
-    .station-picker-checkbox {
-      width: 16px;
-      height: 16px;
-      margin: 0;
-      flex: 0 0 auto;
-      accent-color: #1f6feb;
-    }
-
-    .station-picker-label {
-      min-width: 0;
-      line-height: 1.35;
-      word-break: keep-all;
-      overflow-wrap: anywhere;
-      font-size: 14px;
-    }
-
-    @media (max-width: 640px) {
-      .station-picker-panel {
-        padding: 8px;
-        border-radius: 10px;
-        max-width: 100%;
-      }
-
-      .station-picker-actions,
-      .station-picker-confirm {
-        margin-bottom: 6px;
-      }
-
-      .station-picker-list {
-        max-height: 220px;
-      }
-
-      .station-picker-item {
-        grid-template-columns: 16px minmax(0, 1fr);
-        gap: 6px;
-        padding: 6px 8px;
-      }
-
-      .station-picker-checkbox {
-        width: 14px;
-        height: 14px;
-      }
-
-      .station-picker-label {
-        font-size: 13px;
-      }
-    }
-  `
   return (
     <div>
       <section className="card">
@@ -3577,8 +3481,17 @@ const stationColumns = useMemo(
           </label>
 
           {stationPickerOpen ? (
-            <div className="station-picker-panel">
-              <div className="grid-actions station-picker-actions">
+            <div
+              style={{
+                border: '1px solid #d0d7de',
+                borderRadius: '8px',
+                padding: '10px',
+                background: '#fff',
+                marginTop: '8px',
+                maxWidth: '520px'
+              }}
+            >
+              <div className="grid-actions" style={{ marginBottom: '8px' }}>
                 <button type="button" className="btn secondary" onClick={selectAllStations}>
                   전체 선택
                 </button>
@@ -3587,36 +3500,74 @@ const stationColumns = useMemo(
                 </button>
               </div>
 
-              <div className="station-picker-list">
-                {stationOptions.map((station) => {
-                  const checked = stationDraftIds.includes(station.id)
-                  return (
-                    <button
-                      key={station.id}
-                      type="button"
-                      onClick={() => toggleStationDraft(station.id)}
-                      className={`station-picker-item${checked ? ' is-selected' : ''}`}
-                    >
-                      <input
-                        type="checkbox"
-                        readOnly
-                        checked={checked}
-                        className="station-picker-checkbox"
-                      />
-                      <span className="station-picker-label">{station.label}</span>
-                    </button>
-                  )
-                })}
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '4px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
+                  paddingRight: '2px'
+                }}
+              >
+              {stationOptions.map((station) => {
+  const checked = stationDraftIds.includes(station.id)
+
+  return (
+    <button
+      key={station.id}
+      type="button"
+      onClick={() => toggleStationDraft(station.id)}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '18px 1fr',
+        alignItems: 'center',
+        columnGap: '8px',
+        width: '100%',
+        textAlign: 'left',
+        padding: '8px 10px',
+        border: '1px solid #d0d7de',
+        borderRadius: '6px',
+        background: checked ? '#e8f1ff' : '#fff',
+        boxSizing: 'border-box',
+        minHeight: '40px'
+      }}
+    >
+      <input
+        type="checkbox"
+        readOnly
+        checked={checked}
+        style={{
+          width: '14px',
+          height: '14px',
+          margin: 0,
+          accentColor: '#1f6feb',
+          justifySelf: 'center'
+        }}
+      />
+
+      <span
+        style={{
+          fontSize: '13px',
+          lineHeight: '1.3',
+          whiteSpace: 'normal',
+          wordBreak: 'keep-all',
+          overflowWrap: 'break-word'
+        }}
+      >
+        {station.label}
+      </span>
+    </button>
+  )
+})}  
               </div>
 
-              <div className="grid-actions station-picker-confirm">
+              <div className="grid-actions" style={{ marginTop: '8px' }}>
                 <button type="button" className="btn" onClick={confirmStationSelection}>
                   확인
                 </button>
               </div>
             </div>
           ) : null}
-
 
 <label>
             API 키
