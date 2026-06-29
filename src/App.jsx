@@ -3521,7 +3521,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         </div>
 
         <div className="row" style={{ alignItems: 'flex-start' }}>
-        <div style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ minWidth: '220px' }}>
   <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
     기간 선택
   </div>
@@ -3531,9 +3531,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       <label
         key={option.key}
         style={{
-          display: 'inline-flex',
+          display: 'flex',
           alignItems: 'center',
-          gap: '4px',
+          gap: '6px',
           margin: 0,
           cursor: 'pointer',
           lineHeight: 1.2
@@ -3545,14 +3545,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           value={option.key}
           checked={chartPeriodKey === option.key}
           onChange={() => setChartPeriodKey(option.key)}
-          style={{
-            margin: 0,
-            width: '14px',
-            height: '14px',
-            flex: '0 0 auto'
-          }}
+          style={{ margin: 0, flex: '0 0 auto' }}
         />
-        <span style={{ margin: 0 }}>{option.label}</span>
+        <span>{option.label}</span>
       </label>
     ))}
   </div>
