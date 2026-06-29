@@ -3521,33 +3521,42 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         </div>
 
         <div className="row" style={{ alignItems: 'flex-start' }}>
-          <div style={{ minWidth: '220px' }}>
-            <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
-              기간 선택
-            </div>
-            {chartPeriodOptions.map((option) => (
-            <label
-  key={option.key}
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    marginBottom: '8px',
-    cursor: 'pointer'
-  }}
->
-  <input
-    type="radio"
-    name="instrument-chart-period"
-    value={option.key}
-    checked={chartPeriodKey === option.key}
-    onChange={() => setChartPeriodKey(option.key)}
-    style={{ margin: 0 }}
-  />
-  <span>{option.label}</span>
-</label>  
-            ))}
-          </div>
+        <div style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+  <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
+    기간 선택
+  </div>
+
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    {chartPeriodOptions.map((option) => (
+      <label
+        key={option.key}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          margin: 0,
+          cursor: 'pointer',
+          lineHeight: 1.2
+        }}
+      >
+        <input
+          type="radio"
+          name="instrument-chart-period"
+          value={option.key}
+          checked={chartPeriodKey === option.key}
+          onChange={() => setChartPeriodKey(option.key)}
+          style={{
+            margin: 0,
+            width: '14px',
+            height: '14px',
+            flex: '0 0 auto'
+          }}
+        />
+        <span style={{ margin: 0 }}>{option.label}</span>
+      </label>
+    ))}
+  </div>
+</div>
 
           <div style={{ minWidth: '260px', display: 'grid', gap: '10px' }}>
             <label>
