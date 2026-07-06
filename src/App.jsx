@@ -85,25 +85,48 @@ const safeScaleNumber = (value, scaleType) => {
   return n
 }
 
-function calcQ(h, section) {
-  const H = num(h)
+function calcQBase(h, section) {
+  const hValue = num(h)
   const A = num(section.a)
   const B = num(section.b)
   const C = num(section.c)
-  if (H === null || A === null || B === null || C === null) return null
+
+  if (hValue === null || A === null || B === null || C === null) return null
+
+  const x = hValue - B
+  if (x < 0) return null
+
+  const q = A * Math.pow(x, C)
+  return Number.isFinite(q) ? q : null
+}
+
+function calcQ(h, section) {
+  const hValue = num(h)
+  const offset = num(section.hOffset) ?? 0
+  const A = num(section.a)
+  const B = num(section.b)
+  const C = num(section.c)
+
+  if (hValue === null || A === null || B === null || C === null) return null
+
+  const H = hValue + offset
   const x = H - B
   if (x < 0) return null
+
   const q = A * Math.pow(x, C)
   return Number.isFinite(q) ? q : null
 }
 
 function findSectionByH(h, sections, measurementDatetime = null) {
-  const H = num(h)
-  if (H === null) return null
+  const hValue = num(h)
+  if (hValue === null) return null
 
   const applicableSections = sections.filter((section) => {
     const hMin = num(section.hMin)
     const hMax = num(section.hMax)
+    const offset = num(section.hOffset) ?? 0
+    const H = hValue + offset
+
     if (hMin === null || hMax === null) return false
     if (H < hMin || H > hMax) return false
     if (!measurementDatetime) return true
@@ -113,6 +136,7 @@ function findSectionByH(h, sections, measurementDatetime = null) {
   const exact = applicableSections.find((s) => {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
+    const H = hValue + (num(s.hOffset) ?? 0)
     return hMin !== null && hMax !== null && H >= hMin && H <= hMax
   })
   if (exact) return exact
@@ -123,8 +147,11 @@ function findSectionByH(h, sections, measurementDatetime = null) {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
     if (hMin === null || hMax === null) continue
+
+    const H = hValue + (num(s.hOffset) ?? 0)
     const center = (hMin + hMax) / 2
     const dist = Math.abs(H - center)
+
     if (dist < bestDist) {
       bestDist = dist
       best = s
@@ -140,7 +167,7 @@ function genCurveRows(section) {
 
   const rows = []
   for (let h = hMin; h <= hMax + 0.000001; h += 0.01) {
-    const q = calcQ(h, section)
+    const q = calcQBase(h, section)
     if (q !== null) {
       rows.push({
         h: Number(h.toFixed(2)),
@@ -211,7 +238,12 @@ function normalizeStation(station) {
   return {
     ...station,
     classification: station.classification || '일반 지점',
-    sections: Array.isArray(station.sections) ? station.sections : [],
+    sections: Array.isArray(station.sections)
+      ? station.sections.map((section) => ({
+          ...section,
+          hOffset: section.hOffset ?? '0'
+        }))
+      : [],
     measurements: Array.isArray(station.measurements) ? station.measurements : [],
     processPlan: Array.isArray(station.processPlan)
       ? station.processPlan.slice(0, 12)
@@ -372,6 +404,7 @@ function createEmptySection() {
     name: '',
     hMin: '',
     hMax: '',
+    hOffset: '0',
     a: '',
     b: '',
     c: '',
@@ -1132,6 +1165,54 @@ function SpreadsheetGrid({
   const tableRef = useRef(null)
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  )
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const getColumnWidth = (col) => {
+    const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
+    const isSpecialDateColumn =
+      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
+
+    if (isMobile) {
+      if (col.key === 'periodStart' || col.key === 'periodEnd') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
+      }
+
+      if (col.key === 'datetime') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
+      }
+
+      return col.mobileWidth || col.mobileMinWidth || baseWidth
+    }
+
+    if (isSpecialDateColumn) {
+      return col.desktopWidth || 'auto'
+    }
+
+    return baseWidth
+  }
+
+  const getColumnMinWidth = (col) => {
+    const isSpecialDateColumn =
+      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
+
+    if (!isMobile && isSpecialDateColumn) {
+      return undefined
+    }
+
+    return getColumnWidth(col)
+  }
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -1380,35 +1461,64 @@ const pasteText = (text, rowIndex, colIndex) => {
         <table className={tableClassName} style={tableStyle}>
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th key={col.key}>{col.label}</th>
-              ))}
+              {columns.map((col) => {
+                const cellMinWidth = getColumnMinWidth(col)
+                const cellWidth = getColumnWidth(col)
+
+                return (
+                  <th
+                    key={col.key}
+                    style={{
+                      minWidth: cellMinWidth,
+                      width: cellWidth,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {col.label}
+                  </th>
+                )
+              })}
               <th />
             </tr>
           </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
-                {columns.map((col, colIndex) => (
-                  <td
-                    key={col.key}
-                    className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                    onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
-                    onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
-                  >
-                    <input
-                      className="cell-input"
-                      style={{ minWidth: isCompactTable ? '72px' : '78px' }}
-                      data-cell={`${rowIndex}-${colIndex}`}
-                      type={col.type || 'text'}
-                      value={row[col.key] ?? ''}
-                      onFocus={() => selectCell(rowIndex, colIndex)}
-                      onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-                      onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
-                      onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-                    />
-                  </td>
-                ))}
+                {columns.map((col, colIndex) => {
+                  const cellMinWidth = getColumnMinWidth(col)
+                  const cellWidth = getColumnWidth(col)
+
+                  return (
+                    <td
+                      key={col.key}
+                      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                      onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
+                      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
+                      style={{
+                        minWidth: cellMinWidth,
+                        width: cellWidth
+                      }}
+                    >
+                      <input
+                        className="cell-input"
+                        style={{
+                          display: 'block',
+                          minWidth: cellMinWidth,
+                          width: isMobile ? '100%' : (col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime') ? 'auto' : '100%',
+                          boxSizing: 'border-box',
+                          minHeight: '34px'
+                        }}
+                        data-cell={`${rowIndex}-${colIndex}`}
+                        type={col.type || 'text'}
+                        value={row[col.key] ?? ''}
+                        onFocus={() => selectCell(rowIndex, colIndex)}
+                        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                        onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
+                        onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                      />
+                    </td>
+                  )
+                })}
                 <td className="delete-cell">
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
@@ -3559,20 +3669,21 @@ const stationColumns = useMemo(
   }
 
   const sectionColumns = [
-    { key: 'name', label: '구간명' },
-    { key: 'hMin', label: '적용수위 시작' },
-    { key: 'hMax', label: '적용수위 끝' },
-    { key: 'a', label: 'A' },
-    { key: 'b', label: 'B' },
-    { key: 'c', label: 'C' },
-    { key: 'lowNote', label: '저수위 외삽' },
-    { key: 'highNote', label: '고수위 외삽' },
-    { key: 'periodStart', label: '적용시작' },
-    { key: 'periodEnd', label: '적용종료' }
-  ]
+  { key: 'name', label: '구간명', minWidth: '86px' },
+  { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
+  { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
+  { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
+  { key: 'a', label: 'A', minWidth: '64px' },
+  { key: 'b', label: 'B', minWidth: '64px' },
+  { key: 'c', label: 'C', minWidth: '64px' },
+  { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
+  { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -3770,7 +3881,7 @@ const stationColumns = useMemo(
             사용자 지정 기간
           </div>
 
-          <label style={{ minWidth: '220px' }}>
+          <label style={{ minWidth: '250px' }}>
   시작시간
   <input
     type="datetime-local"
@@ -3786,13 +3897,13 @@ const stationColumns = useMemo(
       setCustomStartTime(formatDateTimeLocal(rounded))
     }}
      style={{
-      width: '220px',
+      width: '240px',
       maxWidth: '100%'
     }}
   />
 </label>
 
-<label style={{ minWidth: '220px' }}>
+<label style={{ minWidth: '250px' }}>
   종료시간
   <input
     type="datetime-local"
@@ -3808,7 +3919,7 @@ const stationColumns = useMemo(
       setCustomEndTime(formatDateTimeLocal(rounded))
     }}
      style={{
-      width: '220px',
+      width: '240px',
       maxWidth: '100%'
     }}
   />
@@ -3916,7 +4027,7 @@ const stationColumns = useMemo(
     }}
     disabled={chartPeriodKey !== 'custom'}
      style={{
-    width: '220px'
+    width: '240px'
   }}
   />
 </label>
@@ -3938,7 +4049,7 @@ const stationColumns = useMemo(
     }}
     disabled={chartPeriodKey !== 'custom'}
     style={{
-    width: '220px'
+    width: '240px'
   }}
   />
 </label>
@@ -4739,28 +4850,63 @@ export default function App() {
   }, [selectedMeasurements, measurementYearFilter])
 
   const relativeErrorsRaw = useMemo(() => {
-    return selectedMeasurements.map((measurement, index) => {
-      const section = findSectionByH(
-        measurement.h,
-        selectedSections,
-        measurement.datetime
-      )
-      const measuredQ = num(measurement.q)
-      const curveQ = section ? calcQ(measurement.h, section) : null
-      let error = null
-      if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
-        error = ((measuredQ - curveQ) / curveQ) * 100
-      }
-      return {
-        ...measurement,
-        sectionName: section?.name || '',
-        curveQ,
-        error,
-        measurementYear: getYearLabel(measurement.datetime),
-        _order: index
-      }
-    })
-  }, [selectedMeasurements, selectedSections])
+  return selectedMeasurements.map((measurement, index) => {
+    const rawH = num(measurement.h)
+    const section = findSectionByH(
+      measurement.h,
+      selectedSections,
+      measurement.datetime
+    )
+
+    const offset = section ? (num(section.hOffset) ?? 0) : 0
+    const H = rawH === null ? null : rawH + offset
+
+    const measuredQ = num(measurement.q)
+    const curveQ = section && rawH !== null ? calcQ(measurement.h, section) : null
+
+    let error = null
+    if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
+      error = ((measuredQ - curveQ) / curveQ) * 100
+    }
+
+    return {
+      ...measurement,
+      H,
+      sectionName: section?.name || '',
+      curveQ,
+      error,
+      measurementYear: getYearLabel(measurement.datetime),
+      _order: index
+    }
+  })
+}, [selectedMeasurements, selectedSections])
+
+  const graphMeasurementGroups = useMemo(() => {
+  const map = new Map()
+
+  relativeErrorsRaw.forEach((measurement) => {
+    const year = getYearLabel(measurement.datetime)
+    const device = normalizeDeviceLabel(measurement.device)
+    const key = `${year}__${device}`
+
+    if (!map.has(key)) {
+      map.set(key, {
+        year,
+        device,
+        items: []
+      })
+    }
+
+    map.get(key).items.push(measurement)
+  })
+
+  return Array.from(map.values())
+    .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
+    .map((group) => ({
+      ...group,
+      items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
+    }))
+}, [relativeErrorsRaw])
 
   const filteredRelativeErrors = useMemo(() => {
     let rows = relativeErrorsRaw
@@ -4819,28 +4965,31 @@ export default function App() {
   }, [selectedSections, curveRowsBySection])
 
   const measurementDatasets = useMemo(() => {
-    return measurementGroups.map((group) => {
-      const color = yearColorMap[group.year] || YEAR_COLORS[0]
-      const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
+  return graphMeasurementGroups.map((group) => {
+    const color = yearColorMap[group.year] || YEAR_COLORS[0]
+    const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
 
-      return {
-        label: `${group.year}년 ${group.device} 측정성과`,
-        data: group.items
-          .map((measurement) => ({ x: num(measurement.q), y: num(measurement.h) }))
-          .filter((point) => point.x !== null && point.y !== null),
-        showLine: false,
-        pointRadius: 5,
-        pointHoverRadius: 6,
-        borderWidth: 1,
-        backgroundColor: color,
-        borderColor: color,
-        pointStyle: deviceStyle.pointStyle,
-        parsing: false,
-        legendSymbol: deviceStyle.symbol,
-        legendColor: color
-      }
-    })
-  }, [measurementGroups, yearColorMap])
+    return {
+      label: `${group.year}년 ${group.device} 측정성과`,
+      data: group.items
+        .map((measurement) => ({
+          x: num(measurement.q),
+          y: num(measurement.H)
+        }))
+        .filter((point) => point.x !== null && point.y !== null),
+      showLine: false,
+      pointRadius: 5,
+      pointHoverRadius: 6,
+      borderWidth: 1,
+      backgroundColor: color,
+      borderColor: color,
+      pointStyle: deviceStyle.pointStyle,
+      parsing: false,
+      legendSymbol: deviceStyle.symbol,
+      legendColor: color
+    }
+  })
+}, [graphMeasurementGroups, yearColorMap])
 
   const legendItems = useMemo(() => {
     const items = []
@@ -4952,20 +5101,21 @@ export default function App() {
   const currentStationCode = selectedStation?.code || ''
 
   const sectionColumns = [
-    { key: 'name', label: '구간명' },
-    { key: 'hMin', label: '적용수위 시작' },
-    { key: 'hMax', label: '적용수위 끝' },
-    { key: 'a', label: 'A' },
-    { key: 'b', label: 'B' },
-    { key: 'c', label: 'C' },
-    { key: 'lowNote', label: '저수위 외삽' },
-    { key: 'highNote', label: '고수위 외삽' },
-    { key: 'periodStart', label: '적용시작' },
-    { key: 'periodEnd', label: '적용종료' }
-  ]
+  { key: 'name', label: '구간명', minWidth: '86px' },
+  { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
+  { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
+  { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
+  { key: 'a', label: 'A', minWidth: '64px' },
+  { key: 'b', label: 'B', minWidth: '64px' },
+  { key: 'c', label: 'C', minWidth: '64px' },
+  { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
+  { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -5223,7 +5373,7 @@ export default function App() {
                 {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
               </h3>
               <p className="muted">
-                Q = {section.a} × (h - {section.b})^{section.c}
+                 Q = {section.a} × (h - {section.b})^{section.c}
                 {section.lowNote ? ` / ${section.lowNote}` : ''}
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
@@ -5268,18 +5418,27 @@ export default function App() {
           </div>
         </div>
         <CopyableMatrixTable
-            headers={['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)']}
-            rows={filteredRelativeErrors.map((row) => [
-              row.datetime,
-              row.h,
-              row.q,
-              row.sectionName,
-              row.curveQ === null ? '' : fmt(row.curveQ, 3),
-              row.error === null ? '' : fmt(row.error, 2)
-            ])}
-            tableClassName="spreadsheet flow-table"
-            style={tableAutoStyle}
-          />
+  headers={[
+    '측정일시',
+    '수위(h)',
+    '수위(H)',
+    '측정유량',
+    '곡선식 적용구간',
+    '곡선식 유량',
+    '상대오차(%)'
+  ]}
+  rows={filteredRelativeErrors.map((row) => [
+    row.datetime,
+    row.h,
+    row.H === null ? '' : fmt(row.H, 2),
+    row.q,
+    row.sectionName,
+    row.curveQ === null ? '' : fmt(row.curveQ, 3),
+    row.error === null ? '' : fmt(row.error, 2)
+  ])}
+  tableClassName="spreadsheet flow-table"
+  style={tableAutoStyle}
+/>
         <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
       </section>
 
