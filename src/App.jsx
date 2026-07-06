@@ -1179,38 +1179,32 @@ function SpreadsheetGrid({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  const AUTO_DESKTOP_COLUMN_KEYS = new Set(['periodStart', 'periodEnd', 'datetime'])
+
   const getColumnWidth = (col) => {
     const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
-    const isSpecialDateColumn =
-      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
 
-    if (isMobile) {
-      if (col.key === 'periodStart' || col.key === 'periodEnd') {
-        return col.mobileWidth || col.mobileMinWidth || '130px'
-      }
-
-      if (col.key === 'datetime') {
-        return col.mobileWidth || col.mobileMinWidth || '130px'
-      }
-
-      return col.mobileWidth || col.mobileMinWidth || baseWidth
+    if (!isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)) {
+      return 'auto'
     }
 
-    if (isSpecialDateColumn) {
-      return col.desktopWidth || 'auto'
+    if (!isMobile) return baseWidth
+
+    if (col.key === 'periodStart' || col.key === 'periodEnd') {
+      return col.mobileWidth || col.mobileMinWidth || '340px'
     }
 
-    return baseWidth
+    if (col.key === 'datetime') {
+      return col.mobileWidth || col.mobileMinWidth || '320px'
+    }
+
+    return col.mobileWidth || col.mobileMinWidth || baseWidth
   }
 
   const getColumnMinWidth = (col) => {
-    const isSpecialDateColumn =
-      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
-
-    if (!isMobile && isSpecialDateColumn) {
-      return undefined
+    if (!isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)) {
+      return '0px'
     }
-
     return getColumnWidth(col)
   }
   const tableClassName = [
@@ -1464,13 +1458,14 @@ const pasteText = (text, rowIndex, colIndex) => {
               {columns.map((col) => {
                 const cellMinWidth = getColumnMinWidth(col)
                 const cellWidth = getColumnWidth(col)
+                const isDesktopAutoColumn = !isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)
 
                 return (
                   <th
                     key={col.key}
                     style={{
-                      minWidth: cellMinWidth,
-                      width: cellWidth,
+                      minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
+                      width: isDesktopAutoColumn ? 'auto' : cellWidth,
                       whiteSpace: 'nowrap'
                     }}
                   >
@@ -1487,6 +1482,7 @@ const pasteText = (text, rowIndex, colIndex) => {
                 {columns.map((col, colIndex) => {
                   const cellMinWidth = getColumnMinWidth(col)
                   const cellWidth = getColumnWidth(col)
+                  const isDesktopAutoColumn = !isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)
 
                   return (
                     <td
@@ -1495,19 +1491,20 @@ const pasteText = (text, rowIndex, colIndex) => {
                       onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
                       onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
                       style={{
-                        minWidth: cellMinWidth,
-                        width: cellWidth
+                        minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
+                        width: isDesktopAutoColumn ? 'auto' : cellWidth
                       }}
                     >
                       <input
                         className="cell-input"
                         style={{
                           display: 'block',
-                          minWidth: cellMinWidth,
-                          width: isMobile ? '100%' : (col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime') ? 'auto' : '100%',
+                          minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
+                          width: isDesktopAutoColumn ? 'auto' : '100%',
                           boxSizing: 'border-box',
                           minHeight: '34px'
                         }}
+                        size={isDesktopAutoColumn ? 16 : undefined}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
                         value={row[col.key] ?? ''}
