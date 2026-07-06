@@ -86,13 +86,18 @@ const safeScaleNumber = (value, scaleType) => {
 }
 
 function calcQ(h, section) {
-  const H = num(h)
+  const hValue = num(h)
+  const offset = num(section.hOffset) ?? 0
   const A = num(section.a)
   const B = num(section.b)
   const C = num(section.c)
-  if (H === null || A === null || B === null || C === null) return null
+
+  if (hValue === null || A === null || B === null || C === null) return null
+
+  const H = hValue + offset
   const x = H - B
   if (x < 0) return null
+
   const q = A * Math.pow(x, C)
   return Number.isFinite(q) ? q : null
 }
@@ -211,8 +216,18 @@ function normalizeStation(station) {
   return {
     ...station,
     classification: station.classification || '일반 지점',
-    sections: Array.isArray(station.sections) ? station.sections : [],
-    measurements: Array.isArray(station.measurements) ? station.measurements : [],
+
+    sections: Array.isArray(station.sections)
+      ? station.sections.map((section) => ({
+          ...section,
+          hOffset: section.hOffset ?? '0'
+        }))
+      : [],
+
+    measurements: Array.isArray(station.measurements)
+      ? station.measurements
+      : [],
+
     processPlan: Array.isArray(station.processPlan)
       ? station.processPlan.slice(0, 12)
       : Array.from({ length: 12 }, () => '')
@@ -372,6 +387,7 @@ function createEmptySection() {
     name: '',
     hMin: '',
     hMax: '',
+    hOffset: '0',
     a: '',
     b: '',
     c: '',
@@ -3562,6 +3578,7 @@ const stationColumns = useMemo(
     { key: 'name', label: '구간명' },
     { key: 'hMin', label: '적용수위 시작' },
     { key: 'hMax', label: '적용수위 끝' },
+    { key: 'hOffset', label: 'H = h + ( )', type: 'number' },
     { key: 'a', label: 'A' },
     { key: 'b', label: 'B' },
     { key: 'c', label: 'C' },
@@ -5223,7 +5240,8 @@ export default function App() {
                 {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
               </h3>
               <p className="muted">
-                Q = {section.a} × (h - {section.b})^{section.c}
+                Q = {section.a} × (H - {section.b})^{section.c}
+                 {' / '}H = h + ({section.hOffset || 0})
                 {section.lowNote ? ` / ${section.lowNote}` : ''}
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
