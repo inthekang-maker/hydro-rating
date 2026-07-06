@@ -118,12 +118,15 @@ function calcQ(h, section) {
 }
 
 function findSectionByH(h, sections, measurementDatetime = null) {
-  const H = num(h)
-  if (H === null) return null
+  const hValue = num(h)
+  if (hValue === null) return null
 
   const applicableSections = sections.filter((section) => {
     const hMin = num(section.hMin)
     const hMax = num(section.hMax)
+    const offset = num(section.hOffset) ?? 0
+    const H = hValue + offset
+
     if (hMin === null || hMax === null) return false
     if (H < hMin || H > hMax) return false
     if (!measurementDatetime) return true
@@ -133,6 +136,7 @@ function findSectionByH(h, sections, measurementDatetime = null) {
   const exact = applicableSections.find((s) => {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
+    const H = hValue + (num(s.hOffset) ?? 0)
     return hMin !== null && hMax !== null && H >= hMin && H <= hMax
   })
   if (exact) return exact
@@ -143,8 +147,11 @@ function findSectionByH(h, sections, measurementDatetime = null) {
     const hMin = num(s.hMin)
     const hMax = num(s.hMax)
     if (hMin === null || hMax === null) continue
+
+    const H = hValue + (num(s.hOffset) ?? 0)
     const center = (hMin + hMax) / 2
     const dist = Math.abs(H - center)
+
     if (dist < bestDist) {
       bestDist = dist
       best = s
@@ -4765,28 +4772,36 @@ export default function App() {
   }, [selectedMeasurements, measurementYearFilter])
 
   const relativeErrorsRaw = useMemo(() => {
-    return selectedMeasurements.map((measurement, index) => {
-      const section = findSectionByH(
-        measurement.h,
-        selectedSections,
-        measurement.datetime
-      )
-      const measuredQ = num(measurement.q)
-      const curveQ = section ? calcQ(measurement.h, section) : null
-      let error = null
-      if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
-        error = ((measuredQ - curveQ) / curveQ) * 100
-      }
-      return {
-        ...measurement,
-        sectionName: section?.name || '',
-        curveQ,
-        error,
-        measurementYear: getYearLabel(measurement.datetime),
-        _order: index
-      }
-    })
-  }, [selectedMeasurements, selectedSections])
+  return selectedMeasurements.map((measurement, index) => {
+    const rawH = num(measurement.h)
+    const section = findSectionByH(
+      measurement.h,
+      selectedSections,
+      measurement.datetime
+    )
+
+    const offset = section ? (num(section.hOffset) ?? 0) : 0
+    const H = rawH === null ? null : rawH + offset
+
+    const measuredQ = num(measurement.q)
+    const curveQ = section && rawH !== null ? calcQ(measurement.h, section) : null
+
+    let error = null
+    if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
+      error = ((measuredQ - curveQ) / curveQ) * 100
+    }
+
+    return {
+      ...measurement,
+      H,
+      sectionName: section?.name || '',
+      curveQ,
+      error,
+      measurementYear: getYearLabel(measurement.datetime),
+      _order: index
+    }
+  })
+}, [selectedMeasurements, selectedSections])
 
   const filteredRelativeErrors = useMemo(() => {
     let rows = relativeErrorsRaw
@@ -5295,18 +5310,27 @@ export default function App() {
           </div>
         </div>
         <CopyableMatrixTable
-            headers={['측정일시', '수위(h)', '측정유량', '곡선식 적용구간', '곡선식 유량', '상대오차(%)']}
-            rows={filteredRelativeErrors.map((row) => [
-              row.datetime,
-              row.h,
-              row.q,
-              row.sectionName,
-              row.curveQ === null ? '' : fmt(row.curveQ, 3),
-              row.error === null ? '' : fmt(row.error, 2)
-            ])}
-            tableClassName="spreadsheet flow-table"
-            style={tableAutoStyle}
-          />
+  headers={[
+    '측정일시',
+    '수위(h)',
+    '수위(H)',
+    '측정유량',
+    '곡선식 적용구간',
+    '곡선식 유량',
+    '상대오차(%)'
+  ]}
+  rows={filteredRelativeErrors.map((row) => [
+    row.datetime,
+    row.h,
+    row.H === null ? '' : fmt(row.H, 2),
+    row.q,
+    row.sectionName,
+    row.curveQ === null ? '' : fmt(row.curveQ, 3),
+    row.error === null ? '' : fmt(row.error, 2)
+  ])}
+  tableClassName="spreadsheet flow-table"
+  style={tableAutoStyle}
+/>
         <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
       </section>
 
