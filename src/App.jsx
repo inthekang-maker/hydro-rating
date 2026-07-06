@@ -3661,12 +3661,12 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '200px', mobileMinWidth: '200px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '200px', mobileMinWidth: '200px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '150px', mobileMinWidth: '150px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '150px', mobileMinWidth: '150px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '200px', mobileMinWidth: '200px' },
+    { key: 'datetime', label: '측정일시', minWidth: '150px', mobileMinWidth: '150px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -5093,12 +5093,12 @@ export default function App() {
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '200px', mobileMinWidth: '200px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '200px', mobileMinWidth: '200px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '150px', mobileMinWidth: '150px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '150px', mobileMinWidth: '150px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '200px', mobileMinWidth: '200px' },
+    { key: 'datetime', label: '측정일시', minWidth: '150px', mobileMinWidth: '150px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
