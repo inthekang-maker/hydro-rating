@@ -1165,6 +1165,19 @@ function SpreadsheetGrid({
   const tableRef = useRef(null)
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
+  const [isMobile, setIsMobile] = useState(() =>
+  typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+)
+
+useEffect(() => {
+  const handleResize = () => {
+    setIsMobile(window.innerWidth <= 768)
+  }
+
+  handleResize()
+  window.addEventListener('resize', handleResize)
+  return () => window.removeEventListener('resize', handleResize)
+}, [])  
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -1413,52 +1426,66 @@ const pasteText = (text, rowIndex, colIndex) => {
         <table className={tableClassName} style={tableStyle}>
           <thead>
   <tr>
-    {columns.map((col) => (
-      <th
-        key={col.key}
-        style={{
-          minWidth: col.minWidth || 'auto',
-          width: col.width || 'auto',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        {col.label}
-      </th>
-    ))}
+    {columns.map((col) => {
+  const cellMinWidth =
+    isMobile && col.mobileMinWidth
+      ? col.mobileMinWidth
+      : col.minWidth || (isCompactTable ? '72px' : '78px')
+
+  return (
+    <th
+      key={col.key}
+      style={{
+        minWidth: cellMinWidth,
+        width: col.width || 'auto',
+        whiteSpace: 'nowrap'
+      }}
+    >
+      {col.label}
+    </th>
+  )
+})}
     <th />
   </tr>
 </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
-                {columns.map((col, colIndex) => (
-                <td
-  key={col.key}
-  className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-  onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
-  onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
-  style={{
-    minWidth: col.minWidth || (isCompactTable ? '72px' : '78px'),
-    width: col.width || 'auto'
-  }}
->
-  <input
-    className="cell-input"
-    style={{
-      minWidth: col.minWidth || (isCompactTable ? '72px' : '78px'),
-      width: '100%',
-      boxSizing: 'border-box'
-    }}
-    data-cell={`${rowIndex}-${colIndex}`}
-    type={col.type || 'text'}
-    value={row[col.key] ?? ''}
-    onFocus={() => selectCell(rowIndex, colIndex)}
-    onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-    onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
-    onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-  />
-</td>  
-                ))}
+              {columns.map((col, colIndex) => {
+  const cellMinWidth =
+    isMobile && col.mobileMinWidth
+      ? col.mobileMinWidth
+      : col.minWidth || (isCompactTable ? '72px' : '78px')
+
+  return (
+    <td
+      key={col.key}
+      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+      onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
+      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
+      style={{
+        minWidth: cellMinWidth,
+        width: col.width || 'auto'
+      }}
+    >
+      <input
+        className="cell-input"
+        style={{
+          minWidth: cellMinWidth,
+          width: '100%',
+          boxSizing: 'border-box'
+        }}
+        data-cell={`${rowIndex}-${colIndex}`}
+        type={col.type || 'text'}
+        value={row[col.key] ?? ''}
+        onFocus={() => selectCell(rowIndex, colIndex)}
+        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+        onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
+        onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+      />
+    </td>
+  )
+})}  
                 <td className="delete-cell">
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
@@ -3618,8 +3645,8 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '200px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '200px' }
 ]
 
   const measurementColumns = [
