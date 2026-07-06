@@ -4867,8 +4867,22 @@ export default function App() {
       return {
         label: `${group.year}년 ${group.device} 측정성과`,
         data: group.items
-          .map((measurement) => ({ x: num(measurement.q), y: num(measurement.h) }))
-          .filter((point) => point.x !== null && point.y !== null),
+          .map((measurement) => {
+    const section = findSectionByH(
+        measurement.h,
+        selectedSections,
+        measurement.datetime
+    )
+
+    const rawH = num(measurement.h)
+    const offset = section ? (num(section.hOffset) ?? 0) : 0
+
+    return {
+        x: num(measurement.q),
+        y: rawH === null ? null : rawH + offset
+    }
+})
+.filter(point => point.x !== null && point.y !== null),
         showLine: false,
         pointRadius: 5,
         pointHoverRadius: 6,
