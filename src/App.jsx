@@ -3618,8 +3618,8 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '150px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '150px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '250px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px' }
 ]
 
   const measurementColumns = [
