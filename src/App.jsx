@@ -85,6 +85,21 @@ const safeScaleNumber = (value, scaleType) => {
   return n
 }
 
+function calcQBase(h, section) {
+  const hValue = num(h)
+  const A = num(section.a)
+  const B = num(section.b)
+  const C = num(section.c)
+
+  if (hValue === null || A === null || B === null || C === null) return null
+
+  const x = hValue - B
+  if (x < 0) return null
+
+  const q = A * Math.pow(x, C)
+  return Number.isFinite(q) ? q : null
+}
+
 function calcQ(h, section) {
   const hValue = num(h)
   const offset = num(section.hOffset) ?? 0
@@ -145,7 +160,7 @@ function genCurveRows(section) {
 
   const rows = []
   for (let h = hMin; h <= hMax + 0.000001; h += 0.01) {
-    const q = calcQ(h, section)
+    const q = calcQBase(h, section)
     if (q !== null) {
       rows.push({
         h: Number(h.toFixed(2)),
@@ -5235,8 +5250,7 @@ export default function App() {
                 {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
               </h3>
               <p className="muted">
-                Q = {section.a} × (H - {section.b})^{section.c}
-                {' / '}H = h + ({section.hOffset || 0})
+                 Q = {section.a} × (h - {section.b})^{section.c}
                 {section.lowNote ? ` / ${section.lowNote}` : ''}
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
