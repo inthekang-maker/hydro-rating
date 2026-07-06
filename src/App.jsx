@@ -1132,26 +1132,6 @@ function SpreadsheetGrid({
   const tableRef = useRef(null)
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
-  const [isMobile, setIsMobile] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
-  )
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768)
-    }
-
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  const getCellMinWidth = (col) => {
-    if (isMobile && col.mobileMinWidth) {
-      return col.mobileMinWidth
-    }
-    return isCompactTable ? '72px' : '78px'
-  }
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -1261,11 +1241,10 @@ const copySelection = async () => {
       if (!col) continue
       cells.push(String(row[col.key] ?? ''))
     }
-    lines.push(cells.join('	'))
+    lines.push(cells.join('\t'))
   }
 
-  const text = lines.join('
-')
+  const text = lines.join('\n')
   try {
     await navigator.clipboard.writeText(text)
   } catch {
@@ -1279,11 +1258,9 @@ const copySelection = async () => {
 }
 
 const pasteText = (text, rowIndex, colIndex) => {
-  const lines = text.replace(/
-/g, '').split('
-')
+  const lines = text.replace(/\r/g, '').split('\n')
   const matrix = lines
-    .map((line) => line.split('	'))
+    .map((line) => line.split('\t'))
     .filter((line) => line.some((cell) => cell !== ''))
 
   if (matrix.length === 0) return
@@ -1421,7 +1398,7 @@ const pasteText = (text, rowIndex, colIndex) => {
                   >
                     <input
                       className="cell-input"
-                      style={{ minWidth: getCellMinWidth(col) }}
+                      style={{ minWidth: isCompactTable ? '72px' : '78px' }}
                       data-cell={`${rowIndex}-${colIndex}`}
                       type={col.type || 'text'}
                       value={row[col.key] ?? ''}
@@ -1445,6 +1422,10 @@ const pasteText = (text, rowIndex, colIndex) => {
     </>
   )
 }
+
+
+
+
 function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   const [selection, setSelection] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -3586,12 +3567,12 @@ const stationColumns = useMemo(
     { key: 'c', label: 'C' },
     { key: 'lowNote', label: '저수위 외삽' },
     { key: 'highNote', label: '고수위 외삽' },
-    { key: 'periodStart', label: '적용시작', mobileMinWidth: '130px' },
+    { key: 'periodStart', label: '적용시작' },
     { key: 'periodEnd', label: '적용종료' }
   ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -4979,12 +4960,12 @@ export default function App() {
     { key: 'c', label: 'C' },
     { key: 'lowNote', label: '저수위 외삽' },
     { key: 'highNote', label: '고수위 외삽' },
-    { key: 'periodStart', label: '적용시작', mobileMinWidth: '130px' },
+    { key: 'periodStart', label: '적용시작' },
     { key: 'periodEnd', label: '적용종료' }
   ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
