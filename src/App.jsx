@@ -3570,18 +3570,18 @@ const stationColumns = useMemo(
   }
 
   const sectionColumns = [
-    { key: 'name', label: '구간명' },
-    { key: 'hMin', label: '적용수위 시작' },
-    { key: 'hMax', label: '적용수위 끝' },
-    { key: 'hOffset', label: 'H = h + ( )', type: 'number' },
-    { key: 'a', label: 'A' },
-    { key: 'b', label: 'B' },
-    { key: 'c', label: 'C' },
-    { key: 'lowNote', label: '저수위 외삽' },
-    { key: 'highNote', label: '고수위 외삽' },
-    { key: 'periodStart', label: '적용시작' },
-    { key: 'periodEnd', label: '적용종료' }
-  ]
+  { key: 'name', label: '구간명' },
+  { key: 'hMin', label: '적용수위 시작' },
+  { key: 'hMax', label: '적용수위 끝' },
+  { key: 'hOffset', label: 'H = h + ( )', type: 'number' },
+  { key: 'a', label: 'A' },
+  { key: 'b', label: 'B' },
+  { key: 'c', label: 'C' },
+  { key: 'lowNote', label: '저수위 외삽' },
+  { key: 'highNote', label: '고수위 외삽' },
+  { key: 'periodStart', label: '적용시작' },
+  { key: 'periodEnd', label: '적용종료' }
+]
 
   const measurementColumns = [
     { key: 'datetime', label: '측정일시' },
