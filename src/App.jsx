@@ -1434,12 +1434,13 @@ const pasteText = (text, rowIndex, colIndex) => {
 
   return (
     <th
-      key={col.key}
-      style={{
-        minWidth: cellMinWidth,
-        width: col.width || 'auto',
-        whiteSpace: 'nowrap'
-      }}
+  key={col.key}
+  style={{
+    minWidth: cellMinWidth,
+    width: cellWidth,
+    whiteSpace: 'nowrap'
+  }}
+>
     >
       {col.label}
     </th>
@@ -1464,17 +1465,17 @@ const pasteText = (text, rowIndex, colIndex) => {
       onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
       onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
       style={{
-        minWidth: cellMinWidth,
-        width: col.width || 'auto'
-      }}
+    minWidth: cellMinWidth,
+    width: cellWidth
+  }}
     >
       <input
-        className="cell-input"
-        style={{
-          minWidth: cellMinWidth,
-          width: '100%',
-          boxSizing: 'border-box'
-        }}
+    className="cell-input"
+    style={{
+      minWidth: cellMinWidth,
+      width: '100%',
+      boxSizing: 'border-box'
+    }}
         data-cell={`${rowIndex}-${colIndex}`}
         type={col.type || 'text'}
         value={row[col.key] ?? ''}
@@ -3645,8 +3646,8 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '200px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '200px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '250px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '250px' }
 ]
 
   const measurementColumns = [
