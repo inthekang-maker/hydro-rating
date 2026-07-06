@@ -216,18 +216,13 @@ function normalizeStation(station) {
   return {
     ...station,
     classification: station.classification || '일반 지점',
-
     sections: Array.isArray(station.sections)
       ? station.sections.map((section) => ({
           ...section,
           hOffset: section.hOffset ?? '0'
         }))
       : [],
-
-    measurements: Array.isArray(station.measurements)
-      ? station.measurements
-      : [],
-
+    measurements: Array.isArray(station.measurements) ? station.measurements : [],
     processPlan: Array.isArray(station.processPlan)
       ? station.processPlan.slice(0, 12)
       : Array.from({ length: 12 }, () => '')
@@ -5241,7 +5236,7 @@ export default function App() {
               </h3>
               <p className="muted">
                 Q = {section.a} × (H - {section.b})^{section.c}
-                 {' / '}H = h + ({section.hOffset || 0})
+                {' / '}H = h + ({section.hOffset || 0})
                 {section.lowNote ? ` / ${section.lowNote}` : ''}
                 {section.highNote ? ` / ${section.highNote}` : ''}
               </p>
