@@ -1181,33 +1181,36 @@ function SpreadsheetGrid({
 
   const getColumnWidth = (col) => {
     const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
+    const isSpecialDateColumn =
+      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
 
-    if (!isMobile) {
-      if (
-        col.key === 'periodStart' ||
-        col.key === 'periodEnd' ||
-        col.key === 'datetime'
-      ) {
-        return col.desktopWidth || 'auto'
+    if (isMobile) {
+      if (col.key === 'periodStart' || col.key === 'periodEnd') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
       }
-      return baseWidth
+
+      if (col.key === 'datetime') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
+      }
+
+      return col.mobileWidth || col.mobileMinWidth || baseWidth
     }
 
-    if (col.key === 'periodStart' || col.key === 'periodEnd') {
-      return col.mobileWidth || col.mobileMinWidth || '340px'
+    if (isSpecialDateColumn) {
+      return col.desktopWidth || 'auto'
     }
 
-    if (col.key === 'datetime') {
-      return col.mobileWidth || col.mobileMinWidth || '320px'
-    }
-
-    return col.mobileWidth || col.mobileMinWidth || baseWidth
+    return baseWidth
   }
 
   const getColumnMinWidth = (col) => {
-    if (!isMobile && (col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime')) {
+    const isSpecialDateColumn =
+      col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime'
+
+    if (!isMobile && isSpecialDateColumn) {
       return undefined
     }
+
     return getColumnWidth(col)
   }
   const tableClassName = [
@@ -1501,7 +1504,7 @@ const pasteText = (text, rowIndex, colIndex) => {
                         style={{
                           display: 'block',
                           minWidth: cellMinWidth,
-                          width: '100%',
+                          width: isMobile ? '100%' : (col.key === 'periodStart' || col.key === 'periodEnd' || col.key === 'datetime') ? 'auto' : '100%',
                           boxSizing: 'border-box',
                           minHeight: '34px'
                         }}
@@ -3675,12 +3678,12 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', desktopWidth: 'auto', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', desktopWidth: 'auto', mobileMinWidth: '130px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', desktopWidth: 'auto', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -5107,12 +5110,12 @@ export default function App() {
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', desktopWidth: 'auto', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', desktopWidth: 'auto', mobileMinWidth: '130px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', desktopWidth: 'auto', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
