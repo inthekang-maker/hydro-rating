@@ -4708,33 +4708,31 @@ export default function App() {
   }
 
   const measurementGroups = useMemo(() => {
-  const map = new Map()
+    const map = new Map()
 
-  relativeErrorsRaw.forEach((measurement) => {
-    const year = getYearLabel(measurement.datetime)
-    const device = normalizeDeviceLabel(measurement.device)
-    const key = `${year}__${device}`
+    selectedMeasurements.forEach((measurement) => {
+      const year = getYearLabel(measurement.datetime)
+      const device = normalizeDeviceLabel(measurement.device)
+      const key = `${year}__${device}`
+      if (!map.has(key)) {
+        map.set(key, {
+          year,
+          device,
+          items: []
+        })
+      }
+      map.get(key).items.push(measurement)
+    })
 
-    if (!map.has(key)) {
-      map.set(key, {
-        year,
-        device,
-        items: []
-      })
-    }
-
-    map.get(key).items.push(measurement)
-  })
-
-  return Array.from(map.values())
-    .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
-    .map((group) => ({
-      ...group,
-      items: group.items
-        .slice()
-        .sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
-    }))
-}, [relativeErrorsRaw])
+    return Array.from(map.values())
+      .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .slice()
+          .sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
+      }))
+  }, [selectedMeasurements])
 
   const yearColorMap = useMemo(() => {
     const years = Array.from(new Set(measurementGroups.map((g) => g.year))).sort(
@@ -4805,6 +4803,33 @@ export default function App() {
   })
 }, [selectedMeasurements, selectedSections])
 
+  const graphMeasurementGroups = useMemo(() => {
+  const map = new Map()
+
+  relativeErrorsRaw.forEach((measurement) => {
+    const year = getYearLabel(measurement.datetime)
+    const device = normalizeDeviceLabel(measurement.device)
+    const key = `${year}__${device}`
+
+    if (!map.has(key)) {
+      map.set(key, {
+        year,
+        device,
+        items: []
+      })
+    }
+
+    map.get(key).items.push(measurement)
+  })
+
+  return Array.from(map.values())
+    .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
+    .map((group) => ({
+      ...group,
+      items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
+    }))
+}, [relativeErrorsRaw])
+
   const filteredRelativeErrors = useMemo(() => {
     let rows = relativeErrorsRaw
 
@@ -4862,7 +4887,7 @@ export default function App() {
   }, [selectedSections, curveRowsBySection])
 
   const measurementDatasets = useMemo(() => {
-  return measurementGroups.map((group) => {
+  return graphMeasurementGroups.map((group) => {
     const color = yearColorMap[group.year] || YEAR_COLORS[0]
     const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
 
@@ -4886,7 +4911,7 @@ export default function App() {
       legendColor: color
     }
   })
-}, [measurementGroups, yearColorMap])
+}, [graphMeasurementGroups, yearColorMap])
 
   const legendItems = useMemo(() => {
     const items = []
