@@ -1457,11 +1457,16 @@ const pasteText = (text, rowIndex, colIndex) => {
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
-              {columns.map((col, colIndex) => {
+             {columns.map((col, colIndex) => {
   const cellMinWidth =
     isMobile && col.mobileMinWidth
       ? col.mobileMinWidth
       : col.minWidth || (isCompactTable ? '72px' : '78px')
+
+  const cellWidth =
+    isMobile && col.mobileMinWidth
+      ? col.mobileMinWidth
+      : col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
 
   return (
     <td
@@ -1470,18 +1475,18 @@ const pasteText = (text, rowIndex, colIndex) => {
       onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
       onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
       style={{
-    minWidth: cellMinWidth,
-    width: cellWidth
-  }}
+        minWidth: cellMinWidth,
+        width: cellWidth
+      }}
     >
       <input
-  className="cell-input"
-  style={{
-    minWidth: cellMinWidth,
-    width: '100%',
-    boxSizing: 'border-box',
-    minHeight: '34px'
-  }}
+        className="cell-input"
+        style={{
+          minWidth: cellMinWidth,
+          width: '100%',
+          boxSizing: 'border-box',
+          minHeight: '34px'
+        }} 
         data-cell={`${rowIndex}-${colIndex}`}
         type={col.type || 'text'}
         value={row[col.key] ?? ''}
@@ -3657,7 +3662,7 @@ const stationColumns = useMemo(
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '220px', mobileMinWidth: '250px' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '250px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -5089,7 +5094,7 @@ export default function App() {
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '220px', mobileMinWidth: '250px' },
+    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '250px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
