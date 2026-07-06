@@ -1475,12 +1475,13 @@ const pasteText = (text, rowIndex, colIndex) => {
   }}
     >
       <input
-    className="cell-input"
-    style={{
-      minWidth: cellMinWidth,
-      width: '100%',
-      boxSizing: 'border-box'
-    }}
+  className="cell-input"
+  style={{
+    minWidth: cellMinWidth,
+    width: '100%',
+    boxSizing: 'border-box',
+    minHeight: '34px'
+  }}
         data-cell={`${rowIndex}-${colIndex}`}
         type={col.type || 'text'}
         value={row[col.key] ?? ''}
@@ -3656,7 +3657,7 @@ const stationColumns = useMemo(
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시' },
+    { key: 'datetime', label: '측정일시', minWidth: '220px', mobileMinWidth: '250px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -3854,7 +3855,7 @@ const stationColumns = useMemo(
             사용자 지정 기간
           </div>
 
-          <label style={{ minWidth: '220px' }}>
+          <label style={{ minWidth: '250px' }}>
   시작시간
   <input
     type="datetime-local"
@@ -3876,7 +3877,7 @@ const stationColumns = useMemo(
   />
 </label>
 
-<label style={{ minWidth: '220px' }}>
+<label style={{ minWidth: '250px' }}>
   종료시간
   <input
     type="datetime-local"
@@ -5074,21 +5075,21 @@ export default function App() {
   const currentStationCode = selectedStation?.code || ''
 
   const sectionColumns = [
-  { key: 'name', label: '구간명' },
-  { key: 'hMin', label: '적용수위 시작' },
-  { key: 'hMax', label: '적용수위 끝' },
-  { key: 'hOffset', label: 'H = h + ( )', type: 'number' },
-  { key: 'a', label: 'A' },
-  { key: 'b', label: 'B' },
-  { key: 'c', label: 'C' },
-  { key: 'lowNote', label: '저수위 외삽' },
-  { key: 'highNote', label: '고수위 외삽' },
-  { key: 'periodStart', label: '적용시작' },
-  { key: 'periodEnd', label: '적용종료' }
+  { key: 'name', label: '구간명', minWidth: '86px' },
+  { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
+  { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
+  { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
+  { key: 'a', label: 'A', minWidth: '64px' },
+  { key: 'b', label: 'B', minWidth: '64px' },
+  { key: 'c', label: 'C', minWidth: '64px' },
+  { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
+  { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
+  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '250px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '250px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시' },
+    { key: 'datetime', label: '측정일시', minWidth: '220px', mobileMinWidth: '250px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
