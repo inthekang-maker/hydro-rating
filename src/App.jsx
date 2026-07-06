@@ -1182,20 +1182,36 @@ function SpreadsheetGrid({
   const getColumnWidth = (col) => {
     const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
 
-    if (!isMobile) return baseWidth
+    if (isMobile) {
+      if (col.key === 'periodStart' || col.key === 'periodEnd') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
+      }
 
-    if (col.key === 'periodStart' || col.key === 'periodEnd') {
-      return col.mobileWidth || col.mobileMinWidth || '340px'
+      if (col.key === 'datetime') {
+        return col.mobileWidth || col.mobileMinWidth || '130px'
+      }
+
+      return col.mobileWidth || col.mobileMinWidth || baseWidth
     }
 
-    if (col.key === 'datetime') {
-      return col.mobileWidth || col.mobileMinWidth || '320px'
+    if (col.desktopAuto) {
+      return 'auto'
     }
 
-    return col.mobileWidth || col.mobileMinWidth || baseWidth
+    return col.desktopWidth || col.width || col.minWidth || baseWidth
   }
 
-  const getColumnMinWidth = (col) => getColumnWidth(col)
+  const getColumnMinWidth = (col) => {
+    if (isMobile) {
+      return getColumnWidth(col)
+    }
+
+    if (col.desktopAuto) {
+      return undefined
+    }
+
+    return col.desktopMinWidth || col.minWidth || (isCompactTable ? '72px' : '78px')
+  }
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -3661,12 +3677,12 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+  { key: 'periodStart', label: '적용시작', desktopAuto: true, mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', desktopAuto: true, mobileMinWidth: '130px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시', desktopAuto: true, mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -5093,12 +5109,12 @@ export default function App() {
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+  { key: 'periodStart', label: '적용시작', desktopAuto: true, mobileMinWidth: '130px' },
+  { key: 'periodEnd', label: '적용종료', desktopAuto: true, mobileMinWidth: '130px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
+    { key: 'datetime', label: '측정일시', desktopAuto: true, mobileMinWidth: '130px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
