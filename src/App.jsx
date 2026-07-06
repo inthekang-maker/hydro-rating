@@ -1428,9 +1428,14 @@ const pasteText = (text, rowIndex, colIndex) => {
   <tr>
     {columns.map((col) => {
   const cellMinWidth =
-    isMobile && col.mobileMinWidth
-      ? col.mobileMinWidth
-      : col.minWidth || (isCompactTable ? '72px' : '78px')
+  isMobile && col.mobileMinWidth
+    ? col.mobileMinWidth
+    : col.minWidth || (isCompactTable ? '72px' : '78px')
+
+  const cellWidth =
+  isMobile && col.mobileMinWidth
+    ? col.mobileMinWidth
+    : col.width || col.minWidth || (isCompactTable ? '72px' : '78px')    
 
   return (
     <th
