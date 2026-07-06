@@ -1166,18 +1166,36 @@ function SpreadsheetGrid({
   const isCompactTable =
     title.includes('2. 곡선식 입력') || title.includes('3. 측정성과 입력')
   const [isMobile, setIsMobile] = useState(() =>
-  typeof window !== 'undefined' ? window.innerWidth <= 768 : false
-)
+    typeof window !== 'undefined' ? window.innerWidth <= 768 : false
+  )
 
-useEffect(() => {
-  const handleResize = () => {
-    setIsMobile(window.innerWidth <= 768)
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  const getColumnWidth = (col) => {
+    const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
+
+    if (!isMobile) return baseWidth
+
+    if (col.key === 'periodStart' || col.key === 'periodEnd') {
+      return col.mobileWidth || col.mobileMinWidth || '340px'
+    }
+
+    if (col.key === 'datetime') {
+      return col.mobileWidth || col.mobileMinWidth || '320px'
+    }
+
+    return col.mobileWidth || col.mobileMinWidth || baseWidth
   }
 
-  handleResize()
-  window.addEventListener('resize', handleResize)
-  return () => window.removeEventListener('resize', handleResize)
-}, [])  
+  const getColumnMinWidth = (col) => getColumnWidth(col)
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -1425,79 +1443,65 @@ const pasteText = (text, rowIndex, colIndex) => {
       <div className="table-wrap" ref={tableRef}>
         <table className={tableClassName} style={tableStyle}>
           <thead>
-  <tr>
-    {columns.map((col) => {
-  const cellMinWidth =
-  isMobile && col.mobileMinWidth
-    ? col.mobileMinWidth
-    : col.minWidth || (isCompactTable ? '72px' : '78px')
+            <tr>
+              {columns.map((col) => {
+                const cellMinWidth = getColumnMinWidth(col)
+                const cellWidth = getColumnWidth(col)
 
-  const cellWidth =
-  isMobile && col.mobileMinWidth
-    ? col.mobileMinWidth
-    : col.width || col.minWidth || (isCompactTable ? '72px' : '78px')    
-
-  return (
-    <th
-  key={col.key}
-  style={{
-    minWidth: cellMinWidth,
-    width: cellWidth,
-    whiteSpace: 'nowrap'
-  }}
->
-    >
-      {col.label}
-    </th>
-  )
-})}
-    <th />
-  </tr>
-</thead>
+                return (
+                  <th
+                    key={col.key}
+                    style={{
+                      minWidth: cellMinWidth,
+                      width: cellWidth,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {col.label}
+                  </th>
+                )
+              })}
+              <th />
+            </tr>
+          </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
-             {columns.map((col, colIndex) => {
-  const cellMinWidth =
-    isMobile && col.mobileMinWidth
-      ? col.mobileMinWidth
-      : col.minWidth || (isCompactTable ? '72px' : '78px')
+                {columns.map((col, colIndex) => {
+                  const cellMinWidth = getColumnMinWidth(col)
+                  const cellWidth = getColumnWidth(col)
 
-  const cellWidth =
-    isMobile && col.mobileMinWidth
-      ? col.mobileMinWidth
-      : col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
-
-  return (
-    <td
-      key={col.key}
-      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-      onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
-      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
-      style={{
-        minWidth: cellMinWidth,
-        width: cellWidth
-      }}
-    >
-      <input
-        className="cell-input"
-        style={{
-          minWidth: cellMinWidth,
-          width: '100%',
-          boxSizing: 'border-box',
-          minHeight: '34px'
-        }} 
-        data-cell={`${rowIndex}-${colIndex}`}
-        type={col.type || 'text'}
-        value={row[col.key] ?? ''}
-        onFocus={() => selectCell(rowIndex, colIndex)}
-        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
-        onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
-        onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-      />
-    </td>
-  )
-})}  
+                  return (
+                    <td
+                      key={col.key}
+                      className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
+                      onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
+                      onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
+                      style={{
+                        minWidth: cellMinWidth,
+                        width: cellWidth
+                      }}
+                    >
+                      <input
+                        className="cell-input"
+                        style={{
+                          display: 'block',
+                          minWidth: cellMinWidth,
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          minHeight: '34px'
+                        }}
+                        data-cell={`${rowIndex}-${colIndex}`}
+                        type={col.type || 'text'}
+                        value={row[col.key] ?? ''}
+                        onFocus={() => selectCell(rowIndex, colIndex)}
+                        onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                        onChange={(e) => setCell(rowIndex, col.key, e.target.value)}
+                        onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                      />
+                    </td>
+                  )
+                })}
                 <td className="delete-cell">
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
@@ -3657,12 +3661,12 @@ const stationColumns = useMemo(
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '250px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '250px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '340px', mobileMinWidth: '340px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '340px', mobileMinWidth: '340px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '250px' },
+    { key: 'datetime', label: '측정일시', minWidth: '320px', mobileMinWidth: '320px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
@@ -3876,7 +3880,7 @@ const stationColumns = useMemo(
       setCustomStartTime(formatDateTimeLocal(rounded))
     }}
      style={{
-      width: '220px',
+      width: '240px',
       maxWidth: '100%'
     }}
   />
@@ -3898,7 +3902,7 @@ const stationColumns = useMemo(
       setCustomEndTime(formatDateTimeLocal(rounded))
     }}
      style={{
-      width: '220px',
+      width: '240px',
       maxWidth: '100%'
     }}
   />
@@ -4006,7 +4010,7 @@ const stationColumns = useMemo(
     }}
     disabled={chartPeriodKey !== 'custom'}
      style={{
-    width: '220px'
+    width: '240px'
   }}
   />
 </label>
@@ -4028,7 +4032,7 @@ const stationColumns = useMemo(
     }}
     disabled={chartPeriodKey !== 'custom'}
     style={{
-    width: '220px'
+    width: '240px'
   }}
   />
 </label>
@@ -5089,12 +5093,12 @@ export default function App() {
   { key: 'c', label: 'C', minWidth: '64px' },
   { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
   { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '250px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '250px' }
+  { key: 'periodStart', label: '적용시작', minWidth: '340px', mobileMinWidth: '340px' },
+  { key: 'periodEnd', label: '적용종료', minWidth: '340px', mobileMinWidth: '340px' }
 ]
 
   const measurementColumns = [
-    { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '250px' },
+    { key: 'datetime', label: '측정일시', minWidth: '320px', mobileMinWidth: '320px' },
     { key: 'h', label: '수위(h)' },
     { key: 'q', label: '유량(Q)' },
     { key: 'device', label: '측정장비' },
