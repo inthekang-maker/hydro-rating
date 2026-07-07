@@ -1169,7 +1169,6 @@ function SpreadsheetGrid({
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   )
-  const [tableWrapWidth, setTableWrapWidth] = useState(0)
 
   useEffect(() => {
     const handleResize = () => {
@@ -1181,41 +1180,11 @@ function SpreadsheetGrid({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  useEffect(() => {
-    if (!tableRef.current) return
-
-    const measure = () => {
-      const width = tableRef.current?.clientWidth || 0
-      setTableWrapWidth(width)
-    }
-
-    measure()
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const observer = new ResizeObserver(() => {
-        measure()
-      })
-      observer.observe(tableRef.current)
-      return () => observer.disconnect()
-    }
-
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [title, rows.length, columns.length])
-
-  const parseWidthPx = (value, fallback) => {
-    if (typeof value === 'number' && Number.isFinite(value)) return value
-    const s = String(value || '').trim()
-    const n = Number.parseFloat(s.endsWith('px') ? s.slice(0, -2) : s)
-    return Number.isFinite(n) ? n : fallback
-  }
-
-  const getBaseColumnWidth = (col) => {
-    const fallback = isCompactTable ? 72 : 78
-    const baseWidth = col.width || col.minWidth || `${fallback}px`
+  const getColumnMinWidth = (col) => {
+    const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
 
     if (!isMobile) {
-      return baseWidth
+      return isCompactTable ? baseWidth : baseWidth
     }
 
     if (col.key === 'periodStart' || col.key === 'periodEnd') {
@@ -1229,30 +1198,25 @@ function SpreadsheetGrid({
     return col.mobileWidth || col.mobileMinWidth || baseWidth
   }
 
-  const deleteColumnWidth = 56
-  const desktopStretchEnabled = isCompactTable && !isMobile && tableWrapWidth > 0
-
-  const desktopColumnWidths = useMemo(() => {
-    if (!desktopStretchEnabled) return null
-
-    const baseWidths = columns.map((col) => parseWidthPx(getBaseColumnWidth(col), isCompactTable ? 72 : 78))
-    const totalBaseWidth = baseWidths.reduce((acc, value) => acc + value, 0)
-    if (totalBaseWidth <= 0) return null
-
-    const targetMainWidth = Math.max(tableWrapWidth - deleteColumnWidth, totalBaseWidth)
-    const scale = targetMainWidth / totalBaseWidth
-
-    return baseWidths.map((value) => Math.max(24, Math.round(value * scale)))
-  }, [columns, desktopStretchEnabled, tableWrapWidth, isCompactTable])
-
-  const getRenderedColumnWidth = (col, colIndex) => {
-    if (desktopStretchEnabled && desktopColumnWidths) {
-      return `${desktopColumnWidths[colIndex]}px`
+  const getColumnWidth = (col) => {
+    if (!isMobile && isCompactTable) {
+      return undefined
     }
-    return getBaseColumnWidth(col)
-  }
 
-  const getRenderedDeleteWidth = () => `${deleteColumnWidth}px`
+    const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
+
+    if (!isMobile) return baseWidth
+
+    if (col.key === 'periodStart' || col.key === 'periodEnd') {
+      return col.mobileWidth || col.mobileMinWidth || '340px'
+    }
+
+    if (col.key === 'datetime') {
+      return col.mobileWidth || col.mobileMinWidth || '320px'
+    }
+
+    return col.mobileWidth || col.mobileMinWidth || baseWidth
+  }
 
   const tableClassName = [
     'spreadsheet',
@@ -1267,11 +1231,11 @@ function SpreadsheetGrid({
     .filter(Boolean)
     .join(' ')
 
-  const tableStyle = desktopStretchEnabled
+  const tableStyle = isCompactTable && !isMobile
     ? {
-        tableLayout: 'fixed',
-        width: `${tableWrapWidth}px`,
-        minWidth: `${tableWrapWidth}px`
+        tableLayout: 'auto',
+        width: '100%',
+        minWidth: '100%'
       }
     : {
         tableLayout: 'auto',
@@ -1448,7 +1412,10 @@ function SpreadsheetGrid({
     if (
       (e.key === 'Delete' || e.key === 'Backspace') &&
       selection &&
-      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
+      (
+        selection.startRow !== selection.endRow ||
+        selection.startCol !== selection.endCol
+      )
     ) {
       e.preventDefault()
       clearSelection()
@@ -1504,26 +1471,20 @@ function SpreadsheetGrid({
 
       <div className="table-wrap" ref={tableRef}>
         <table className={tableClassName} style={tableStyle}>
-          {desktopStretchEnabled && desktopColumnWidths ? (
-            <colgroup>
-              {columns.map((col, idx) => (
-                <col key={col.key} style={{ width: getRenderedColumnWidth(col, idx) }} />
-              ))}
-              <col style={{ width: getRenderedDeleteWidth() }} />
-            </colgroup>
-          ) : null}
           <thead>
             <tr>
-              {columns.map((col, colIndex) => {
-                const cellMinWidth = getRenderedColumnWidth(col, colIndex)
-                const cellWidth = getRenderedColumnWidth(col, colIndex)
+              {columns.map((col) => {
+                const cellMinWidth = getColumnMinWidth(col)
+                const cellWidth = getColumnWidth(col)
+                const isStretchDesktop = isCompactTable && !isMobile
 
                 return (
                   <th
                     key={col.key}
                     style={{
                       minWidth: cellMinWidth,
-                      width: cellWidth,
+                      ...(cellWidth ? { width: cellWidth } : {}),
+                      ...(isStretchDesktop ? { width: 'auto' } : {}),
                       whiteSpace: 'nowrap'
                     }}
                   >
@@ -1531,15 +1492,16 @@ function SpreadsheetGrid({
                   </th>
                 )
               })}
-              <th style={{ width: getRenderedDeleteWidth() }} />
+              <th style={{ width: isCompactTable && !isMobile ? '56px' : undefined }} />
             </tr>
           </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
                 {columns.map((col, colIndex) => {
-                  const cellMinWidth = getRenderedColumnWidth(col, colIndex)
-                  const cellWidth = getRenderedColumnWidth(col, colIndex)
+                  const cellMinWidth = getColumnMinWidth(col)
+                  const cellWidth = getColumnWidth(col)
+                  const isStretchDesktop = isCompactTable && !isMobile
 
                   return (
                     <td
@@ -1549,7 +1511,8 @@ function SpreadsheetGrid({
                       onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
                       style={{
                         minWidth: cellMinWidth,
-                        width: cellWidth
+                        ...(cellWidth ? { width: cellWidth } : {}),
+                        ...(isStretchDesktop ? { width: 'auto' } : {})
                       }}
                     >
                       <input
@@ -1557,7 +1520,7 @@ function SpreadsheetGrid({
                         style={{
                           display: 'block',
                           minWidth: cellMinWidth,
-                          width: '100%',
+                          width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
                           boxSizing: 'border-box',
                           minHeight: '34px'
                         }}
@@ -1572,7 +1535,10 @@ function SpreadsheetGrid({
                     </td>
                   )
                 })}
-                <td className="delete-cell" style={{ width: getRenderedDeleteWidth() }}>
+                <td
+                  className="delete-cell"
+                  style={{ width: isCompactTable && !isMobile ? '56px' : undefined }}
+                >
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
                   </button>
@@ -1585,8 +1551,6 @@ function SpreadsheetGrid({
     </>
   )
 }
-
-
 function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   const [selection, setSelection] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
