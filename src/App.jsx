@@ -1151,6 +1151,7 @@ function CopyableMatrixTable({
   )
 }
 
+
 function SpreadsheetGrid({
   title,
   columns,
@@ -1168,6 +1169,7 @@ function SpreadsheetGrid({
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth <= 768 : false
   )
+  const [tableWrapWidth, setTableWrapWidth] = useState(0)
 
   useEffect(() => {
     const handleResize = () => {
@@ -1179,16 +1181,42 @@ function SpreadsheetGrid({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const AUTO_DESKTOP_COLUMN_KEYS = new Set(['periodStart', 'periodEnd', 'datetime'])
+  useEffect(() => {
+    if (!tableRef.current) return
 
-  const getColumnWidth = (col) => {
-    const baseWidth = col.width || col.minWidth || (isCompactTable ? '72px' : '78px')
-
-    if (!isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)) {
-      return 'auto'
+    const measure = () => {
+      const width = tableRef.current?.clientWidth || 0
+      setTableWrapWidth(width)
     }
 
-    if (!isMobile) return baseWidth
+    measure()
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(() => {
+        measure()
+      })
+      observer.observe(tableRef.current)
+      return () => observer.disconnect()
+    }
+
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [title, rows.length, columns.length])
+
+  const parseWidthPx = (value, fallback) => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    const s = String(value || '').trim()
+    const n = Number.parseFloat(s.endsWith('px') ? s.slice(0, -2) : s)
+    return Number.isFinite(n) ? n : fallback
+  }
+
+  const getBaseColumnWidth = (col) => {
+    const fallback = isCompactTable ? 72 : 78
+    const baseWidth = col.width || col.minWidth || `${fallback}px`
+
+    if (!isMobile) {
+      return baseWidth
+    }
 
     if (col.key === 'periodStart' || col.key === 'periodEnd') {
       return col.mobileWidth || col.mobileMinWidth || '340px'
@@ -1201,12 +1229,31 @@ function SpreadsheetGrid({
     return col.mobileWidth || col.mobileMinWidth || baseWidth
   }
 
-  const getColumnMinWidth = (col) => {
-    if (!isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)) {
-      return '0px'
+  const deleteColumnWidth = 56
+  const desktopStretchEnabled = isCompactTable && !isMobile && tableWrapWidth > 0
+
+  const desktopColumnWidths = useMemo(() => {
+    if (!desktopStretchEnabled) return null
+
+    const baseWidths = columns.map((col) => parseWidthPx(getBaseColumnWidth(col), isCompactTable ? 72 : 78))
+    const totalBaseWidth = baseWidths.reduce((acc, value) => acc + value, 0)
+    if (totalBaseWidth <= 0) return null
+
+    const targetMainWidth = Math.max(tableWrapWidth - deleteColumnWidth, totalBaseWidth)
+    const scale = targetMainWidth / totalBaseWidth
+
+    return baseWidths.map((value) => Math.max(24, Math.round(value * scale)))
+  }, [columns, desktopStretchEnabled, tableWrapWidth, isCompactTable])
+
+  const getRenderedColumnWidth = (col, colIndex) => {
+    if (desktopStretchEnabled && desktopColumnWidths) {
+      return `${desktopColumnWidths[colIndex]}px`
     }
-    return getColumnWidth(col)
+    return getBaseColumnWidth(col)
   }
+
+  const getRenderedDeleteWidth = () => `${deleteColumnWidth}px`
+
   const tableClassName = [
     'spreadsheet',
     title.includes('2. 곡선식 입력')
@@ -1219,11 +1266,18 @@ function SpreadsheetGrid({
   ]
     .filter(Boolean)
     .join(' ')
-  const tableStyle = {
-    tableLayout: 'auto',
-    width: 'max-content',
-    minWidth: '100%'
-  }
+
+  const tableStyle = desktopStretchEnabled
+    ? {
+        tableLayout: 'fixed',
+        width: `${tableWrapWidth}px`,
+        minWidth: `${tableWrapWidth}px`
+      }
+    : {
+        tableLayout: 'auto',
+        width: 'max-content',
+        minWidth: '100%'
+      }
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -1303,65 +1357,65 @@ function SpreadsheetGrid({
     onRowsChange(next)
   }
 
-const copySelection = async () => {
-  const r = normalizeRange(selection)
-  if (!r) return
+  const copySelection = async () => {
+    const r = normalizeRange(selection)
+    if (!r) return
 
-  const lines = []
-  for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
-    const row = rows[rowIndex] || {}
-    const cells = []
-    for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
-      const col = columns[colIndex]
-      if (!col) continue
-      cells.push(String(row[col.key] ?? ''))
-    }
-    lines.push(cells.join('\t'))
-  }
-
-  const text = lines.join('\n')
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch {
-    const temp = document.createElement('textarea')
-    temp.value = text
-    document.body.appendChild(temp)
-    temp.select()
-    document.execCommand('copy')
-    document.body.removeChild(temp)
-  }
-}
-
-const pasteText = (text, rowIndex, colIndex) => {
-  const lines = text.replace(/\r/g, '').split('\n')
-  const matrix = lines
-    .map((line) => line.split('\t'))
-    .filter((line) => line.some((cell) => cell !== ''))
-
-  if (matrix.length === 0) return
-
-  const next = rows.map((r) => ({ ...r }))
-  while (next.length < rowIndex + matrix.length) {
-    next.push(createEmptyRow())
-  }
-
-  matrix.forEach((line, rOffset) => {
-    const targetRow = rowIndex + rOffset
-    if (!next[targetRow]) return
-
-    line.forEach((cell, cOffset) => {
-      const targetCol = colIndex + cOffset
-      if (!columns[targetCol]) return
-      const key = columns[targetCol].key
-      next[targetRow] = {
-        ...next[targetRow],
-        [key]: cell
+    const lines = []
+    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+      const row = rows[rowIndex] || {}
+      const cells = []
+      for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
+        const col = columns[colIndex]
+        if (!col) continue
+        cells.push(String(row[col.key] ?? ''))
       }
-    })
-  })
+      lines.push(cells.join('\t'))
+    }
 
-  onRowsChange(next)
-}
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const temp = document.createElement('textarea')
+      temp.value = text
+      document.body.appendChild(temp)
+      temp.select()
+      document.execCommand('copy')
+      document.body.removeChild(temp)
+    }
+  }
+
+  const pasteText = (text, rowIndex, colIndex) => {
+    const lines = text.replace(/\r/g, '').split('\n')
+    const matrix = lines
+      .map((line) => line.split('\t'))
+      .filter((line) => line.some((cell) => cell !== ''))
+
+    if (matrix.length === 0) return
+
+    const next = rows.map((r) => ({ ...r }))
+    while (next.length < rowIndex + matrix.length) {
+      next.push(createEmptyRow())
+    }
+
+    matrix.forEach((line, rOffset) => {
+      const targetRow = rowIndex + rOffset
+      if (!next[targetRow]) return
+
+      line.forEach((cell, cOffset) => {
+        const targetCol = colIndex + cOffset
+        if (!columns[targetCol]) return
+        const key = columns[targetCol].key
+        next[targetRow] = {
+          ...next[targetRow],
+          [key]: cell
+        }
+      })
+    })
+
+    onRowsChange(next)
+  }
 
   const setCell = (rowIndex, key, value) => {
     const next = rows.map((r, idx) => (idx === rowIndex ? { ...r, [key]: value } : r))
@@ -1392,17 +1446,14 @@ const pasteText = (text, rowIndex, colIndex) => {
     }
 
     if (
-  (e.key === 'Delete' || e.key === 'Backspace') &&
-  selection &&
-  (
-    selection.startRow !== selection.endRow ||
-    selection.startCol !== selection.endCol
-  )
-) {
-  e.preventDefault()
-  clearSelection()
-  return
-}
+      (e.key === 'Delete' || e.key === 'Backspace') &&
+      selection &&
+      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
+    ) {
+      e.preventDefault()
+      clearSelection()
+      return
+    }
 
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -1453,19 +1504,26 @@ const pasteText = (text, rowIndex, colIndex) => {
 
       <div className="table-wrap" ref={tableRef}>
         <table className={tableClassName} style={tableStyle}>
+          {desktopStretchEnabled && desktopColumnWidths ? (
+            <colgroup>
+              {columns.map((col, idx) => (
+                <col key={col.key} style={{ width: getRenderedColumnWidth(col, idx) }} />
+              ))}
+              <col style={{ width: getRenderedDeleteWidth() }} />
+            </colgroup>
+          ) : null}
           <thead>
             <tr>
-              {columns.map((col) => {
-                const cellMinWidth = getColumnMinWidth(col)
-                const cellWidth = getColumnWidth(col)
-                const isDesktopAutoColumn = !isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)
+              {columns.map((col, colIndex) => {
+                const cellMinWidth = getRenderedColumnWidth(col, colIndex)
+                const cellWidth = getRenderedColumnWidth(col, colIndex)
 
                 return (
                   <th
                     key={col.key}
                     style={{
-                      minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
-                      width: isDesktopAutoColumn ? 'auto' : cellWidth,
+                      minWidth: cellMinWidth,
+                      width: cellWidth,
                       whiteSpace: 'nowrap'
                     }}
                   >
@@ -1473,16 +1531,15 @@ const pasteText = (text, rowIndex, colIndex) => {
                   </th>
                 )
               })}
-              <th />
+              <th style={{ width: getRenderedDeleteWidth() }} />
             </tr>
           </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id}>
                 {columns.map((col, colIndex) => {
-                  const cellMinWidth = getColumnMinWidth(col)
-                  const cellWidth = getColumnWidth(col)
-                  const isDesktopAutoColumn = !isMobile && AUTO_DESKTOP_COLUMN_KEYS.has(col.key)
+                  const cellMinWidth = getRenderedColumnWidth(col, colIndex)
+                  const cellWidth = getRenderedColumnWidth(col, colIndex)
 
                   return (
                     <td
@@ -1491,20 +1548,19 @@ const pasteText = (text, rowIndex, colIndex) => {
                       onMouseDown={() => handleMouseDown(rowIndex, colIndex)}
                       onMouseEnter={() => handleMouseEnter(rowIndex, colIndex)}
                       style={{
-                        minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
-                        width: isDesktopAutoColumn ? 'auto' : cellWidth
+                        minWidth: cellMinWidth,
+                        width: cellWidth
                       }}
                     >
                       <input
                         className="cell-input"
                         style={{
                           display: 'block',
-                          minWidth: isDesktopAutoColumn ? '0px' : cellMinWidth,
-                          width: isDesktopAutoColumn ? 'auto' : '100%',
+                          minWidth: cellMinWidth,
+                          width: '100%',
                           boxSizing: 'border-box',
                           minHeight: '34px'
                         }}
-                        size={isDesktopAutoColumn ? 16 : undefined}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
                         value={row[col.key] ?? ''}
@@ -1516,7 +1572,7 @@ const pasteText = (text, rowIndex, colIndex) => {
                     </td>
                   )
                 })}
-                <td className="delete-cell">
+                <td className="delete-cell" style={{ width: getRenderedDeleteWidth() }}>
                   <button className="btn danger" onClick={() => onDeleteRow(row.id)}>
                     삭제
                   </button>
@@ -1529,8 +1585,6 @@ const pasteText = (text, rowIndex, colIndex) => {
     </>
   )
 }
-
-
 
 
 function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
