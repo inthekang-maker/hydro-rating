@@ -1523,11 +1523,11 @@ function SpreadsheetGrid({
   width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
   boxSizing: 'border-box',
 
-  minHeight: isMobile ? '34px' : '38px',
+  minHeight: isMobile ? '34px' : '35px',
   padding: isMobile ? '4px' : '6px',
 
   fontSize: isMobile ? '12px' : '13px',
-  fontWeight: '500'
+  fontWeight: '400'
 }}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
