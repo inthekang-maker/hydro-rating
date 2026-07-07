@@ -1526,8 +1526,8 @@ function SpreadsheetGrid({
   minHeight: isMobile ? '34px' : '38px',
   padding: isMobile ? '4px' : '6px',
 
-  fontSize: isMobile ? '12px' : '14px',
-  fontWeight: '600'
+  fontSize: isMobile ? '12px' : '13px',
+  fontWeight: '500'
 }}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
