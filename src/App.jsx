@@ -1518,12 +1518,17 @@ function SpreadsheetGrid({
                       <input
                         className="cell-input"
                         style={{
-                          display: 'block',
-                          minWidth: cellMinWidth,
-                          width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
-                          boxSizing: 'border-box',
-                          minHeight: '34px'
-                        }}
+  display: 'block',
+  minWidth: cellMinWidth,
+  width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
+  boxSizing: 'border-box',
+
+  minHeight: isMobile ? '34px' : '38px',
+  padding: isMobile ? '4px' : '6px',
+
+  fontSize: isMobile ? '12px' : '14px',
+  fontWeight: '600'
+}}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
                         value={row[col.key] ?? ''}
