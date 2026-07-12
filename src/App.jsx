@@ -488,7 +488,16 @@ const APP_STATE_SYNC_KEY = 'hydro-pwa-app-state-sync-v3'
 const APP_STATE_CLIENT_ID_KEY = 'hydro-pwa-app-client-id-v1'
 const APP_STATE_SAVE_DEBOUNCE_MS = 700
 const APP_STATE_SAVE_RETRY_MS = 5000
+
 const APP_STATE_LEGACY_ID = 'main'
+const APP_STATE_STATION_ROW_SUFFIX = '::station::'
+
+const makeScopedStationRowId = (scope, stationId) =>
+  `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}${String(stationId || '').trim()}`
+
+const makeScopedStationRowPrefix = (scope) =>
+  `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}`
+
 
 const toSafeRevision = (value) => {
   const n = Number(value)
@@ -581,6 +590,7 @@ const buildAppStatePayload = (groups, clientId) => {
   }
 }
 
+
 const extractGroupsFromAppStatePayload = (payload) => {
   const loadedGroups = payload?.groups
   const loadedStations = payload?.stations
@@ -601,6 +611,91 @@ const extractGroupsFromAppStatePayload = (payload) => {
 
   return null
 }
+
+const buildStationRecordPayload = (group, groupIndex, station, stationIndex) => ({
+  version: 3,
+  groupId: group.id,
+  groupName: group.name || '그룹 없음',
+  groupOrder: groupIndex,
+  stationOrder: stationIndex,
+  station: normalizeStation(station)
+})
+
+const buildStationRecordDescriptors = (groups, scope) => {
+  const records = []
+  normalizeGroups(groups).forEach((group, groupIndex) => {
+    (group.stations || []).forEach((station, stationIndex) => {
+      const normalizedStation = normalizeStation(station)
+      records.push({
+        rowId: makeScopedStationRowId(scope, normalizedStation.id),
+        stationId: normalizedStation.id,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupOrder: groupIndex,
+        stationOrder: stationIndex,
+        payload: buildStationRecordPayload(group, groupIndex, normalizedStation, stationIndex)
+      })
+    })
+  })
+  return records
+}
+
+const extractGroupsFromStationRows = (rows) => {
+  const grouped = new Map()
+  const safeRows = Array.isArray(rows) ? rows : []
+
+  safeRows.forEach((row, fallbackIndex) => {
+    const payload = row?.payload || {}
+    const rowId = String(row?.id || '')
+    const stationFromPayload = payload.station || {}
+    const parsedStationId = String(stationFromPayload.id || rowId.split(APP_STATE_STATION_ROW_SUFFIX).pop() || '').trim() || makeId()
+    const station = normalizeStation({
+      ...stationFromPayload,
+      id: parsedStationId
+    })
+
+    const groupId = String(payload.groupId || '').trim() || `group_${fallbackIndex}`
+    const groupName = String(payload.groupName || '그룹 없음').trim() || '그룹 없음'
+    const groupOrderValue = num(payload.groupOrder)
+    const stationOrderValue = num(payload.stationOrder)
+    const groupOrder = groupOrderValue === null ? fallbackIndex : groupOrderValue
+    const stationOrder = stationOrderValue === null ? fallbackIndex : stationOrderValue
+
+    if (!grouped.has(groupId)) {
+      grouped.set(groupId, {
+        id: groupId,
+        name: groupName,
+        order: groupOrder,
+        stations: []
+      })
+    }
+
+    const group = grouped.get(groupId)
+    group.name = group.name || groupName
+    group.order = Math.min(group.order ?? groupOrder, groupOrder)
+    group.stations.push({ station, order: stationOrder })
+  })
+
+  return Array.from(grouped.values())
+    .sort((a, b) => {
+      const orderDiff = (a.order ?? 0) - (b.order ?? 0)
+      if (orderDiff !== 0) return orderDiff
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
+    })
+    .map((group) => ({
+      id: group.id,
+      name: group.name || '그룹 없음',
+      stations: group.stations
+        .slice()
+        .sort((a, b) => {
+          const orderDiff = (a.order ?? 0) - (b.order ?? 0)
+          if (orderDiff !== 0) return orderDiff
+          return String(a.station.name || '').localeCompare(String(b.station.name || ''), 'ko')
+        })
+        .map(({ station }) => station)
+    }))
+}
+
 
 const cloneSerializable = (value) => {
   if (value === undefined) return undefined
@@ -640,7 +735,7 @@ const mergeThreeWaySerializable = (base, current, remote) => {
       return mergeIdObjectArrayThreeWay(base, current, remote)
     }
 
-    return cloneSerializable(current !== undefined ? current : remote)
+    return mergeArrayByIndexThreeWay(base, current, remote)
   }
 
   if (isPlainObject(base) || isPlainObject(current) || isPlainObject(remote)) {
@@ -661,6 +756,20 @@ const mergeThreeWaySerializable = (base, current, remote) => {
   }
 
   return cloneSerializable(current !== undefined ? current : remote)
+}
+
+const mergeArrayByIndexThreeWay = (base = [], current = [], remote = []) => {
+  const baseArr = Array.isArray(base) ? base : []
+  const currentArr = Array.isArray(current) ? current : []
+  const remoteArr = Array.isArray(remote) ? remote : []
+  const maxLength = Math.max(baseArr.length, currentArr.length, remoteArr.length)
+  const merged = []
+
+  for (let i = 0; i < maxLength; i += 1) {
+    merged.push(mergeThreeWaySerializable(baseArr[i], currentArr[i], remoteArr[i]))
+  }
+
+  return merged
 }
 
 const mergeIdObjectArrayThreeWay = (base = [], current = [], remote = []) => {
@@ -4278,6 +4387,7 @@ export default function App() {
   const suppressNextPersistRef = useRef(false)
   const savingReasonRef = useRef('')
 
+
   const queueNextSave = (delay = APP_STATE_SAVE_DEBOUNCE_MS, reason = 'queued') => {
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
@@ -4315,8 +4425,70 @@ export default function App() {
     return response.data || null
   }
 
-  const persistAppState = async ({
-    nextPayload,
+  const readServerStationRows = async () => {
+    const selectFields =
+      supportsRevisionRef.current === false ? 'id, payload, updated_at' : 'id, payload, updated_at, revision'
+    const prefix = makeScopedStationRowPrefix(storageScope)
+
+    let response = await supabase
+      .from('app_state')
+      .select(selectFields)
+      .like('id', `${prefix}%`)
+      .order('id', { ascending: true })
+
+    if (
+      response.error &&
+      supportsRevisionRef.current !== false &&
+      isMissingRevisionColumnError(response.error)
+    ) {
+      supportsRevisionRef.current = false
+      response = await supabase
+        .from('app_state')
+        .select('id, payload, updated_at')
+        .like('id', `${prefix}%`)
+        .order('id', { ascending: true })
+    }
+
+    if (response.error) {
+      throw response.error
+    }
+
+    return response.data || []
+  }
+
+  const readServerStationRow = async (rowId) => {
+    const selectFields =
+      supportsRevisionRef.current === false ? 'id, payload, updated_at' : 'id, payload, updated_at, revision'
+
+    let response = await supabase
+      .from('app_state')
+      .select(selectFields)
+      .eq('id', rowId)
+      .maybeSingle()
+
+    if (
+      response.error &&
+      supportsRevisionRef.current !== false &&
+      isMissingRevisionColumnError(response.error)
+    ) {
+      supportsRevisionRef.current = false
+      response = await supabase
+        .from('app_state')
+        .select('id, payload, updated_at')
+        .eq('id', rowId)
+        .maybeSingle()
+    }
+
+    if (response.error) {
+      throw response.error
+    }
+
+    return response.data || null
+  }
+
+  const persistStationRow = async ({
+    rowId,
+    payload,
     expectedUpdatedAt = '',
     expectedRevision = null,
     allowInsert = true
@@ -4331,19 +4503,20 @@ export default function App() {
         const { data, error } = await supabase
           .from('app_state')
           .insert({
-            id: APP_STATE_ID,
-            payload: nextPayload,
+            id: rowId,
+            payload,
             updated_at: startedAt,
             revision: insertedRevision
           })
-          .select('updated_at, payload, revision')
+          .select('id, updated_at, payload, revision')
           .maybeSingle()
 
         if (error) {
           if (isMissingRevisionColumnError(error)) {
             supportsRevisionRef.current = false
-            return persistAppState({
-              nextPayload,
+            return persistStationRow({
+              rowId,
+              payload,
               expectedUpdatedAt,
               expectedRevision: null,
               allowInsert
@@ -4365,19 +4538,20 @@ export default function App() {
         const query = supabase
           .from('app_state')
           .update({
-            payload: nextPayload,
+            payload,
             updated_at: startedAt,
             revision: nextRevision
           })
-          .eq('id', APP_STATE_ID)
+          .eq('id', rowId)
           .eq('revision', safeExpectedRevision)
 
-        const { data, error } = await query.select('updated_at, payload, revision').maybeSingle()
+        const { data, error } = await query.select('id, updated_at, payload, revision').maybeSingle()
         if (error) {
           if (isMissingRevisionColumnError(error)) {
             supportsRevisionRef.current = false
-            return persistAppState({
-              nextPayload,
+            return persistStationRow({
+              rowId,
+              payload,
               expectedUpdatedAt,
               expectedRevision: null,
               allowInsert
@@ -4394,13 +4568,13 @@ export default function App() {
         .from('app_state')
         .upsert(
           {
-            id: APP_STATE_ID,
-            payload: nextPayload,
+            id: rowId,
+            payload,
             updated_at: startedAt
           },
           { onConflict: 'id' }
         )
-        .select('updated_at, payload')
+        .select('id, updated_at, payload')
         .maybeSingle()
 
       if (error) throw error
@@ -4410,18 +4584,24 @@ export default function App() {
     const query = supabase
       .from('app_state')
       .update({
-        payload: nextPayload,
+        payload,
         updated_at: startedAt
       })
-      .eq('id', APP_STATE_ID)
+      .eq('id', rowId)
 
     if (expectedUpdatedAt) {
       query.eq('updated_at', expectedUpdatedAt)
     }
 
-    const { data, error } = await query.select('updated_at, payload').maybeSingle()
+    const { data, error } = await query.select('id, updated_at, payload').maybeSingle()
     if (error) throw error
     return data || null
+  }
+
+  const deleteStationRow = async (rowId) => {
+    const { error } = await supabase.from('app_state').delete().eq('id', rowId)
+    if (error) throw error
+    return true
   }
 
   const applyLoadedState = (nextGroups, nextUpdatedAt = '', nextRevision = null, message = '서버 값을 다시 불러왔습니다.') => {
@@ -4457,149 +4637,115 @@ export default function App() {
     setSaveStatus(reason === 'retry' ? '저장 재시도 중...' : '저장 중...')
 
     const currentGroups = normalizeGroups(groupsRef.current)
-    const currentPayload = buildAppStatePayload(currentGroups, CLIENT_ID, storageScope)
+    const currentRecords = buildStationRecordDescriptors(currentGroups, storageScope)
+    const baseRecords = buildStationRecordDescriptors(lastCommittedGroupsRef.current || [], storageScope)
+    const currentMap = new Map(currentRecords.map((record) => [record.rowId, record]))
+    const baseMap = new Map(baseRecords.map((record) => [record.rowId, record]))
 
     try {
-      const latestScoped = await readServerAppState(APP_STATE_ID).catch((error) => {
-        throw error
-      })
-      const latestLegacy = latestScoped ? null : await readServerAppState(APP_STATE_LEGACY_ID).catch(() => null)
-      const latestServer = latestScoped || latestLegacy
-      const latestServerId = latestScoped ? APP_STATE_ID : latestLegacy ? APP_STATE_LEGACY_ID : null
+      const latestStationRows = await readServerStationRows().catch(() => [])
+      const latestStationMap = new Map(
+        (Array.isArray(latestStationRows) ? latestStationRows : []).map((row) => [String(row.id || ''), row])
+      )
+      const latestHasV3Rows = latestStationRows.length > 0
 
-      if (!latestServer) {
-        const inserted = await persistAppState({
-          nextPayload: currentPayload,
-          expectedUpdatedAt: '',
-          expectedRevision: null,
-          allowInsert: true
-        })
-        if (!inserted) {
-          throw new Error('저장 결과를 확인할 수 없습니다.')
+      const saveOneRecord = async (currentRecord, baseRecord, remoteRow, depth = 0) => {
+        const basePayload = baseRecord?.payload ?? null
+        const currentPayload = currentRecord.payload
+        const remotePayload = remoteRow?.payload ?? null
+        const currentEqualsBase = baseRecord ? deepEqualSerializable(currentPayload, basePayload) : false
+        const remoteEqualsBase = baseRecord ? deepEqualSerializable(remotePayload, basePayload) : false
+
+        if (remoteRow && currentEqualsBase) {
+          return true
         }
 
-        const savedAt = String(inserted.updated_at || new Date().toISOString())
-        lastServerUpdatedAtRef.current = String(inserted.updated_at || '')
-        lastServerRevisionRef.current = toSafeRevision(inserted.revision)
-        lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
-        setLastSavedAt(savedAt)
-        setSaveStatus('저장 완료')
-        dirtyRef.current = false
+        let payloadToSave = currentPayload
+        let expectedUpdatedAt = String(remoteRow?.updated_at || '')
+        let expectedRevision = toSafeRevision(remoteRow?.revision)
+        let allowInsert = !remoteRow
 
-        safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
-          savedAt,
-          serverUpdatedAt: lastServerUpdatedAtRef.current,
-          serverRevision: lastServerRevisionRef.current,
-          clientId: CLIENT_ID,
-          scope: storageScope
+        if (remoteRow && baseRecord && !currentEqualsBase && !remoteEqualsBase) {
+          payloadToSave = mergeThreeWaySerializable(basePayload, currentPayload, remotePayload)
+          hadConflictMerge = true
+        }
+
+        const saved = await persistStationRow({
+          rowId: currentRecord.rowId,
+          payload: payloadToSave,
+          expectedUpdatedAt,
+          expectedRevision,
+          allowInsert
         })
-        safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
-        return
-      }
 
-      const latestUpdatedAt = String(latestServer.updated_at || '')
-      const latestRevision = toSafeRevision(latestServer.revision)
-      const loadedUpdatedAt = String(lastServerUpdatedAtRef.current || '')
-      const loadedRevision = toSafeRevision(lastServerRevisionRef.current)
+        if (saved) {
+          return true
+        }
 
-      const revisionSupported = supportsRevisionRef.current !== false && latestRevision !== null
+        if (depth >= 1) {
+          return false
+        }
 
-      if (
-        revisionSupported &&
-        loadedRevision !== null &&
-        latestRevision !== null &&
-        loadedRevision !== latestRevision
-      ) {
-        const conflictGroups = extractGroupsFromAppStatePayload(latestServer.payload) || currentGroups
-        applyLoadedState(
-          conflictGroups,
-          latestUpdatedAt,
-          latestRevision,
-          '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-        )
-        safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-          groups: normalizeGroups(currentGroups),
-          updatedAt: new Date().toISOString(),
-          clientId: CLIENT_ID,
-          scope: storageScope,
-          reason: 'conflict'
-        })
-        return
-      }
+        const latestRow = await readServerStationRow(currentRecord.rowId).catch(() => null)
+        if (latestRow) {
+          return saveOneRecord(currentRecord, baseRecord, latestRow, depth + 1)
+        }
 
-      if (
-        !revisionSupported &&
-        loadedUpdatedAt &&
-        latestUpdatedAt &&
-        latestUpdatedAt !== loadedUpdatedAt
-      ) {
-        const conflictGroups = extractGroupsFromAppStatePayload(latestServer.payload) || currentGroups
-        applyLoadedState(
-          conflictGroups,
-          latestUpdatedAt,
-          latestRevision,
-          '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-        )
-        safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-          groups: normalizeGroups(currentGroups),
-          updatedAt: new Date().toISOString(),
-          clientId: CLIENT_ID,
-          scope: storageScope,
-          reason: 'conflict'
-        })
-        return
-      }
-
-      const shouldAllowInsert = latestServerId === APP_STATE_LEGACY_ID
-
-      const saved = await persistAppState({
-        nextPayload: currentPayload,
-        expectedUpdatedAt: shouldAllowInsert ? '' : latestUpdatedAt,
-        expectedRevision: shouldAllowInsert ? null : (revisionSupported ? latestRevision : null),
-        allowInsert: shouldAllowInsert || false
-      })
-      if (!saved) {
-        const refetched = await readServerAppState(APP_STATE_ID).catch(() => null)
-        const refetchedUpdatedAt = String(refetched?.updated_at || '')
-        const refetchedRevision = toSafeRevision(refetched?.revision)
-
-        const revisionMismatch =
-          revisionSupported &&
-          latestRevision !== null &&
-          refetchedRevision !== null &&
-          refetchedRevision !== latestRevision
-
-        const updatedAtMismatch =
-          !revisionSupported &&
-          refetchedUpdatedAt &&
-          refetchedUpdatedAt !== latestUpdatedAt
-
-        if (revisionMismatch || updatedAtMismatch) {
-          const conflictGroups = extractGroupsFromAppStatePayload(refetched?.payload) || currentGroups
-          applyLoadedState(
-            conflictGroups,
-            refetchedUpdatedAt || latestUpdatedAt,
-            refetchedRevision,
-            '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-          )
-          safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-            groups: normalizeGroups(currentGroups),
-            updatedAt: new Date().toISOString(),
-            clientId: CLIENT_ID,
-            scope: storageScope,
-            reason: 'conflict'
+        if (!remoteRow) {
+          const retryInsert = await persistStationRow({
+            rowId: currentRecord.rowId,
+            payload: currentPayload,
+            expectedUpdatedAt: '',
+            expectedRevision: null,
+            allowInsert: true
           })
-          return
+          if (retryInsert) return true
         }
-        throw new Error('저장 충돌이 발생했습니다.')
+
+        return false
       }
 
-      const savedAt = String(saved.updated_at || new Date().toISOString())
-      lastServerUpdatedAtRef.current = String(saved.updated_at || latestUpdatedAt || '')
-      lastServerRevisionRef.current = toSafeRevision(saved.revision)
+      let hadConflictMerge = false
+      let changedCount = 0
+      let deletedCount = 0
+
+      for (const currentRecord of currentRecords) {
+        const baseRecord = baseMap.get(currentRecord.rowId) || null
+        const remoteRow = latestStationMap.get(currentRecord.rowId) || null
+        const basePayload = baseRecord?.payload ?? null
+        const currentPayload = currentRecord.payload
+        const currentEqualsBase = baseRecord ? deepEqualSerializable(currentPayload, basePayload) : false
+
+        if (remoteRow && currentEqualsBase) {
+          continue
+        }
+
+        if (!remoteRow && currentEqualsBase && latestHasV3Rows) {
+          // 서버에 해당 행이 사라진 경우에는 현재 값을 복구한다.
+        }
+
+        const saved = await saveOneRecord(currentRecord, baseRecord, remoteRow)
+        if (!saved) {
+          throw new Error('저장 충돌이 발생했습니다.')
+        }
+        changedCount += 1
+      }
+
+      const deletedRowIds = baseRecords
+        .map((record) => record.rowId)
+        .filter((rowId) => !currentMap.has(rowId))
+
+      for (const rowId of deletedRowIds) {
+        await deleteStationRow(rowId)
+        deletedCount += 1
+      }
+
+      const savedAt = new Date().toISOString()
       lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
+      lastServerUpdatedAtRef.current = savedAt
+      lastServerRevisionRef.current = null
       setLastSavedAt(savedAt)
-      setSaveStatus('저장 완료')
+      setSaveStatus(hadConflictMerge ? '충돌 자동 병합 후 저장 완료' : '저장 완료')
       dirtyRef.current = false
 
       safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
@@ -4607,7 +4753,10 @@ export default function App() {
         serverUpdatedAt: lastServerUpdatedAtRef.current,
         serverRevision: lastServerRevisionRef.current,
         clientId: CLIENT_ID,
-        scope: storageScope
+        scope: storageScope,
+        format: 'v3',
+        changedCount,
+        deletedCount
       })
       safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
     } catch (error) {
@@ -4629,19 +4778,32 @@ export default function App() {
 
   useEffect(() => {
     const loadAppState = async () => {
+      let stationRows = []
       let scopedData = null
       let legacyData = null
+      let loadedFromV3 = false
+
       try {
-        scopedData = await readServerAppState(APP_STATE_ID)
+        stationRows = await readServerStationRows()
       } catch (error) {
-        console.error('loadStations scoped error:', error)
+        console.error('loadStations v3 error:', error)
       }
 
-      if (!scopedData) {
+      if (Array.isArray(stationRows) && stationRows.length > 0) {
+        loadedFromV3 = true
+      } else {
         try {
-          legacyData = await readServerAppState(APP_STATE_LEGACY_ID)
+          scopedData = await readServerAppState(APP_STATE_ID)
         } catch (error) {
-          console.error('loadStations legacy error:', error)
+          console.error('loadStations scoped error:', error)
+        }
+
+        if (!scopedData) {
+          try {
+            legacyData = await readServerAppState(APP_STATE_LEGACY_ID)
+          } catch (error) {
+            console.error('loadStations legacy error:', error)
+          }
         }
       }
 
@@ -4655,25 +4817,46 @@ export default function App() {
       let serverRevision = null
       let shouldMigrate = false
 
-      const chosenServerData = scopedData || legacyData
-      const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
-
-      if (serverGroups && serverGroups.length > 0) {
-        nextGroups = serverGroups
-        savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
-        serverUpdatedAt = String(chosenServerData?.updated_at || '')
-        serverRevision = toSafeRevision(chosenServerData?.revision)
-        sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
-        shouldMigrate = Boolean(legacyData && !scopedData)
+      if (loadedFromV3) {
+        nextGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
+        savedAt = String(
+          stationRows.reduce((latest, row) => {
+            const ts = String(row?.updated_at || '')
+            if (!latest) return ts
+            return String(ts) > String(latest) ? ts : latest
+          }, '')
+        )
+        serverUpdatedAt = String(
+          stationRows.reduce((latest, row) => {
+            const ts = String(row?.updated_at || '')
+            if (!latest) return ts
+            return String(ts) > String(latest) ? ts : latest
+          }, '')
+        )
+        const revisions = stationRows.map((row) => toSafeRevision(row?.revision)).filter((v) => v !== null)
+        serverRevision = revisions.length > 0 ? Math.max(...revisions) : null
+        sourceLabel = '서버 V3'
       } else {
-        const localDraftGroups = Array.isArray(localDraft?.groups) ? normalizeGroups(localDraft.groups) : null
-        if (localDraftGroups && localDraftGroups.length > 0) {
-          nextGroups = localDraftGroups
-          savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
-          sourceLabel = '로컬 복구'
+        const chosenServerData = scopedData || legacyData
+        const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
+
+        if (serverGroups && serverGroups.length > 0) {
+          nextGroups = serverGroups
+          savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
+          serverUpdatedAt = String(chosenServerData?.updated_at || '')
+          serverRevision = toSafeRevision(chosenServerData?.revision)
+          sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
           shouldMigrate = true
         } else {
-          savedAt = String(localSync?.savedAt || '')
+          const localDraftGroups = Array.isArray(localDraft?.groups) ? normalizeGroups(localDraft.groups) : null
+          if (localDraftGroups && localDraftGroups.length > 0) {
+            nextGroups = localDraftGroups
+            savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
+            sourceLabel = '로컬 복구'
+            shouldMigrate = true
+          } else {
+            savedAt = String(localSync?.savedAt || '')
+          }
         }
       }
 
@@ -4685,7 +4868,7 @@ export default function App() {
       lastCommittedGroupsRef.current = cloneSerializable(nextGroups)
       lastServerUpdatedAtRef.current = serverUpdatedAt
       lastServerRevisionRef.current = serverRevision
-      supportsRevisionRef.current = toSafeRevision(serverRevision) !== null ? true : supportsRevisionRef.current
+      supportsRevisionRef.current = supportsRevisionRef.current === false ? false : true
       appStateReadyRef.current = true
       setStationsLoaded(true)
 
