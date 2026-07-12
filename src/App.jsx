@@ -490,25 +490,6 @@ const APP_STATE_SAVE_DEBOUNCE_MS = 700
 const APP_STATE_SAVE_RETRY_MS = 5000
 const APP_STATE_LEGACY_ID = 'main'
 
-const toSafeRevision = (value) => {
-  const n = Number(value)
-  return Number.isInteger(n) && n >= 0 ? n : null
-}
-
-const isDuplicateKeyError = (error) => {
-  const code = String(error?.code || '')
-  const message = String(error?.message || error?.details || '').toLowerCase()
-  return code === '23505' || message.includes('duplicate key')
-}
-
-const isMissingRevisionColumnError = (error) => {
-  const message = String(error?.message || error?.details || '').toLowerCase()
-  return (
-    message.includes('revision') &&
-    (message.includes('does not exist') || message.includes('column'))
-  )
-}
-
 const getAppStorageScope = () => {
   if (typeof window === 'undefined') return 'default'
   const host = String(window.location.hostname || 'default').trim().toLowerCase()
@@ -4268,8 +4249,6 @@ export default function App() {
   const groupsRef = useRef(groups)
   const lastCommittedGroupsRef = useRef(cloneSerializable(groups))
   const lastServerUpdatedAtRef = useRef('')
-  const lastServerRevisionRef = useRef(null)
-  const supportsRevisionRef = useRef(null)
   const appStateReadyRef = useRef(false)
   const saveTimerRef = useRef(null)
   const retryTimerRef = useRef(null)
@@ -4286,108 +4265,21 @@ export default function App() {
   }
 
   const readServerAppState = async (id) => {
-    const selectFields =
-      supportsRevisionRef.current === false ? 'payload, updated_at' : 'payload, updated_at, revision'
-
-    let response = await supabase
+    const { data, error } = await supabase
       .from('app_state')
-      .select(selectFields)
+      .select('payload, updated_at')
       .eq('id', id)
       .maybeSingle()
 
-    if (
-      response.error &&
-      supportsRevisionRef.current !== false &&
-      isMissingRevisionColumnError(response.error)
-    ) {
-      supportsRevisionRef.current = false
-      response = await supabase
-        .from('app_state')
-        .select('payload, updated_at')
-        .eq('id', id)
-        .maybeSingle()
+    if (error) {
+      throw error
     }
 
-    if (response.error) {
-      throw response.error
-    }
-
-    return response.data || null
+    return data || null
   }
 
-  const persistAppState = async ({
-    nextPayload,
-    expectedUpdatedAt = '',
-    expectedRevision = null,
-    allowInsert = true
-  }) => {
+  const persistAppState = async (nextPayload, expectedUpdatedAt = '', allowInsert = true) => {
     const startedAt = new Date().toISOString()
-    const revisionSupported = supportsRevisionRef.current !== false
-    const safeExpectedRevision = toSafeRevision(expectedRevision)
-
-    if (revisionSupported) {
-      if (safeExpectedRevision === null && allowInsert) {
-        const insertedRevision = 1
-        const { data, error } = await supabase
-          .from('app_state')
-          .insert({
-            id: APP_STATE_ID,
-            payload: nextPayload,
-            updated_at: startedAt,
-            revision: insertedRevision
-          })
-          .select('updated_at, payload, revision')
-          .maybeSingle()
-
-        if (error) {
-          if (isMissingRevisionColumnError(error)) {
-            supportsRevisionRef.current = false
-            return persistAppState({
-              nextPayload,
-              expectedUpdatedAt,
-              expectedRevision: null,
-              allowInsert
-            })
-          }
-
-          if (isDuplicateKeyError(error)) {
-            return null
-          }
-
-          throw error
-        }
-
-        return data || null
-      }
-
-      if (safeExpectedRevision !== null) {
-        const nextRevision = safeExpectedRevision + 1
-        const query = supabase
-          .from('app_state')
-          .update({
-            payload: nextPayload,
-            updated_at: startedAt,
-            revision: nextRevision
-          })
-          .eq('id', APP_STATE_ID)
-          .eq('revision', safeExpectedRevision)
-
-        const { data, error } = await query.select('updated_at, payload, revision').maybeSingle()
-        if (error) {
-          if (isMissingRevisionColumnError(error)) {
-            supportsRevisionRef.current = false
-            return persistAppState({
-              nextPayload,
-              expectedUpdatedAt,
-              expectedRevision: null,
-              allowInsert
-            })
-          }
-          throw error
-        }
-        return data || null
-      }
-    }
 
     if (!expectedUpdatedAt && allowInsert) {
       const { data, error } = await supabase
@@ -4424,18 +4316,6 @@ export default function App() {
     return data || null
   }
 
-  const applyLoadedState = (nextGroups, nextUpdatedAt = '', nextRevision = null, message = '서버 값을 다시 불러왔습니다.') => {
-    const normalizedGroups = normalizeGroups(nextGroups)
-    suppressNextPersistRef.current = true
-    groupsRef.current = normalizedGroups
-    setGroups(normalizedGroups)
-    lastCommittedGroupsRef.current = cloneSerializable(normalizedGroups)
-    lastServerUpdatedAtRef.current = String(nextUpdatedAt || lastServerUpdatedAtRef.current || '')
-    lastServerRevisionRef.current = toSafeRevision(nextRevision)
-    dirtyRef.current = false
-    setSaveStatus(message)
-  }
-
   const flushAppStateSave = async (reason = 'manual', retryCount = 0) => {
     if (!stationsLoaded || !appStateReadyRef.current) return
     if (saveInFlightRef.current) {
@@ -4459,6 +4339,17 @@ export default function App() {
     const currentGroups = normalizeGroups(groupsRef.current)
     const currentPayload = buildAppStatePayload(currentGroups, CLIENT_ID, storageScope)
 
+    const applyLoadedState = (nextGroups, nextUpdatedAt = '', message = '서버 값을 다시 불러왔습니다.') => {
+      const normalizedGroups = normalizeGroups(nextGroups)
+      suppressNextPersistRef.current = true
+      groupsRef.current = normalizedGroups
+      setGroups(normalizedGroups)
+      lastCommittedGroupsRef.current = cloneSerializable(normalizedGroups)
+      lastServerUpdatedAtRef.current = String(nextUpdatedAt || lastServerUpdatedAtRef.current || '')
+      dirtyRef.current = false
+      setSaveStatus(message)
+    }
+
     try {
       const latestScoped = await readServerAppState(APP_STATE_ID).catch((error) => {
         throw error
@@ -4467,19 +4358,13 @@ export default function App() {
       const latestServer = latestScoped || latestLegacy
 
       if (!latestServer) {
-        const inserted = await persistAppState({
-          nextPayload: currentPayload,
-          expectedUpdatedAt: '',
-          expectedRevision: null,
-          allowInsert: true
-        })
+        const inserted = await persistAppState(currentPayload, '', true)
         if (!inserted) {
           throw new Error('저장 결과를 확인할 수 없습니다.')
         }
 
         const savedAt = String(inserted.updated_at || new Date().toISOString())
         lastServerUpdatedAtRef.current = String(inserted.updated_at || '')
-        lastServerRevisionRef.current = toSafeRevision(inserted.revision)
         lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
         setLastSavedAt(savedAt)
         setSaveStatus('저장 완료')
@@ -4488,7 +4373,6 @@ export default function App() {
         safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
           savedAt,
           serverUpdatedAt: lastServerUpdatedAtRef.current,
-          serverRevision: lastServerRevisionRef.current,
           clientId: CLIENT_ID,
           scope: storageScope
         })
@@ -4497,95 +4381,21 @@ export default function App() {
       }
 
       const latestUpdatedAt = String(latestServer.updated_at || '')
-      const latestRevision = toSafeRevision(latestServer.revision)
       const loadedUpdatedAt = String(lastServerUpdatedAtRef.current || '')
-      const loadedRevision = toSafeRevision(lastServerRevisionRef.current)
 
-      const revisionSupported = supportsRevisionRef.current !== false && latestRevision !== null
-
-      if (
-        revisionSupported &&
-        loadedRevision !== null &&
-        latestRevision !== null &&
-        loadedRevision !== latestRevision
-      ) {
+      if (loadedUpdatedAt && latestUpdatedAt && latestUpdatedAt !== loadedUpdatedAt) {
         const conflictGroups = extractGroupsFromAppStatePayload(latestServer.payload) || currentGroups
-        applyLoadedState(
-          conflictGroups,
-          latestUpdatedAt,
-          latestRevision,
-          '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-        )
-        safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-          groups: normalizeGroups(currentGroups),
-          updatedAt: new Date().toISOString(),
-          clientId: CLIENT_ID,
-          scope: storageScope,
-          reason: 'conflict'
-        })
+        applyLoadedState(conflictGroups, latestUpdatedAt, '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.')
         return
       }
 
-      if (
-        !revisionSupported &&
-        loadedUpdatedAt &&
-        latestUpdatedAt &&
-        latestUpdatedAt !== loadedUpdatedAt
-      ) {
-        const conflictGroups = extractGroupsFromAppStatePayload(latestServer.payload) || currentGroups
-        applyLoadedState(
-          conflictGroups,
-          latestUpdatedAt,
-          latestRevision,
-          '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-        )
-        safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-          groups: normalizeGroups(currentGroups),
-          updatedAt: new Date().toISOString(),
-          clientId: CLIENT_ID,
-          scope: storageScope,
-          reason: 'conflict'
-        })
-        return
-      }
-
-      const saved = await persistAppState({
-        nextPayload: currentPayload,
-        expectedUpdatedAt: latestUpdatedAt,
-        expectedRevision: revisionSupported ? latestRevision : null,
-        allowInsert: false
-      })
+      const saved = await persistAppState(currentPayload, latestUpdatedAt, false)
       if (!saved) {
         const refetched = await readServerAppState(APP_STATE_ID).catch(() => null)
         const refetchedUpdatedAt = String(refetched?.updated_at || '')
-        const refetchedRevision = toSafeRevision(refetched?.revision)
-
-        const revisionMismatch =
-          revisionSupported &&
-          latestRevision !== null &&
-          refetchedRevision !== null &&
-          refetchedRevision !== latestRevision
-
-        const updatedAtMismatch =
-          !revisionSupported &&
-          refetchedUpdatedAt &&
-          refetchedUpdatedAt !== latestUpdatedAt
-
-        if (revisionMismatch || updatedAtMismatch) {
+        if (refetchedUpdatedAt && refetchedUpdatedAt !== latestUpdatedAt) {
           const conflictGroups = extractGroupsFromAppStatePayload(refetched?.payload) || currentGroups
-          applyLoadedState(
-            conflictGroups,
-            refetchedUpdatedAt || latestUpdatedAt,
-            refetchedRevision,
-            '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.'
-          )
-          safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
-            groups: normalizeGroups(currentGroups),
-            updatedAt: new Date().toISOString(),
-            clientId: CLIENT_ID,
-            scope: storageScope,
-            reason: 'conflict'
-          })
+          applyLoadedState(conflictGroups, refetchedUpdatedAt, '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.')
           return
         }
         throw new Error('저장 충돌이 발생했습니다.')
@@ -4593,7 +4403,6 @@ export default function App() {
 
       const savedAt = String(saved.updated_at || new Date().toISOString())
       lastServerUpdatedAtRef.current = String(saved.updated_at || latestUpdatedAt || '')
-      lastServerRevisionRef.current = toSafeRevision(saved.revision)
       lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
       setLastSavedAt(savedAt)
       setSaveStatus('저장 완료')
@@ -4602,7 +4411,6 @@ export default function App() {
       safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
         savedAt,
         serverUpdatedAt: lastServerUpdatedAtRef.current,
-        serverRevision: lastServerRevisionRef.current,
         clientId: CLIENT_ID,
         scope: storageScope
       })
@@ -4649,7 +4457,6 @@ export default function App() {
       let sourceLabel = '기본값'
       let savedAt = ''
       let serverUpdatedAt = ''
-      let serverRevision = null
       let shouldMigrate = false
 
       const chosenServerData = scopedData || legacyData
@@ -4659,7 +4466,6 @@ export default function App() {
         nextGroups = serverGroups
         savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
         serverUpdatedAt = String(chosenServerData?.updated_at || '')
-        serverRevision = toSafeRevision(chosenServerData?.revision)
         sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
         shouldMigrate = Boolean(legacyData && !scopedData)
       } else {
@@ -4681,8 +4487,6 @@ export default function App() {
       setSaveStatus(`${sourceLabel} 불러옴`)
       lastCommittedGroupsRef.current = cloneSerializable(nextGroups)
       lastServerUpdatedAtRef.current = serverUpdatedAt
-      lastServerRevisionRef.current = serverRevision
-      supportsRevisionRef.current = toSafeRevision(serverRevision) !== null ? true : supportsRevisionRef.current
       appStateReadyRef.current = true
       setStationsLoaded(true)
 
