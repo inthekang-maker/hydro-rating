@@ -498,7 +498,17 @@ const APP_STATE_STATION_ROW_VARIANTS = {
   PROCESS_PLAN: 'processPlan'
 }
 
-const makeScopedStationRowId = (scope, stationId, variant = APP_STATE_STATION_ROW_VARIANTS.INFO) =>
+const APP_STATE_DRAFT_KEY = 'hydro-pwa-app-state-draft-v4'
+const APP_STATE_SYNC_KEY = 'hydro-pwa-app-state-sync-v4'
+const APP_STATE_CLIENT_ID_KEY = 'hydro-pwa-app-client-id-v1'
+const APP_STATE_SAVE_DEBOUNCE_MS = 700
+const APP_STATE_SAVE_RETRY_MS = 5000
+
+const makeScopedStationRowId = (
+  scope,
+  stationId,
+  variant = APP_STATE_STATION_ROW_VARIANTS.INFO
+) =>
   `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}${String(stationId || '').trim()}::${String(variant || APP_STATE_STATION_ROW_VARIANTS.INFO).trim()}`
 
 const makeScopedStationRowPrefix = (scope) =>
@@ -523,6 +533,118 @@ const parseScopedStationRowId = (rowId) => {
     variant,
     isVariantRow: parts.length > 1
   }
+}
+
+const toSafeRevision = (value) => {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 0 ? n : null
+}
+
+const isDuplicateKeyError = (error) => {
+  const code = String(error?.code || '')
+  const message = String(error?.message || error?.details || '').toLowerCase()
+  return code === '23505' || message.includes('duplicate key')
+}
+
+const isMissingRevisionColumnError = (error) => {
+  const message = String(error?.message || error?.details || '').toLowerCase()
+  return (
+    message.includes('revision') &&
+    (message.includes('does not exist') || message.includes('column'))
+  )
+}
+
+const getAppStorageScope = () => {
+  if (typeof window === 'undefined') return 'default'
+  const host = String(window.location.hostname || 'default').trim().toLowerCase()
+  return host || 'default'
+}
+
+const sanitizeStorageScope = (value) =>
+  String(value || 'default')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, '_') || 'default'
+
+const makeScopedStorageKey = (baseKey, scope) => `${baseKey}::${sanitizeStorageScope(scope)}`
+
+const makeScopedAppStateId = (scope) => `app_state::${sanitizeStorageScope(scope)}`
+
+const safeReadJson = (key, fallback = null) => {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return fallback
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+const safeWriteJson = (key, value) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // ignore storage quota / privacy mode errors
+  }
+}
+
+const safeRemoveKey = (key) => {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // ignore storage quota / privacy mode errors
+  }
+}
+
+const makeClientId = () => `client_${Math.random().toString(36).slice(2, 10)}`
+
+const getStoredClientId = (scope = 'default') => {
+  const storageKey = makeScopedStorageKey(APP_STATE_CLIENT_ID_KEY, scope)
+  try {
+    const existing = localStorage.getItem(storageKey)
+    if (existing) return existing
+    const next = makeClientId()
+    localStorage.setItem(storageKey, next)
+    return next
+  } catch {
+    return makeClientId()
+  }
+}
+
+const toTimeValue = (value) => {
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+const buildAppStatePayload = (groups, clientId) => {
+  const now = new Date().toISOString()
+  return {
+    groups: normalizeGroups(groups),
+    stations: flattenGroupsToStations(groups),
+    savedAt: now,
+    clientId
+  }
+}
+
+const extractGroupsFromAppStatePayload = (payload) => {
+  const loadedGroups = payload?.groups
+  const loadedStations = payload?.stations
+
+  if (Array.isArray(loadedGroups) && loadedGroups.length > 0) {
+    return normalizeGroups(loadedGroups)
+  }
+
+  if (Array.isArray(loadedStations) && loadedStations.length > 0) {
+    return normalizeGroups([
+      {
+        id: makeId(),
+        name: '그룹 1',
+        stations: loadedStations
+      }
+    ])
+  }
+
+  return null
 }
 
 const pickStationCore = (station) => ({
@@ -592,8 +714,6 @@ const buildStationRecordDescriptors = (groups, scope) => {
   normalizeGroups(groups).forEach((group, groupIndex) => {
     (group.stations || []).forEach((station, stationIndex) => {
       const normalizedStation = normalizeStation(station)
-      const basePayloadArgs = [group, groupIndex, normalizedStation, stationIndex]
-
       ;[
         APP_STATE_STATION_ROW_VARIANTS.INFO,
         APP_STATE_STATION_ROW_VARIANTS.SECTIONS,
@@ -607,8 +727,14 @@ const buildStationRecordDescriptors = (groups, scope) => {
           groupName: group.name || '그룹 없음',
           groupOrder: groupIndex,
           stationOrder: stationIndex,
-          variant,
-          payload: buildStationRecordPayload(...basePayloadArgs, variant)
+          rowType: variant,
+          payload: buildStationRecordPayload(
+            group,
+            groupIndex,
+            normalizedStation,
+            stationIndex,
+            variant
+          )
         })
       })
     })
@@ -625,14 +751,11 @@ const extractGroupsFromStationRows = (rows) => {
     const rowMeta = parseScopedStationRowId(row?.id)
     const stationFromPayload = isPlainObject(payload.station) ? payload.station : {}
     const stationId = String(
-      payload.stationId || stationFromPayload.id || rowMeta?.stationId || ''
+      payload.stationId ||
+      stationFromPayload.id ||
+      rowMeta?.stationId ||
+      ''
     ).trim() || makeId()
-
-    const rowType = String(
-      payload.rowType ||
-      rowMeta?.variant ||
-      (payload.version >= 4 ? APP_STATE_STATION_ROW_VARIANTS.INFO : 'legacy')
-    ).trim() || 'legacy'
 
     if (!stationsById.has(stationId)) {
       stationsById.set(stationId, {
@@ -664,18 +787,22 @@ const extractGroupsFromStationRows = (rows) => {
       bucket.stationOrder = Math.min(bucket.stationOrder ?? stationOrderValue, stationOrderValue)
     }
 
+    const variant =
+      String(payload.rowType || rowMeta?.variant || '').trim() ||
+      (payload.version >= 4 ? APP_STATE_STATION_ROW_VARIANTS.INFO : 'legacy')
+
     const entry = {
       row,
       fallbackIndex
     }
 
-    if (rowType === APP_STATE_STATION_ROW_VARIANTS.INFO) {
+    if (variant === APP_STATE_STATION_ROW_VARIANTS.INFO) {
       bucket.rows.info = entry
-    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.SECTIONS) {
+    } else if (variant === APP_STATE_STATION_ROW_VARIANTS.SECTIONS) {
       bucket.rows.sections = entry
-    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS) {
+    } else if (variant === APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS) {
       bucket.rows.measurements = entry
-    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN) {
+    } else if (variant === APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN) {
       bucket.rows.processPlan = entry
     } else {
       bucket.legacyRows.push(entry)
@@ -787,8 +914,12 @@ const extractGroupsFromStationRows = (rows) => {
       station,
       groupId,
       groupName,
-      groupOrder: groupOrderCandidates.length ? Math.min(...groupOrderCandidates, bucket.groupOrder ?? bucket.order) : bucket.groupOrder ?? bucket.order,
-      stationOrder: stationOrderCandidates.length ? Math.min(...stationOrderCandidates, bucket.stationOrder ?? bucket.order) : bucket.stationOrder ?? bucket.order
+      groupOrder: groupOrderCandidates.length
+        ? Math.min(...groupOrderCandidates, bucket.groupOrder ?? bucket.order)
+        : bucket.groupOrder ?? bucket.order,
+      stationOrder: stationOrderCandidates.length
+        ? Math.min(...stationOrderCandidates, bucket.stationOrder ?? bucket.order)
+        : bucket.stationOrder ?? bucket.order
     }
   })
 
@@ -805,7 +936,10 @@ const extractGroupsFromStationRows = (rows) => {
 
     const group = grouped.get(entry.groupId)
     group.name = group.name || entry.groupName || '그룹 없음'
-    group.order = Math.min(group.order ?? entry.groupOrder ?? entry.stationOrder ?? 0, entry.groupOrder ?? entry.stationOrder ?? 0)
+    group.order = Math.min(
+      group.order ?? entry.groupOrder ?? entry.stationOrder ?? 0,
+      entry.groupOrder ?? entry.stationOrder ?? 0
+    )
     group.stations.push({ station: entry.station, order: entry.stationOrder ?? 0 })
   })
 
@@ -828,7 +962,6 @@ const extractGroupsFromStationRows = (rows) => {
         .map(({ station }) => station)
     }))
 }
-
 const cloneSerializable = (value) => {
   if (value === undefined) return undefined
   try {
@@ -4779,12 +4912,7 @@ export default function App() {
       const latestStationMap = new Map(
         (Array.isArray(latestStationRows) ? latestStationRows : []).map((row) => [String(row.id || ''), row])
       )
-
-      const desiredRowIds = new Set(currentRecords.map((record) => record.rowId))
-
-      let hadConflictMerge = false
-      let changedCount = 0
-      let deletedCount = 0
+      const latestHasV3Rows = latestStationRows.length > 0
 
       const saveOneRecord = async (currentRecord, baseRecord, remoteRow, depth = 0) => {
         const basePayload = baseRecord?.payload ?? null
@@ -4842,6 +4970,10 @@ export default function App() {
         return false
       }
 
+      let hadConflictMerge = false
+      let changedCount = 0
+      let deletedCount = 0
+
       for (const currentRecord of currentRecords) {
         const baseRecord = baseMap.get(currentRecord.rowId) || null
         const remoteRow = latestStationMap.get(currentRecord.rowId) || null
@@ -4853,6 +4985,10 @@ export default function App() {
           continue
         }
 
+        if (!remoteRow && currentEqualsBase && latestHasV3Rows) {
+          // 서버에 해당 행이 사라진 경우에는 현재 값을 복구한다.
+        }
+
         const saved = await saveOneRecord(currentRecord, baseRecord, remoteRow)
         if (!saved) {
           throw new Error('저장 충돌이 발생했습니다.')
@@ -4860,18 +4996,9 @@ export default function App() {
         changedCount += 1
       }
 
-      const deletedRowIds = new Set(
-        baseRecords
-          .map((record) => record.rowId)
-          .filter((rowId) => !currentMap.has(rowId))
-      )
-
-      for (const row of Array.isArray(latestStationRows) ? latestStationRows : []) {
-        const rowId = String(row?.id || '')
-        if (rowId && !desiredRowIds.has(rowId)) {
-          deletedRowIds.add(rowId)
-        }
-      }
+      const deletedRowIds = baseRecords
+        .map((record) => record.rowId)
+        .filter((rowId) => !currentMap.has(rowId))
 
       for (const rowId of deletedRowIds) {
         await deleteStationRow(rowId)
@@ -4924,7 +5051,7 @@ export default function App() {
       try {
         stationRows = await readServerStationRows()
       } catch (error) {
-        console.error('loadStations v4 error:', error)
+        console.error('loadStations v3 error:', error)
       }
 
       if (Array.isArray(stationRows) && stationRows.length > 0) {
@@ -5018,6 +5145,7 @@ export default function App() {
 
     loadAppState()
   }, [APP_STATE_DRAFT_STORAGE_KEY, APP_STATE_ID, APP_STATE_SYNC_STORAGE_KEY])
+
   useEffect(() => {
     groupsRef.current = groups
     if (suppressNextPersistRef.current) {
