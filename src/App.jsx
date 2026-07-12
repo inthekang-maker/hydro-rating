@@ -4254,7 +4254,6 @@ export default function App() {
   const retryTimerRef = useRef(null)
   const saveInFlightRef = useRef(false)
   const dirtyRef = useRef(false)
-  const suppressNextPersistRef = useRef(false)
   const savingReasonRef = useRef('')
 
   const queueNextSave = (delay = APP_STATE_SAVE_DEBOUNCE_MS, reason = 'queued') => {
@@ -4338,72 +4337,69 @@ export default function App() {
 
     const currentGroups = normalizeGroups(groupsRef.current)
     const currentPayload = buildAppStatePayload(currentGroups, CLIENT_ID, storageScope)
+    const expectedUpdatedAt = String(lastServerUpdatedAtRef.current || '')
 
-    const applyLoadedState = (nextGroups, nextUpdatedAt = '', message = '서버 값을 다시 불러왔습니다.') => {
-      const normalizedGroups = normalizeGroups(nextGroups)
-      suppressNextPersistRef.current = true
-      groupsRef.current = normalizedGroups
-      setGroups(normalizedGroups)
-      lastCommittedGroupsRef.current = cloneSerializable(normalizedGroups)
-      lastServerUpdatedAtRef.current = String(nextUpdatedAt || lastServerUpdatedAtRef.current || '')
-      dirtyRef.current = false
-      setSaveStatus(message)
-    }
-
-    try {
-      const latestScoped = await readServerAppState(APP_STATE_ID).catch((error) => {
-        throw error
-      })
+    const attemptSave = async () => {
+      const latestScoped = await readServerAppState(APP_STATE_ID)
       const latestLegacy = latestScoped ? null : await readServerAppState(APP_STATE_LEGACY_ID).catch(() => null)
       const latestServer = latestScoped || latestLegacy
+      const latestUpdatedAt = String(latestServer?.updated_at || '')
+      const latestGroups = extractGroupsFromAppStatePayload(latestServer?.payload) || null
 
       if (!latestServer) {
         const inserted = await persistAppState(currentPayload, '', true)
-        if (!inserted) {
-          throw new Error('저장 결과를 확인할 수 없습니다.')
+        return { saved: inserted, merged: currentGroups, sourceUpdatedAt: '' }
+      }
+
+      const serverChangedSinceLoad =
+        expectedUpdatedAt && latestUpdatedAt && latestUpdatedAt !== expectedUpdatedAt
+
+      if (serverChangedSinceLoad && latestGroups) {
+        const mergedGroups = mergeThreeWaySerializable(
+          lastCommittedGroupsRef.current || [],
+          currentGroups,
+          latestGroups
+        )
+
+        if (!deepEqualSerializable(mergedGroups, currentGroups)) {
+          groupsRef.current = mergedGroups
+          setGroups(mergedGroups)
         }
 
-        const savedAt = String(inserted.updated_at || new Date().toISOString())
-        lastServerUpdatedAtRef.current = String(inserted.updated_at || '')
-        lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
-        setLastSavedAt(savedAt)
-        setSaveStatus('저장 완료')
-        dirtyRef.current = false
-
-        safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
-          savedAt,
-          serverUpdatedAt: lastServerUpdatedAtRef.current,
-          clientId: CLIENT_ID,
-          scope: storageScope
+        const mergedPayload = buildAppStatePayload(mergedGroups, CLIENT_ID, storageScope)
+        const saved = await persistAppState(mergedPayload, latestUpdatedAt, false).catch(async () => {
+          const refetched = await readServerAppState(APP_STATE_ID).catch(() => null)
+          const refetchedUpdatedAt = String(refetched?.updated_at || latestUpdatedAt)
+          const refetchedGroups = extractGroupsFromAppStatePayload(refetched?.payload) || mergedGroups
+          const retryMergedGroups = mergeThreeWaySerializable(
+            lastCommittedGroupsRef.current || [],
+            groupsRef.current,
+            refetchedGroups
+          )
+          const retryPayload = buildAppStatePayload(retryMergedGroups, CLIENT_ID, storageScope)
+          return persistAppState(retryPayload, refetchedUpdatedAt, false)
         })
-        safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
-        return
-      }
 
-      const latestUpdatedAt = String(latestServer.updated_at || '')
-      const loadedUpdatedAt = String(lastServerUpdatedAtRef.current || '')
-
-      if (loadedUpdatedAt && latestUpdatedAt && latestUpdatedAt !== loadedUpdatedAt) {
-        const conflictGroups = extractGroupsFromAppStatePayload(latestServer.payload) || currentGroups
-        applyLoadedState(conflictGroups, latestUpdatedAt, '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.')
-        return
-      }
-
-      const saved = await persistAppState(currentPayload, latestUpdatedAt, false)
-      if (!saved) {
-        const refetched = await readServerAppState(APP_STATE_ID).catch(() => null)
-        const refetchedUpdatedAt = String(refetched?.updated_at || '')
-        if (refetchedUpdatedAt && refetchedUpdatedAt !== latestUpdatedAt) {
-          const conflictGroups = extractGroupsFromAppStatePayload(refetched?.payload) || currentGroups
-          applyLoadedState(conflictGroups, refetchedUpdatedAt, '충돌 감지 - 서버의 최신 값으로 다시 불러왔습니다. 변경 후 다시 저장해 주세요.')
-          return
+        return {
+          saved,
+          merged: mergedGroups,
+          sourceUpdatedAt: latestUpdatedAt
         }
-        throw new Error('저장 충돌이 발생했습니다.')
       }
 
-      const savedAt = String(saved.updated_at || new Date().toISOString())
-      lastServerUpdatedAtRef.current = String(saved.updated_at || latestUpdatedAt || '')
-      lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
+      const saved = await persistAppState(currentPayload, latestUpdatedAt || expectedUpdatedAt, false)
+      return {
+        saved,
+        merged: currentGroups,
+        sourceUpdatedAt: latestUpdatedAt || expectedUpdatedAt
+      }
+    }
+
+    try {
+      const result = await attemptSave()
+      const savedAt = String(result.saved?.updated_at || new Date().toISOString())
+      lastServerUpdatedAtRef.current = String(result.sourceUpdatedAt || result.saved?.updated_at || savedAt)
+      lastCommittedGroupsRef.current = cloneSerializable(result.merged || currentGroups)
       setLastSavedAt(savedAt)
       setSaveStatus('저장 완료')
       dirtyRef.current = false
@@ -4417,8 +4413,8 @@ export default function App() {
       safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
     } catch (error) {
       console.error('saveStations error:', error)
-      setSaveStatus(error instanceof Error ? error.message : '저장 실패 - 다시 시도해 주세요')
-      if (retryCount < 1) {
+      setSaveStatus('저장 실패 - 다시 시도 중')
+      if (retryCount < 3) {
         retryTimerRef.current = setTimeout(() => {
           void flushAppStateSave('retry', retryCount + 1)
         }, APP_STATE_SAVE_RETRY_MS)
@@ -4434,6 +4430,9 @@ export default function App() {
 
   useEffect(() => {
     const loadAppState = async () => {
+      const localDraft = safeReadJson(APP_STATE_DRAFT_STORAGE_KEY, null)
+      const localSync = safeReadJson(APP_STATE_SYNC_STORAGE_KEY, null)
+
       let scopedData = null
       let legacyData = null
       try {
@@ -4450,14 +4449,10 @@ export default function App() {
         }
       }
 
-      const localDraft = safeReadJson(APP_STATE_DRAFT_STORAGE_KEY, null)
-      const localSync = safeReadJson(APP_STATE_SYNC_STORAGE_KEY, null)
-
       let nextGroups = DEFAULT_GROUPS
       let sourceLabel = '기본값'
       let savedAt = ''
       let serverUpdatedAt = ''
-      let shouldMigrate = false
 
       const chosenServerData = scopedData || legacyData
       const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
@@ -4466,21 +4461,20 @@ export default function App() {
         nextGroups = serverGroups
         savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
         serverUpdatedAt = String(chosenServerData?.updated_at || '')
-        sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
-        shouldMigrate = Boolean(legacyData && !scopedData)
+        sourceLabel = scopedData
+          ? '서버'
+          : '서버(레거시 이관)'
       } else {
         const localDraftGroups = Array.isArray(localDraft?.groups) ? normalizeGroups(localDraft.groups) : null
         if (localDraftGroups && localDraftGroups.length > 0) {
           nextGroups = localDraftGroups
           savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
           sourceLabel = '로컬 복구'
-          shouldMigrate = true
         } else {
           savedAt = String(localSync?.savedAt || '')
         }
       }
 
-      suppressNextPersistRef.current = true
       groupsRef.current = nextGroups
       setGroups(nextGroups)
       setLastSavedAt(savedAt)
@@ -4490,7 +4484,7 @@ export default function App() {
       appStateReadyRef.current = true
       setStationsLoaded(true)
 
-      if (shouldMigrate) {
+      if (legacyData && !scopedData) {
         dirtyRef.current = true
         queueNextSave(0, 'migrate')
       }
@@ -4501,10 +4495,6 @@ export default function App() {
 
   useEffect(() => {
     groupsRef.current = groups
-    if (suppressNextPersistRef.current) {
-      suppressNextPersistRef.current = false
-      return
-    }
     if (!stationsLoaded || !appStateReadyRef.current) return
 
     const updatedAt = new Date().toISOString()
@@ -4523,6 +4513,7 @@ export default function App() {
       void flushAppStateSave('debounce')
     }, APP_STATE_SAVE_DEBOUNCE_MS)
   }, [groups, stationsLoaded, CLIENT_ID, storageScope, APP_STATE_DRAFT_STORAGE_KEY])
+
   useEffect(() => {
     const flushNow = () => {
       if (dirtyRef.current) {
