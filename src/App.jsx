@@ -491,149 +491,125 @@ const APP_STATE_SAVE_RETRY_MS = 5000
 
 const APP_STATE_LEGACY_ID = 'main'
 const APP_STATE_STATION_ROW_SUFFIX = '::station::'
+const APP_STATE_STATION_ROW_VARIANTS = {
+  INFO: 'info',
+  SECTIONS: 'sections',
+  MEASUREMENTS: 'measurements',
+  PROCESS_PLAN: 'processPlan'
+}
 
-const makeScopedStationRowId = (scope, stationId) =>
-  `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}${String(stationId || '').trim()}`
+const makeScopedStationRowId = (scope, stationId, variant = APP_STATE_STATION_ROW_VARIANTS.INFO) =>
+  `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}${String(stationId || '').trim()}::${String(variant || APP_STATE_STATION_ROW_VARIANTS.INFO).trim()}`
 
 const makeScopedStationRowPrefix = (scope) =>
   `app_state::${sanitizeStorageScope(scope)}${APP_STATE_STATION_ROW_SUFFIX}`
 
+const parseScopedStationRowId = (rowId) => {
+  const raw = String(rowId || '')
+  const markerIndex = raw.indexOf(APP_STATE_STATION_ROW_SUFFIX)
+  if (markerIndex < 0) return null
 
-const toSafeRevision = (value) => {
-  const n = Number(value)
-  return Number.isInteger(n) && n >= 0 ? n : null
-}
+  const tail = raw.slice(markerIndex + APP_STATE_STATION_ROW_SUFFIX.length)
+  if (!tail) return null
 
-const isDuplicateKeyError = (error) => {
-  const code = String(error?.code || '')
-  const message = String(error?.message || error?.details || '').toLowerCase()
-  return code === '23505' || message.includes('duplicate key')
-}
+  const parts = tail.split('::').filter(Boolean)
+  if (parts.length === 0) return null
 
-const isMissingRevisionColumnError = (error) => {
-  const message = String(error?.message || error?.details || '').toLowerCase()
-  return (
-    message.includes('revision') &&
-    (message.includes('does not exist') || message.includes('column'))
-  )
-}
+  const stationId = String(parts[0] || '').trim()
+  const variant = String(parts[1] || APP_STATE_STATION_ROW_VARIANTS.INFO).trim() || APP_STATE_STATION_ROW_VARIANTS.INFO
 
-const getAppStorageScope = () => {
-  if (typeof window === 'undefined') return 'default'
-  const host = String(window.location.hostname || 'default').trim().toLowerCase()
-  return host || 'default'
-}
-
-const sanitizeStorageScope = (value) =>
-  String(value || 'default')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9.-]/g, '_') || 'default'
-
-const makeScopedStorageKey = (baseKey, scope) => `${baseKey}::${sanitizeStorageScope(scope)}`
-
-const makeScopedAppStateId = (scope) => `app_state::${sanitizeStorageScope(scope)}`
-
-const safeReadJson = (key, fallback = null) => {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-const safeWriteJson = (key, value) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // ignore storage quota / privacy mode errors
-  }
-}
-
-const safeRemoveKey = (key) => {
-  try {
-    localStorage.removeItem(key)
-  } catch {
-    // ignore storage quota / privacy mode errors
-  }
-}
-
-const makeClientId = () => `client_${Math.random().toString(36).slice(2, 10)}`
-
-const getStoredClientId = (scope = 'default') => {
-  const storageKey = makeScopedStorageKey(APP_STATE_CLIENT_ID_KEY, scope)
-  try {
-    const existing = localStorage.getItem(storageKey)
-    if (existing) return existing
-    const next = makeClientId()
-    localStorage.setItem(storageKey, next)
-    return next
-  } catch {
-    return makeClientId()
-  }
-}
-
-const toTimeValue = (value) => {
-  const time = new Date(value).getTime()
-  return Number.isFinite(time) ? time : 0
-}
-
-const buildAppStatePayload = (groups, clientId) => {
-  const now = new Date().toISOString()
   return {
-    groups: normalizeGroups(groups),
-    stations: flattenGroupsToStations(groups),
-    savedAt: now,
-    clientId
+    stationId,
+    variant,
+    isVariantRow: parts.length > 1
   }
 }
 
-
-const extractGroupsFromAppStatePayload = (payload) => {
-  const loadedGroups = payload?.groups
-  const loadedStations = payload?.stations
-
-  if (Array.isArray(loadedGroups) && loadedGroups.length > 0) {
-    return normalizeGroups(loadedGroups)
-  }
-
-  if (Array.isArray(loadedStations) && loadedStations.length > 0) {
-    return normalizeGroups([
-      {
-        id: makeId(),
-        name: '그룹 1',
-        stations: loadedStations
-      }
-    ])
-  }
-
-  return null
-}
-
-const buildStationRecordPayload = (group, groupIndex, station, stationIndex) => ({
-  version: 3,
-  groupId: group.id,
-  groupName: group.name || '그룹 없음',
-  groupOrder: groupIndex,
-  stationOrder: stationIndex,
-  station: normalizeStation(station)
+const pickStationCore = (station) => ({
+  id: String(station?.id || '').trim(),
+  name: String(station?.name || ''),
+  code: String(station?.code || ''),
+  classification: station?.classification || '일반 지점'
 })
+
+const normalizeSectionForStorage = (section) => ({
+  ...section,
+  hOffset: section?.hOffset ?? '0'
+})
+
+const normalizeMeasurementForStorage = (measurement) => ({
+  ...measurement
+})
+
+const normalizeProcessPlanForStorage = (processPlan) =>
+  Array.from({ length: 12 }, (_, idx) => String(processPlan?.[idx] ?? ''))
+
+const buildStationRecordPayload = (group, groupIndex, station, stationIndex, rowType) => {
+  const normalizedStation = normalizeStation(station)
+  const stationCore = pickStationCore(normalizedStation)
+
+  const common = {
+    version: 4,
+    rowType,
+    groupId: group.id,
+    groupName: group.name || '그룹 없음',
+    groupOrder: groupIndex,
+    stationOrder: stationIndex,
+    stationId: stationCore.id,
+    station: stationCore
+  }
+
+  if (rowType === APP_STATE_STATION_ROW_VARIANTS.INFO) {
+    return common
+  }
+
+  if (rowType === APP_STATE_STATION_ROW_VARIANTS.SECTIONS) {
+    return {
+      ...common,
+      sections: normalizedStation.sections.map(normalizeSectionForStorage)
+    }
+  }
+
+  if (rowType === APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS) {
+    return {
+      ...common,
+      measurements: normalizedStation.measurements.map(normalizeMeasurementForStorage)
+    }
+  }
+
+  if (rowType === APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN) {
+    return {
+      ...common,
+      processPlan: normalizeProcessPlanForStorage(normalizedStation.processPlan)
+    }
+  }
+
+  return common
+}
 
 const buildStationRecordDescriptors = (groups, scope) => {
   const records = []
   normalizeGroups(groups).forEach((group, groupIndex) => {
     (group.stations || []).forEach((station, stationIndex) => {
       const normalizedStation = normalizeStation(station)
-      records.push({
-        rowId: makeScopedStationRowId(scope, normalizedStation.id),
-        stationId: normalizedStation.id,
-        groupId: group.id,
-        groupName: group.name || '그룹 없음',
-        groupOrder: groupIndex,
-        stationOrder: stationIndex,
-        payload: buildStationRecordPayload(group, groupIndex, normalizedStation, stationIndex)
+      const basePayloadArgs = [group, groupIndex, normalizedStation, stationIndex]
+
+      ;[
+        APP_STATE_STATION_ROW_VARIANTS.INFO,
+        APP_STATE_STATION_ROW_VARIANTS.SECTIONS,
+        APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS,
+        APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN
+      ].forEach((variant) => {
+        records.push({
+          rowId: makeScopedStationRowId(scope, normalizedStation.id, variant),
+          stationId: normalizedStation.id,
+          groupId: group.id,
+          groupName: group.name || '그룹 없음',
+          groupOrder: groupIndex,
+          stationOrder: stationIndex,
+          variant,
+          payload: buildStationRecordPayload(...basePayloadArgs, variant)
+        })
       })
     })
   })
@@ -641,39 +617,196 @@ const buildStationRecordDescriptors = (groups, scope) => {
 }
 
 const extractGroupsFromStationRows = (rows) => {
-  const grouped = new Map()
   const safeRows = Array.isArray(rows) ? rows : []
+  const stationsById = new Map()
 
   safeRows.forEach((row, fallbackIndex) => {
     const payload = row?.payload || {}
-    const rowId = String(row?.id || '')
-    const stationFromPayload = payload.station || {}
-    const parsedStationId = String(stationFromPayload.id || rowId.split(APP_STATE_STATION_ROW_SUFFIX).pop() || '').trim() || makeId()
-    const station = normalizeStation({
-      ...stationFromPayload,
-      id: parsedStationId
-    })
+    const rowMeta = parseScopedStationRowId(row?.id)
+    const stationFromPayload = isPlainObject(payload.station) ? payload.station : {}
+    const stationId = String(
+      payload.stationId || stationFromPayload.id || rowMeta?.stationId || ''
+    ).trim() || makeId()
 
-    const groupId = String(payload.groupId || '').trim() || `group_${fallbackIndex}`
-    const groupName = String(payload.groupName || '그룹 없음').trim() || '그룹 없음'
+    const rowType = String(
+      payload.rowType ||
+      rowMeta?.variant ||
+      (payload.version >= 4 ? APP_STATE_STATION_ROW_VARIANTS.INFO : 'legacy')
+    ).trim() || 'legacy'
+
+    if (!stationsById.has(stationId)) {
+      stationsById.set(stationId, {
+        stationId,
+        rows: {
+          info: null,
+          sections: null,
+          measurements: null,
+          processPlan: null
+        },
+        legacyRows: [],
+        order: fallbackIndex,
+        groupId: '',
+        groupName: '그룹 없음',
+        groupOrder: fallbackIndex,
+        stationOrder: fallbackIndex
+      })
+    }
+
+    const bucket = stationsById.get(stationId)
+    bucket.order = Math.min(bucket.order ?? fallbackIndex, fallbackIndex)
+
     const groupOrderValue = num(payload.groupOrder)
     const stationOrderValue = num(payload.stationOrder)
-    const groupOrder = groupOrderValue === null ? fallbackIndex : groupOrderValue
-    const stationOrder = stationOrderValue === null ? fallbackIndex : stationOrderValue
+    if (groupOrderValue !== null) {
+      bucket.groupOrder = Math.min(bucket.groupOrder ?? groupOrderValue, groupOrderValue)
+    }
+    if (stationOrderValue !== null) {
+      bucket.stationOrder = Math.min(bucket.stationOrder ?? stationOrderValue, stationOrderValue)
+    }
 
-    if (!grouped.has(groupId)) {
-      grouped.set(groupId, {
-        id: groupId,
-        name: groupName,
-        order: groupOrder,
+    const entry = {
+      row,
+      fallbackIndex
+    }
+
+    if (rowType === APP_STATE_STATION_ROW_VARIANTS.INFO) {
+      bucket.rows.info = entry
+    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.SECTIONS) {
+      bucket.rows.sections = entry
+    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS) {
+      bucket.rows.measurements = entry
+    } else if (rowType === APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN) {
+      bucket.rows.processPlan = entry
+    } else {
+      bucket.legacyRows.push(entry)
+    }
+  })
+
+  const stationEntries = Array.from(stationsById.values()).map((bucket) => {
+    const rowCandidates = [
+      bucket.rows.info?.row,
+      bucket.rows.sections?.row,
+      bucket.rows.measurements?.row,
+      bucket.rows.processPlan?.row,
+      bucket.legacyRows[0]?.row
+    ].filter(Boolean)
+
+    const baseRow = rowCandidates[0] || null
+    const basePayload = baseRow?.payload || {}
+    const coreCandidates = [
+      bucket.rows.info?.row?.payload?.station,
+      bucket.rows.sections?.row?.payload?.station,
+      bucket.rows.measurements?.row?.payload?.station,
+      bucket.rows.processPlan?.row?.payload?.station,
+      bucket.legacyRows[0]?.row?.payload?.station,
+      basePayload.station
+    ].filter(isPlainObject)
+
+    const mergedCore = coreCandidates.reduce(
+      (acc, candidate) => ({
+        ...acc,
+        ...pickStationCore(candidate)
+      }),
+      {
+        id: bucket.stationId,
+        name: '',
+        code: '',
+        classification: '일반 지점'
+      }
+    )
+
+    const sectionsPayload =
+      bucket.rows.sections?.row?.payload?.sections ||
+      bucket.legacyRows[0]?.row?.payload?.station?.sections ||
+      basePayload.station?.sections ||
+      []
+
+    const measurementsPayload =
+      bucket.rows.measurements?.row?.payload?.measurements ||
+      bucket.legacyRows[0]?.row?.payload?.station?.measurements ||
+      basePayload.station?.measurements ||
+      []
+
+    const processPlanPayload =
+      bucket.rows.processPlan?.row?.payload?.processPlan ||
+      bucket.legacyRows[0]?.row?.payload?.station?.processPlan ||
+      basePayload.station?.processPlan ||
+      []
+
+    const station = normalizeStation({
+      ...mergedCore,
+      sections: Array.isArray(sectionsPayload) ? sectionsPayload : [],
+      measurements: Array.isArray(measurementsPayload) ? measurementsPayload : [],
+      processPlan: Array.isArray(processPlanPayload) ? processPlanPayload : []
+    })
+
+    const groupId = String(
+      bucket.rows.info?.row?.payload?.groupId ||
+      bucket.rows.sections?.row?.payload?.groupId ||
+      bucket.rows.measurements?.row?.payload?.groupId ||
+      bucket.rows.processPlan?.row?.payload?.groupId ||
+      bucket.legacyRows[0]?.row?.payload?.groupId ||
+      basePayload.groupId ||
+      ''
+    ).trim() || `group_${bucket.order}`
+
+    const groupName = String(
+      bucket.rows.info?.row?.payload?.groupName ||
+      bucket.rows.sections?.row?.payload?.groupName ||
+      bucket.rows.measurements?.row?.payload?.groupName ||
+      bucket.rows.processPlan?.row?.payload?.groupName ||
+      bucket.legacyRows[0]?.row?.payload?.groupName ||
+      basePayload.groupName ||
+      '그룹 없음'
+    ).trim() || '그룹 없음'
+
+    const groupOrderCandidates = [
+      bucket.rows.info?.row?.payload?.groupOrder,
+      bucket.rows.sections?.row?.payload?.groupOrder,
+      bucket.rows.measurements?.row?.payload?.groupOrder,
+      bucket.rows.processPlan?.row?.payload?.groupOrder,
+      bucket.legacyRows[0]?.row?.payload?.groupOrder,
+      basePayload.groupOrder
+    ]
+      .map(num)
+      .filter((value) => value !== null)
+
+    const stationOrderCandidates = [
+      bucket.rows.info?.row?.payload?.stationOrder,
+      bucket.rows.sections?.row?.payload?.stationOrder,
+      bucket.rows.measurements?.row?.payload?.stationOrder,
+      bucket.rows.processPlan?.row?.payload?.stationOrder,
+      bucket.legacyRows[0]?.row?.payload?.stationOrder,
+      basePayload.stationOrder
+    ]
+      .map(num)
+      .filter((value) => value !== null)
+
+    return {
+      id: bucket.stationId,
+      station,
+      groupId,
+      groupName,
+      groupOrder: groupOrderCandidates.length ? Math.min(...groupOrderCandidates, bucket.groupOrder ?? bucket.order) : bucket.groupOrder ?? bucket.order,
+      stationOrder: stationOrderCandidates.length ? Math.min(...stationOrderCandidates, bucket.stationOrder ?? bucket.order) : bucket.stationOrder ?? bucket.order
+    }
+  })
+
+  const grouped = new Map()
+  stationEntries.forEach((entry) => {
+    if (!grouped.has(entry.groupId)) {
+      grouped.set(entry.groupId, {
+        id: entry.groupId,
+        name: entry.groupName || '그룹 없음',
+        order: entry.groupOrder ?? entry.stationOrder ?? 0,
         stations: []
       })
     }
 
-    const group = grouped.get(groupId)
-    group.name = group.name || groupName
-    group.order = Math.min(group.order ?? groupOrder, groupOrder)
-    group.stations.push({ station, order: stationOrder })
+    const group = grouped.get(entry.groupId)
+    group.name = group.name || entry.groupName || '그룹 없음'
+    group.order = Math.min(group.order ?? entry.groupOrder ?? entry.stationOrder ?? 0, entry.groupOrder ?? entry.stationOrder ?? 0)
+    group.stations.push({ station: entry.station, order: entry.stationOrder ?? 0 })
   })
 
   return Array.from(grouped.values())
@@ -695,7 +828,6 @@ const extractGroupsFromStationRows = (rows) => {
         .map(({ station }) => station)
     }))
 }
-
 
 const cloneSerializable = (value) => {
   if (value === undefined) return undefined
@@ -4647,7 +4779,12 @@ export default function App() {
       const latestStationMap = new Map(
         (Array.isArray(latestStationRows) ? latestStationRows : []).map((row) => [String(row.id || ''), row])
       )
-      const latestHasV3Rows = latestStationRows.length > 0
+
+      const desiredRowIds = new Set(currentRecords.map((record) => record.rowId))
+
+      let hadConflictMerge = false
+      let changedCount = 0
+      let deletedCount = 0
 
       const saveOneRecord = async (currentRecord, baseRecord, remoteRow, depth = 0) => {
         const basePayload = baseRecord?.payload ?? null
@@ -4705,10 +4842,6 @@ export default function App() {
         return false
       }
 
-      let hadConflictMerge = false
-      let changedCount = 0
-      let deletedCount = 0
-
       for (const currentRecord of currentRecords) {
         const baseRecord = baseMap.get(currentRecord.rowId) || null
         const remoteRow = latestStationMap.get(currentRecord.rowId) || null
@@ -4720,10 +4853,6 @@ export default function App() {
           continue
         }
 
-        if (!remoteRow && currentEqualsBase && latestHasV3Rows) {
-          // 서버에 해당 행이 사라진 경우에는 현재 값을 복구한다.
-        }
-
         const saved = await saveOneRecord(currentRecord, baseRecord, remoteRow)
         if (!saved) {
           throw new Error('저장 충돌이 발생했습니다.')
@@ -4731,9 +4860,18 @@ export default function App() {
         changedCount += 1
       }
 
-      const deletedRowIds = baseRecords
-        .map((record) => record.rowId)
-        .filter((rowId) => !currentMap.has(rowId))
+      const deletedRowIds = new Set(
+        baseRecords
+          .map((record) => record.rowId)
+          .filter((rowId) => !currentMap.has(rowId))
+      )
+
+      for (const row of Array.isArray(latestStationRows) ? latestStationRows : []) {
+        const rowId = String(row?.id || '')
+        if (rowId && !desiredRowIds.has(rowId)) {
+          deletedRowIds.add(rowId)
+        }
+      }
 
       for (const rowId of deletedRowIds) {
         await deleteStationRow(rowId)
@@ -4754,7 +4892,7 @@ export default function App() {
         serverRevision: lastServerRevisionRef.current,
         clientId: CLIENT_ID,
         scope: storageScope,
-        format: 'v3',
+        format: 'v4',
         changedCount,
         deletedCount
       })
@@ -4781,16 +4919,16 @@ export default function App() {
       let stationRows = []
       let scopedData = null
       let legacyData = null
-      let loadedFromV3 = false
+      let loadedFromV4 = false
 
       try {
         stationRows = await readServerStationRows()
       } catch (error) {
-        console.error('loadStations v3 error:', error)
+        console.error('loadStations v4 error:', error)
       }
 
       if (Array.isArray(stationRows) && stationRows.length > 0) {
-        loadedFromV3 = true
+        loadedFromV4 = true
       } else {
         try {
           scopedData = await readServerAppState(APP_STATE_ID)
@@ -4817,7 +4955,7 @@ export default function App() {
       let serverRevision = null
       let shouldMigrate = false
 
-      if (loadedFromV3) {
+      if (loadedFromV4) {
         nextGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
         savedAt = String(
           stationRows.reduce((latest, row) => {
@@ -4835,7 +4973,7 @@ export default function App() {
         )
         const revisions = stationRows.map((row) => toSafeRevision(row?.revision)).filter((v) => v !== null)
         serverRevision = revisions.length > 0 ? Math.max(...revisions) : null
-        sourceLabel = '서버 V3'
+        sourceLabel = '서버 V4'
       } else {
         const chosenServerData = scopedData || legacyData
         const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
@@ -4880,7 +5018,6 @@ export default function App() {
 
     loadAppState()
   }, [APP_STATE_DRAFT_STORAGE_KEY, APP_STATE_ID, APP_STATE_SYNC_STORAGE_KEY])
-
   useEffect(() => {
     groupsRef.current = groups
     if (suppressNextPersistRef.current) {
