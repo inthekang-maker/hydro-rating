@@ -20,44 +20,9 @@ ChartJS.register(
   Legend
 )
 
-const getAppScope = () => {
-  try {
-    if (typeof window === 'undefined' || !window.location) return 'default'
-    const host = String(window.location.hostname || '').toLowerCase()
-    if (!host) return 'default'
-
-    const exactMap = {
-      'hydro-rating.vercel.app': 'hydro-rating',
-      'nakdong-hydro.vercel.app': 'nakdong-hydro',
-      'localhost': 'local',
-      '127.0.0.1': 'local'
-    }
-
-    if (exactMap[host]) return exactMap[host]
-
-    const subdomainMap = [
-      { pattern: /(^|\.)hydro-rating(\.|$)/, value: 'hydro-rating' },
-      { pattern: /(^|\.)nakdong-hydro(\.|$)/, value: 'nakdong-hydro' }
-    ]
-
-    for (const entry of subdomainMap) {
-      if (entry.pattern.test(host)) return entry.value
-    }
-
-    return host.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'app'
-  } catch {
-    return 'default'
-  }
-}
-
-const APP_SCOPE = getAppScope()
-const APP_STATE_ID = `main:${APP_SCOPE}`
-const LEGACY_APP_STATE_ID = 'main'
-const scopedStorageKey = (base) => `${base}:${APP_SCOPE}`
-
-const STORAGE_KEY = scopedStorageKey('hydro-pwa-stations-v2')
-const CHART_CONFIG_KEY = scopedStorageKey('hydro-pwa-chart-config-v1')
-const CHART_LEGEND_POS_KEY = scopedStorageKey('hydro-pwa-chart-legend-pos-v1')
+const STORAGE_KEY = 'hydro-pwa-stations-v2'
+const CHART_CONFIG_KEY = 'hydro-pwa-chart-config-v1'
+const CHART_LEGEND_POS_KEY = 'hydro-pwa-chart-legend-pos-v1'
 
 const YEAR_COLORS = [
   '#1d4ed8',
@@ -518,11 +483,28 @@ function moveArrayItem(items, fromIndex, toIndex) {
 
 const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
 
-const APP_STATE_DRAFT_KEY = scopedStorageKey('hydro-pwa-app-state-draft-v4')
-const APP_STATE_SYNC_KEY = scopedStorageKey('hydro-pwa-app-state-sync-v4')
-const APP_STATE_CLIENT_ID_KEY = scopedStorageKey('hydro-pwa-app-client-id-v1')
+const APP_STATE_DRAFT_KEY = 'hydro-pwa-app-state-draft-v3'
+const APP_STATE_SYNC_KEY = 'hydro-pwa-app-state-sync-v3'
+const APP_STATE_CLIENT_ID_KEY = 'hydro-pwa-app-client-id-v1'
 const APP_STATE_SAVE_DEBOUNCE_MS = 700
 const APP_STATE_SAVE_RETRY_MS = 5000
+const APP_STATE_LEGACY_ID = 'main'
+
+const getAppStorageScope = () => {
+  if (typeof window === 'undefined') return 'default'
+  const host = String(window.location.hostname || 'default').trim().toLowerCase()
+  return host || 'default'
+}
+
+const sanitizeStorageScope = (value) =>
+  String(value || 'default')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, '_') || 'default'
+
+const makeScopedStorageKey = (baseKey, scope) => `${baseKey}::${sanitizeStorageScope(scope)}`
+
+const makeScopedAppStateId = (scope) => `app_state::${sanitizeStorageScope(scope)}`
 
 const safeReadJson = (key, fallback = null) => {
   try {
@@ -542,7 +524,7 @@ const safeWriteJson = (key, value) => {
   }
 }
 
-const safeRemoveItem = (key) => {
+const safeRemoveKey = (key) => {
   try {
     localStorage.removeItem(key)
   } catch {
@@ -552,12 +534,13 @@ const safeRemoveItem = (key) => {
 
 const makeClientId = () => `client_${Math.random().toString(36).slice(2, 10)}`
 
-const getStoredClientId = () => {
+const getStoredClientId = (scope = 'default') => {
+  const storageKey = makeScopedStorageKey(APP_STATE_CLIENT_ID_KEY, scope)
   try {
-    const existing = localStorage.getItem(APP_STATE_CLIENT_ID_KEY)
+    const existing = localStorage.getItem(storageKey)
     if (existing) return existing
     const next = makeClientId()
-    localStorage.setItem(APP_STATE_CLIENT_ID_KEY, next)
+    localStorage.setItem(storageKey, next)
     return next
   } catch {
     return makeClientId()
@@ -569,28 +552,14 @@ const toTimeValue = (value) => {
   return Number.isFinite(time) ? time : 0
 }
 
-const buildAppStatePayload = (groups, clientId, revision = 0) => {
+const buildAppStatePayload = (groups, clientId) => {
   const now = new Date().toISOString()
   return {
     groups: normalizeGroups(groups),
     stations: flattenGroupsToStations(groups),
     savedAt: now,
-    clientId,
-    scope: APP_SCOPE,
-    revision,
-    meta: {
-      scope: APP_SCOPE,
-      clientId,
-      revision,
-      savedAt: now
-    }
+    clientId
   }
-}
-
-const getPayloadRevision = (payload) => {
-  const raw = payload?.revision ?? payload?.meta?.revision ?? 0
-  const n = Number(raw)
-  return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
 const extractGroupsFromAppStatePayload = (payload) => {
@@ -4242,7 +4211,21 @@ const stationColumns = useMemo(
   )
 }
 export default function App() {
-  const CLIENT_ID = useMemo(() => getStoredClientId(), [])
+  const storageScope = useMemo(() => getAppStorageScope(), [])
+  const APP_STATE_ID = useMemo(() => makeScopedAppStateId(storageScope), [storageScope])
+  const APP_STATE_DRAFT_STORAGE_KEY = useMemo(
+    () => makeScopedStorageKey(APP_STATE_DRAFT_KEY, storageScope),
+    [storageScope]
+  )
+  const APP_STATE_SYNC_STORAGE_KEY = useMemo(
+    () => makeScopedStorageKey(APP_STATE_SYNC_KEY, storageScope),
+    [storageScope]
+  )
+  const HRFCO_API_KEY_STORAGE_KEY_SCOPED = useMemo(
+    () => makeScopedStorageKey(HRFCO_API_KEY_STORAGE_KEY, storageScope),
+    [storageScope]
+  )
+  const CLIENT_ID = useMemo(() => getStoredClientId(storageScope), [storageScope])
 
   const [groups, setGroups] = useState(() => DEFAULT_GROUPS)
   const [stationsLoaded, setStationsLoaded] = useState(false)
@@ -4253,36 +4236,86 @@ export default function App() {
   const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
   const [activeTab, setActiveTab] = useState('management')
   const [instrumentSubTab, setInstrumentSubTab] = useState('current')
-  const [hrfcoApiKey, setHrfcoApiKey] = useState(() => localStorage.getItem(HRFCO_API_KEY_STORAGE_KEY) || '')
+  const [hrfcoApiKey, setHrfcoApiKey] = useState(() => {
+    try {
+      return localStorage.getItem(HRFCO_API_KEY_STORAGE_KEY_SCOPED) || ''
+    } catch {
+      return ''
+    }
+  })
   const [saveStatus, setSaveStatus] = useState('저장 대기 중')
   const [lastSavedAt, setLastSavedAt] = useState('')
 
   const groupsRef = useRef(groups)
-  const lastLoadedServerUpdatedAtRef = useRef('')
-  const lastLoadedRevisionRef = useRef(0)
+  const lastCommittedGroupsRef = useRef(cloneSerializable(groups))
+  const lastServerUpdatedAtRef = useRef('')
   const appStateReadyRef = useRef(false)
   const saveTimerRef = useRef(null)
   const retryTimerRef = useRef(null)
   const saveInFlightRef = useRef(false)
   const dirtyRef = useRef(false)
+  const savingReasonRef = useRef('')
 
-  const queueNextSave = (delay = APP_STATE_SAVE_DEBOUNCE_MS) => {
+  const queueNextSave = (delay = APP_STATE_SAVE_DEBOUNCE_MS, reason = 'queued') => {
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      void flushAppStateSave()
+      void flushAppStateSave(reason)
     }, delay)
   }
 
-  const readState = async (stateId) => {
+  const readServerAppState = async (id) => {
     const { data, error } = await supabase
       .from('app_state')
       .select('payload, updated_at')
-      .eq('id', stateId)
+      .eq('id', id)
       .maybeSingle()
-    return { data, error }
+
+    if (error) {
+      throw error
+    }
+
+    return data || null
   }
 
-  const flushAppStateSave = async (retryCount = 0) => {
+  const persistAppState = async (nextPayload, expectedUpdatedAt = '', allowInsert = true) => {
+    const startedAt = new Date().toISOString()
+
+    if (!expectedUpdatedAt && allowInsert) {
+      const { data, error } = await supabase
+        .from('app_state')
+        .upsert(
+          {
+            id: APP_STATE_ID,
+            payload: nextPayload,
+            updated_at: startedAt
+          },
+          { onConflict: 'id' }
+        )
+        .select('updated_at, payload')
+        .maybeSingle()
+
+      if (error) throw error
+      return data || null
+    }
+
+    const query = supabase
+      .from('app_state')
+      .update({
+        payload: nextPayload,
+        updated_at: startedAt
+      })
+      .eq('id', APP_STATE_ID)
+
+    if (expectedUpdatedAt) {
+      query.eq('updated_at', expectedUpdatedAt)
+    }
+
+    const { data, error } = await query.select('updated_at, payload').maybeSingle()
+    if (error) throw error
+    return data || null
+  }
+
+  const flushAppStateSave = async (reason = 'manual', retryCount = 0) => {
     if (!stationsLoaded || !appStateReadyRef.current) return
     if (saveInFlightRef.current) {
       dirtyRef.current = true
@@ -4294,176 +4327,182 @@ export default function App() {
     saveTimerRef.current = null
     retryTimerRef.current = null
 
-    if (!dirtyRef.current) return
+    if (!dirtyRef.current && reason !== 'force' && reason !== 'retry') {
+      return
+    }
 
     saveInFlightRef.current = true
-    setSaveStatus('저장 중...')
+    savingReasonRef.current = reason
+    setSaveStatus(reason === 'retry' ? '저장 재시도 중...' : '저장 중...')
 
-    const startedAt = new Date().toISOString()
     const currentGroups = normalizeGroups(groupsRef.current)
-    const expectedUpdatedAt = String(lastLoadedServerUpdatedAtRef.current || '')
-    const nextRevision = lastLoadedRevisionRef.current + 1
-    const payload = buildAppStatePayload(currentGroups, CLIENT_ID, nextRevision)
+    const currentPayload = buildAppStatePayload(currentGroups, CLIENT_ID, storageScope)
+    const expectedUpdatedAt = String(lastServerUpdatedAtRef.current || '')
+
+    const attemptSave = async () => {
+      const latestScoped = await readServerAppState(APP_STATE_ID)
+      const latestLegacy = latestScoped ? null : await readServerAppState(APP_STATE_LEGACY_ID).catch(() => null)
+      const latestServer = latestScoped || latestLegacy
+      const latestUpdatedAt = String(latestServer?.updated_at || '')
+      const latestGroups = extractGroupsFromAppStatePayload(latestServer?.payload) || null
+
+      if (!latestServer) {
+        const inserted = await persistAppState(currentPayload, '', true)
+        return { saved: inserted, merged: currentGroups, sourceUpdatedAt: '' }
+      }
+
+      const serverChangedSinceLoad =
+        expectedUpdatedAt && latestUpdatedAt && latestUpdatedAt !== expectedUpdatedAt
+
+      if (serverChangedSinceLoad && latestGroups) {
+        const mergedGroups = mergeThreeWaySerializable(
+          lastCommittedGroupsRef.current || [],
+          currentGroups,
+          latestGroups
+        )
+
+        if (!deepEqualSerializable(mergedGroups, currentGroups)) {
+          groupsRef.current = mergedGroups
+          setGroups(mergedGroups)
+        }
+
+        const mergedPayload = buildAppStatePayload(mergedGroups, CLIENT_ID, storageScope)
+        const saved = await persistAppState(mergedPayload, latestUpdatedAt, false).catch(async () => {
+          const refetched = await readServerAppState(APP_STATE_ID).catch(() => null)
+          const refetchedUpdatedAt = String(refetched?.updated_at || latestUpdatedAt)
+          const refetchedGroups = extractGroupsFromAppStatePayload(refetched?.payload) || mergedGroups
+          const retryMergedGroups = mergeThreeWaySerializable(
+            lastCommittedGroupsRef.current || [],
+            groupsRef.current,
+            refetchedGroups
+          )
+          const retryPayload = buildAppStatePayload(retryMergedGroups, CLIENT_ID, storageScope)
+          return persistAppState(retryPayload, refetchedUpdatedAt, false)
+        })
+
+        return {
+          saved,
+          merged: mergedGroups,
+          sourceUpdatedAt: latestUpdatedAt
+        }
+      }
+
+      const saved = await persistAppState(currentPayload, latestUpdatedAt || expectedUpdatedAt, false)
+      return {
+        saved,
+        merged: currentGroups,
+        sourceUpdatedAt: latestUpdatedAt || expectedUpdatedAt
+      }
+    }
 
     try {
-      const { data: latestData, error: latestError } = await readState(APP_STATE_ID)
-      if (latestError) throw latestError
-
-      const latestUpdatedAt = String(latestData?.updated_at || '')
-      const latestRevision = getPayloadRevision(latestData?.payload)
-      const hasRemoteRow = Boolean(latestUpdatedAt)
-
-      if (hasRemoteRow && expectedUpdatedAt && latestUpdatedAt && latestUpdatedAt !== expectedUpdatedAt) {
-        const remoteGroups = extractGroupsFromAppStatePayload(latestData?.payload)
-        if (remoteGroups) {
-          groupsRef.current = remoteGroups
-          setGroups(remoteGroups)
-        }
-        lastLoadedServerUpdatedAtRef.current = latestUpdatedAt
-        lastLoadedRevisionRef.current = latestRevision
-        dirtyRef.current = false
-        setSaveStatus('다른 저장이 먼저 반영되었습니다. 최신 상태를 다시 불러왔습니다.')
-        return
-      }
-
-      const saveQuery = hasRemoteRow
-        ? supabase
-            .from('app_state')
-            .update({
-              payload,
-              updated_at: startedAt
-            })
-            .eq('id', APP_STATE_ID)
-            .eq('updated_at', expectedUpdatedAt || latestUpdatedAt)
-            .select('updated_at, payload')
-            .maybeSingle()
-        : supabase
-            .from('app_state')
-            .upsert(
-              {
-                id: APP_STATE_ID,
-                payload,
-                updated_at: startedAt
-              },
-              { onConflict: 'id' }
-            )
-            .select('updated_at, payload')
-            .maybeSingle()
-
-      const { data, error } = await saveQuery
-      if (error) throw error
-
-      if (!data?.updated_at) {
-        const { data: latestAfterSave, error: latestAfterSaveError } = await readState(APP_STATE_ID)
-        if (latestAfterSaveError) throw latestAfterSaveError
-        if (latestAfterSave?.updated_at) {
-          lastLoadedServerUpdatedAtRef.current = String(latestAfterSave.updated_at || startedAt)
-          lastLoadedRevisionRef.current = getPayloadRevision(latestAfterSave?.payload)
-          safeRemoveItem(APP_STATE_DRAFT_KEY)
-          dirtyRef.current = false
-          setLastSavedAt(startedAt)
-          setSaveStatus('저장 완료')
-          return
-        }
-        throw new Error('저장 응답이 비어 있습니다.')
-      }
-
-      lastLoadedServerUpdatedAtRef.current = String(data.updated_at || startedAt)
-      lastLoadedRevisionRef.current = nextRevision
-      safeWriteJson(APP_STATE_SYNC_KEY, {
-        savedAt: startedAt,
-        clientId: CLIENT_ID,
-        scope: APP_SCOPE,
-        appStateId: APP_STATE_ID,
-        revision: nextRevision
-      })
-      safeRemoveItem(APP_STATE_DRAFT_KEY)
-      setLastSavedAt(startedAt)
+      const result = await attemptSave()
+      const savedAt = String(result.saved?.updated_at || new Date().toISOString())
+      lastServerUpdatedAtRef.current = String(result.sourceUpdatedAt || result.saved?.updated_at || savedAt)
+      lastCommittedGroupsRef.current = cloneSerializable(result.merged || currentGroups)
+      setLastSavedAt(savedAt)
       setSaveStatus('저장 완료')
       dirtyRef.current = false
+
+      safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
+        savedAt,
+        serverUpdatedAt: lastServerUpdatedAtRef.current,
+        clientId: CLIENT_ID,
+        scope: storageScope
+      })
+      safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
     } catch (error) {
       console.error('saveStations error:', error)
-      setSaveStatus('저장 실패 - 재시도 중')
+      setSaveStatus('저장 실패 - 다시 시도 중')
       if (retryCount < 3) {
         retryTimerRef.current = setTimeout(() => {
-          void flushAppStateSave(retryCount + 1)
+          void flushAppStateSave('retry', retryCount + 1)
         }, APP_STATE_SAVE_RETRY_MS)
       }
     } finally {
       saveInFlightRef.current = false
+      savingReasonRef.current = ''
       if (dirtyRef.current && !retryTimerRef.current) {
-        queueNextSave(APP_STATE_SAVE_DEBOUNCE_MS)
+        queueNextSave(APP_STATE_SAVE_DEBOUNCE_MS, 'queued')
       }
     }
   }
 
   useEffect(() => {
     const loadAppState = async () => {
-      const { data: primaryData, error: primaryError } = await readState(APP_STATE_ID)
-      let legacyData = null
-      let legacyError = null
+      const localDraft = safeReadJson(APP_STATE_DRAFT_STORAGE_KEY, null)
+      const localSync = safeReadJson(APP_STATE_SYNC_STORAGE_KEY, null)
 
-      if (!primaryData && !primaryError) {
-        const legacyResult = await readState(LEGACY_APP_STATE_ID)
-        legacyData = legacyResult.data
-        legacyError = legacyResult.error
+      let scopedData = null
+      let legacyData = null
+      try {
+        scopedData = await readServerAppState(APP_STATE_ID)
+      } catch (error) {
+        console.error('loadStations scoped error:', error)
       }
 
-      const activeData = primaryData || legacyData
-      const activeError = primaryData ? primaryError : (legacyError || primaryError)
+      if (!scopedData) {
+        try {
+          legacyData = await readServerAppState(APP_STATE_LEGACY_ID)
+        } catch (error) {
+          console.error('loadStations legacy error:', error)
+        }
+      }
 
       let nextGroups = DEFAULT_GROUPS
       let sourceLabel = '기본값'
-      let serverSavedAt = ''
-      let serverRevision = 0
+      let savedAt = ''
+      let serverUpdatedAt = ''
 
-      if (activeData) {
-        serverSavedAt = String(activeData?.payload?.savedAt || activeData?.updated_at || '')
-        serverRevision = getPayloadRevision(activeData?.payload)
+      const chosenServerData = scopedData || legacyData
+      const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
 
-        const serverGroups = extractGroupsFromAppStatePayload(activeData?.payload)
-        if (serverGroups) {
-          nextGroups = serverGroups
-          sourceLabel = Array.isArray(activeData?.payload?.groups) ? '서버' : '서버(구형 형식)'
+      if (serverGroups && serverGroups.length > 0) {
+        nextGroups = serverGroups
+        savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
+        serverUpdatedAt = String(chosenServerData?.updated_at || '')
+        sourceLabel = scopedData
+          ? '서버'
+          : '서버(레거시 이관)'
+      } else {
+        const localDraftGroups = Array.isArray(localDraft?.groups) ? normalizeGroups(localDraft.groups) : null
+        if (localDraftGroups && localDraftGroups.length > 0) {
+          nextGroups = localDraftGroups
+          savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
+          sourceLabel = '로컬 복구'
+        } else {
+          savedAt = String(localSync?.savedAt || '')
         }
-      } else if (activeError) {
-        console.error('loadStations error:', activeError)
       }
 
       groupsRef.current = nextGroups
       setGroups(nextGroups)
-      setLastSavedAt(serverSavedAt)
+      setLastSavedAt(savedAt)
       setSaveStatus(`${sourceLabel} 불러옴`)
-      lastLoadedServerUpdatedAtRef.current = String(activeData?.updated_at || '')
-      lastLoadedRevisionRef.current = serverRevision
+      lastCommittedGroupsRef.current = cloneSerializable(nextGroups)
+      lastServerUpdatedAtRef.current = serverUpdatedAt
       appStateReadyRef.current = true
       setStationsLoaded(true)
 
-      safeWriteJson(APP_STATE_SYNC_KEY, {
-        savedAt: serverSavedAt,
-        clientId: CLIENT_ID,
-        source: activeData ? 'server' : 'default',
-        scope: APP_SCOPE,
-        appStateId: APP_STATE_ID,
-        revision: serverRevision
-      })
+      if (legacyData && !scopedData) {
+        dirtyRef.current = true
+        queueNextSave(0, 'migrate')
+      }
     }
 
     loadAppState()
-  }, [])
+  }, [APP_STATE_DRAFT_STORAGE_KEY, APP_STATE_ID, APP_STATE_SYNC_STORAGE_KEY])
 
   useEffect(() => {
     groupsRef.current = groups
     if (!stationsLoaded || !appStateReadyRef.current) return
 
     const updatedAt = new Date().toISOString()
-    safeWriteJson(APP_STATE_DRAFT_KEY, {
+    safeWriteJson(APP_STATE_DRAFT_STORAGE_KEY, {
       groups: normalizeGroups(groups),
       updatedAt,
       clientId: CLIENT_ID,
-      scope: APP_SCOPE,
-      appStateId: APP_STATE_ID,
-      revision: lastLoadedRevisionRef.current
+      scope: storageScope
     })
 
     dirtyRef.current = true
@@ -4471,14 +4510,14 @@ export default function App() {
 
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(() => {
-      void flushAppStateSave()
+      void flushAppStateSave('debounce')
     }, APP_STATE_SAVE_DEBOUNCE_MS)
-  }, [groups, stationsLoaded, CLIENT_ID])
+  }, [groups, stationsLoaded, CLIENT_ID, storageScope, APP_STATE_DRAFT_STORAGE_KEY])
 
   useEffect(() => {
     const flushNow = () => {
       if (dirtyRef.current) {
-        void flushAppStateSave()
+        void flushAppStateSave('visibility')
       }
     }
 
@@ -4587,8 +4626,12 @@ export default function App() {
   }, [legendPos])
 
   useEffect(() => {
-    localStorage.setItem(HRFCO_API_KEY_STORAGE_KEY, hrfcoApiKey)
-  }, [hrfcoApiKey])
+    try {
+      localStorage.setItem(HRFCO_API_KEY_STORAGE_KEY_SCOPED, hrfcoApiKey)
+    } catch {
+      // ignore storage quota / privacy mode errors
+    }
+  }, [hrfcoApiKey, HRFCO_API_KEY_STORAGE_KEY_SCOPED])
 
   useEffect(() => {
     if (!groups.length) return
