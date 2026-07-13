@@ -483,11 +483,6 @@ function moveArrayItem(items, fromIndex, toIndex) {
 
 const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
 
-const APP_STATE_DRAFT_KEY = 'hydro-pwa-app-state-draft-v3'
-const APP_STATE_SYNC_KEY = 'hydro-pwa-app-state-sync-v3'
-const APP_STATE_CLIENT_ID_KEY = 'hydro-pwa-app-client-id-v1'
-const APP_STATE_SAVE_DEBOUNCE_MS = 700
-const APP_STATE_SAVE_RETRY_MS = 5000
 
 const APP_STATE_LEGACY_ID = 'main'
 const APP_STATE_STATION_ROW_SUFFIX = '::station::'
