@@ -1089,6 +1089,26 @@ const SHARED_TABLE_STYLE = {
 
 
 const HRFCO_API_KEY_STORAGE_KEY = 'hrfco-api-key-v1'
+const SAVE_METRICS_KEY = 'hydro-pwa-save-metrics-v1'
+
+const DEFAULT_SAVE_METRICS = {
+  attempts: 0,
+  successes: 0,
+  failures: 0,
+  retries: 0,
+  mergeSuccesses: 0,
+  totalMs: 0,
+  lastDurationMs: 0,
+  lastOutcome: '',
+  lastError: '',
+  lastSavedAt: '',
+  lastReason: ''
+}
+
+const createDefaultSaveMetrics = () => ({
+  ...DEFAULT_SAVE_METRICS
+})
+
 let cachedHrfcoStationInfoApiKey = ''
 let cachedHrfcoStationInfoItems = []
 let cachedHrfcoStationInfoPromise = null
@@ -4613,6 +4633,10 @@ export default function App() {
     () => makeScopedStorageKey(HRFCO_API_KEY_STORAGE_KEY, storageScope),
     [storageScope]
   )
+  const SAVE_METRICS_STORAGE_KEY = useMemo(
+    () => makeScopedStorageKey(SAVE_METRICS_KEY, storageScope),
+    [storageScope]
+  )
   const CLIENT_ID = useMemo(() => getStoredClientId(storageScope), [storageScope])
 
   const [groups, setGroups] = useState(() => DEFAULT_GROUPS)
@@ -4633,6 +4657,13 @@ export default function App() {
   })
   const [saveStatus, setSaveStatus] = useState('저장 대기 중')
   const [lastSavedAt, setLastSavedAt] = useState('')
+  const [saveMetrics, setSaveMetrics] = useState(() => {
+    const loaded = safeReadJson(SAVE_METRICS_STORAGE_KEY, null)
+    return {
+      ...createDefaultSaveMetrics(),
+      ...(isPlainObject(loaded) ? loaded : {})
+    }
+  })
 
   const groupsRef = useRef(groups)
   const lastCommittedGroupsRef = useRef(cloneSerializable(groups))
@@ -4646,7 +4677,25 @@ export default function App() {
   const dirtyRef = useRef(false)
   const suppressNextPersistRef = useRef(false)
   const savingReasonRef = useRef('')
+  const saveMetricsRef = useRef(saveMetrics)
 
+  useEffect(() => {
+    saveMetricsRef.current = saveMetrics
+    safeWriteJson(SAVE_METRICS_STORAGE_KEY, saveMetrics)
+  }, [saveMetrics, SAVE_METRICS_STORAGE_KEY])
+
+  const pushSaveMetrics = (updater) => {
+    setSaveMetrics((prev) => {
+      const base = isPlainObject(prev) ? prev : createDefaultSaveMetrics()
+      const next = typeof updater === 'function' ? updater(base) : { ...base, ...updater }
+      const normalized = {
+        ...createDefaultSaveMetrics(),
+        ...(isPlainObject(next) ? next : {})
+      }
+      saveMetricsRef.current = normalized
+      return normalized
+    })
+  }
 
   const queueNextSave = (delay = APP_STATE_SAVE_DEBOUNCE_MS, reason = 'queued') => {
     clearTimeout(saveTimerRef.current)
@@ -4883,6 +4932,18 @@ export default function App() {
       return
     }
 
+    const saveStartedAt = typeof performance !== 'undefined' && performance.now
+      ? performance.now()
+      : Date.now()
+
+    pushSaveMetrics((prev) => ({
+      ...prev,
+      attempts: (prev.attempts || 0) + 1,
+      lastReason: reason,
+      lastOutcome: 'saving',
+      lastError: ''
+    }))
+
     clearTimeout(saveTimerRef.current)
     clearTimeout(retryTimerRef.current)
     saveTimerRef.current = null
@@ -5001,12 +5062,23 @@ export default function App() {
       }
 
       const savedAt = new Date().toISOString()
+      const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - saveStartedAt))
       lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
       lastServerUpdatedAtRef.current = savedAt
       lastServerRevisionRef.current = null
       setLastSavedAt(savedAt)
       setSaveStatus(hadConflictMerge ? '충돌 자동 병합 후 저장 완료' : '저장 완료')
       dirtyRef.current = false
+      pushSaveMetrics((prev) => ({
+        ...prev,
+        successes: (prev.successes || 0) + 1,
+        mergeSuccesses: (prev.mergeSuccesses || 0) + (hadConflictMerge ? 1 : 0),
+        totalMs: (prev.totalMs || 0) + durationMs,
+        lastDurationMs: durationMs,
+        lastOutcome: hadConflictMerge ? 'merged-success' : 'success',
+        lastError: '',
+        lastSavedAt: savedAt
+      }))
 
       safeWriteJson(APP_STATE_SYNC_STORAGE_KEY, {
         savedAt,
@@ -5021,8 +5093,24 @@ export default function App() {
       safeRemoveKey(APP_STATE_DRAFT_STORAGE_KEY)
     } catch (error) {
       console.error('saveStations error:', error)
-      setSaveStatus(error instanceof Error ? error.message : '저장 실패 - 다시 시도해 주세요')
+      const errorMessage = error instanceof Error ? error.message : '저장 실패 - 다시 시도해 주세요'
+      const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - saveStartedAt))
+      setSaveStatus(errorMessage)
+      pushSaveMetrics((prev) => ({
+        ...prev,
+        failures: (prev.failures || 0) + 1,
+        totalMs: (prev.totalMs || 0) + durationMs,
+        lastDurationMs: durationMs,
+        lastOutcome: 'failure',
+        lastError: errorMessage,
+        lastSavedAt: prev.lastSavedAt || ''
+      }))
       if (retryCount < 1) {
+        pushSaveMetrics((prev) => ({
+          ...prev,
+          retries: (prev.retries || 0) + 1,
+          lastOutcome: 'retry-scheduled'
+        }))
         retryTimerRef.current = setTimeout(() => {
           void flushAppStateSave('retry', retryCount + 1)
         }, APP_STATE_SAVE_RETRY_MS)
@@ -5922,6 +6010,9 @@ export default function App() {
         <div style={{ marginTop: '8px', fontSize: '13px', fontWeight: 600 }}>
           저장 상태: {saveStatus}
           {lastSavedAt ? ` · ${formatDateTimeDisplay(new Date(lastSavedAt))}` : ''}
+        </div>
+        <div style={{ marginTop: '4px', fontSize: '12px', color: '#555' }}>
+          저장 진단: 성공 {saveMetrics.successes}회 · 실패 {saveMetrics.failures}회 · 재시도 {saveMetrics.retries}회 · 자동병합 {saveMetrics.mergeSuccesses}회 · 평균 {saveMetrics.attempts > 0 ? Math.round(saveMetrics.totalMs / saveMetrics.attempts) : 0}ms · 마지막 {saveMetrics.lastOutcome || '없음'}
         </div>
       </header>
 
