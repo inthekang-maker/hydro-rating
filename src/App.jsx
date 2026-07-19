@@ -1370,6 +1370,18 @@ const buildCurrentWaterEntries = (station, currentValue, previousValue, currentT
   return entries
 }
 
+function calcInstrumentConvertedFlow(station, waterLevel, measurementDatetime = null) {
+  const hValue = num(waterLevel)
+  if (hValue === null) return null
+
+  const sections = Array.isArray(station?.sections) ? station.sections : []
+  const section = findSectionByH(hValue, sections, measurementDatetime)
+  if (!section) return null
+
+  const q = calcQ(hValue, section)
+  return q === null ? null : q
+}
+
 function CopyableMatrixTable({
   headers,
   rows,
@@ -2956,7 +2968,13 @@ const getInstrumentChartPeriodRange = (periodKey, customStartTime, customEndTime
   }
 }
 
-const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
+const buildInstrumentWaterLevelChartOptions = (
+  range,
+  yMinValue,
+  yMaxValue,
+  yAxisTitle = '수위 h(m)',
+  tooltipValueLabel = 'h'
+) => {
   const min = range?.start instanceof Date && !Number.isNaN(range.start.getTime())
     ? range.start.getTime()
     : undefined
@@ -3002,7 +3020,7 @@ const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
         max: yMax,
         title: {
           display: true,
-          text: '수위 h(m)',
+          text: yAxisTitle,
           color: '#111',
           font: {
             size: 14,
@@ -3034,7 +3052,7 @@ const buildInstrumentWaterLevelChartOptions = (range, yMinValue, yMaxValue) => {
           label: (ctx) => {
             const x = ctx.parsed.x
             const y = ctx.parsed.y
-            return `${ctx.dataset.label}: ${formatChartTooltipDateTime(x)} / h=${fmt(y, 3)}`
+            return `${ctx.dataset.label}: ${formatChartTooltipDateTime(x)} / ${tooltipValueLabel}=${fmt(y, 3)}`
           }
         }
       }
@@ -3050,12 +3068,14 @@ function InstrumentWaterLevelChart({
   height = 460,
   yMin,
   yMax,
+  yAxisTitle = '수위 h(m)',
+  tooltipValueLabel = 'h',
   zoomX = 1,
   zoomY = 1
 }) {
   const options = useMemo(
-    () => buildInstrumentWaterLevelChartOptions(range, yMin, yMax),
-    [range, yMin, yMax]
+    () => buildInstrumentWaterLevelChartOptions(range, yMin, yMax, yAxisTitle, tooltipValueLabel),
+    [range, yMin, yMax, yAxisTitle, tooltipValueLabel]
   )
 
   return (
@@ -3143,10 +3163,10 @@ const mergeRowsByStation = (baseRowsByStation, additions) => {
   return next
 }
 
-function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
+function VirtualizedHistoryTable({ stationColumns, times, ascending = false, showConvertedFlow = false }) {
   const containerRef = useRef(null)
   const [scrollTop, setScrollTop] = useState(0)
-  const rowHeight = 34
+  const rowHeight = showConvertedFlow ? 44 : 34
   const height = 560
   const overscan = 10
   const totalRows = times.length
@@ -3156,14 +3176,14 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
   const visibleTimes = times.slice(startIndex, endIndex)
   const topSpacer = startIndex * rowHeight
   const bottomSpacer = Math.max(0, (totalRows - endIndex) * rowHeight)
-  const colCount = stationColumns.length + 1
+  const colCount = 1 + stationColumns.reduce((acc, col) => acc + (showConvertedFlow ? 2 : 1), 0)
 
   useEffect(() => {
     setScrollTop(0)
     if (containerRef.current) {
       containerRef.current.scrollTop = 0
     }
-  }, [stationColumns, times, ascending])
+  }, [stationColumns, times, ascending, showConvertedFlow])
 
   return (
     <div
@@ -3180,6 +3200,7 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
         <thead>
           <tr>
             <th
+              rowSpan={showConvertedFlow ? 2 : 1}
               style={{
                 position: 'sticky',
                 top: 0,
@@ -3194,13 +3215,14 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
             {stationColumns.map((col) => (
               <th
                 key={col.station.id}
+                colSpan={showConvertedFlow ? 2 : 1}
                 style={{
                   position: 'sticky',
                   top: 0,
                   zIndex: 3,
                   background: '#fff',
                   whiteSpace: 'nowrap',
-                  minWidth: '96px'
+                  minWidth: showConvertedFlow ? '184px' : '96px'
                 }}
               >
                 <div>{col.station.name || '지점 없음'}</div>
@@ -3210,6 +3232,38 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
               </th>
             ))}
           </tr>
+          {showConvertedFlow ? (
+            <tr>
+              {stationColumns.map((col) => (
+                <React.Fragment key={`${col.station.id}-subheader`}>
+                  <th
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 3,
+                      background: '#fff',
+                      whiteSpace: 'nowrap',
+                      minWidth: '92px'
+                    }}
+                  >
+                    수위(h)
+                  </th>
+                  <th
+                    style={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 3,
+                      background: '#fff',
+                      whiteSpace: 'nowrap',
+                      minWidth: '92px'
+                    }}
+                  >
+                    환산유량(Q)
+                  </th>
+                </React.Fragment>
+              ))}
+            </tr>
+          ) : null}
         </thead>
         <tbody>
           {topSpacer > 0 ? (
@@ -3231,14 +3285,28 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false }) {
               >
                 {formatYmdhm(time)}
               </td>
-              {stationColumns.map((col) => {
-                const value = col.rowsMap?.[time]
-                return (
+              {stationColumns.map((col) =>
+                showConvertedFlow ? (
+                  <React.Fragment key={`${col.station.id}-${time}`}>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                      {col.rowsMap?.[time] === null || col.rowsMap?.[time] === undefined || col.rowsMap?.[time] === ''
+                        ? ''
+                        : fmt(col.rowsMap[time], 2)}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
+                      {col.flowRowsMap?.[time] === null || col.flowRowsMap?.[time] === undefined || col.flowRowsMap?.[time] === ''
+                        ? ''
+                        : fmt(col.flowRowsMap[time], 3)}
+                    </td>
+                  </React.Fragment>
+                ) : (
                   <td key={`${col.station.id}-${time}`} style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                    {value === null || value === undefined || value === '' ? '' : fmt(value, 2)}
+                    {col.rowsMap?.[time] === null || col.rowsMap?.[time] === undefined || col.rowsMap?.[time] === ''
+                      ? ''
+                      : fmt(col.rowsMap[time], 2)}
                   </td>
                 )
-              })}
+              )}
             </tr>
           ))}
           {bottomSpacer > 0 ? (
@@ -3598,6 +3666,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [historyStatus, setHistoryStatus] = useState('')
   const [historyMode, setHistoryMode] = useState('period')
   const [historyLoadedLabel, setHistoryLoadedLabel] = useState('')
+  const [showConvertedFlow, setShowConvertedFlow] = useState(false)
   const [chartPeriodKey, setChartPeriodKey] = useState('all')
   const defaultChartRange = getChartDefaultRange()
   const [chartCustomStartTime, setChartCustomStartTime] = useState(defaultChartRange.start)
@@ -3607,6 +3676,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [chartStatus, setChartStatus] = useState('')
   const [generatedCharts, setGeneratedCharts] = useState([])
   const [generatedChartLabel, setGeneratedChartLabel] = useState('')
+  const [flowChartLoading, setFlowChartLoading] = useState(false)
+  const [flowChartStatus, setFlowChartStatus] = useState('')
+  const [generatedFlowCharts, setGeneratedFlowCharts] = useState([])
+  const [generatedFlowChartLabel, setGeneratedFlowChartLabel] = useState('')
   const [instrumentChartYMin, setInstrumentChartYMin] = useState('')
   const [instrumentChartYMax, setInstrumentChartYMax] = useState('')
   const [instrumentChartZoomX, setInstrumentChartZoomX] = useState(1)
@@ -3689,11 +3762,23 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   }
 
 const stationColumns = useMemo(
-    () => filteredStations.map((station) => ({ station, rowsMap: historyRowsByStation[station.id] || {} })),
+    () =>
+      filteredStations.map((station) => {
+        const rowsMap = historyRowsByStation[station.id] || {}
+        const flowRowsMap = {}
+
+        Object.entries(rowsMap).forEach(([ymdhm, value]) => {
+          const q = calcInstrumentConvertedFlow(station, value, ymdhm)
+          if (q !== null) {
+            flowRowsMap[ymdhm] = q
+          }
+        })
+
+        return { station, rowsMap, flowRowsMap }
+      }),
     [filteredStations, historyRowsByStation]
   )
-
-  const resetHistory = () => {
+const resetHistory = () => {
     setHistoryRowsByStation({})
     setHistoryTimes([])
     setHistoryLoadedLabel('')
@@ -4122,6 +4207,169 @@ const stationColumns = useMemo(
     }
   }
 
+
+  const generateInstrumentFlowCharts = async () => {
+    const apiKey = String(hrfcoApiKey || '').trim()
+    if (!apiKey) {
+      window.alert('API 키를 입력해 주세요.')
+      return
+    }
+    if (filteredStations.length === 0) {
+      window.alert('선택된 지점이 없습니다.')
+      return
+    }
+
+    if (!chartPeriodRange || !chartPeriodRange.start || !chartPeriodRange.end) {
+      window.alert('차트 기간을 올바르게 입력해 주세요.')
+      return
+    }
+
+    if (chartPeriodRange.start > chartPeriodRange.end) {
+      window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
+      return
+    }
+
+    setFlowChartLoading(true)
+    setFlowChartStatus('환산유량 차트를 생성하는 중입니다...')
+
+    try {
+      const result = await fetchInstrumentChartHistorySlice(chartPeriodRange.start, chartPeriodRange.end)
+      const rowsByStation = result.rowsByStation || {}
+      const charts = []
+      const chartColorPalette = [...YEAR_COLORS, ...CURVE_COLORS, '#0ea5e9', '#f97316']
+      const measurementPointColor = '#d946ef'
+
+      const buildStationPoints = (station, rowsMap, range) => {
+        const flowPoints = Object.entries(rowsMap || {})
+          .map(([ymdhm, value]) => {
+            const date = parseYmdhmToDate(ymdhm)
+            const q = calcInstrumentConvertedFlow(station, value, ymdhm)
+            if (!date || q === null || !Number.isFinite(Number(q))) return null
+            if (range?.start && range?.end && (date < range.start || date > range.end)) return null
+            return { x: date.getTime(), y: Number(q) }
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.x - b.x)
+
+        const measurementPoints = (station.measurements || [])
+          .map((measurement) => {
+            const date = parseInstrumentChartDateTime(measurement.datetime)
+            const y = num(measurement.q)
+            if (!date || y === null) return null
+            if (range?.start && range?.end && (date < range.start || date > range.end)) return null
+            return { x: date.getTime(), y }
+          })
+          .filter(Boolean)
+          .sort((a, b) => a.x - b.x)
+
+        return { flowPoints, measurementPoints }
+      }
+
+      const makeFlowDataset = (station, stationIndex, points) => {
+        const color = chartColorPalette[stationIndex % chartColorPalette.length]
+        return {
+          label: `${station.name || '지점 없음'} 환산유량`,
+          data: points,
+          showLine: true,
+          spanGaps: true,
+          pointRadius: 0,
+          pointHoverRadius: 0,
+          borderWidth: 1,
+          borderColor: color,
+          backgroundColor: color,
+          parsing: false,
+          order: 2
+        }
+      }
+
+      const makeMeasurementDataset = (station, points) => ({
+        label: `${station.name || '지점 없음'} 측정유량`,
+        data: points,
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        borderWidth: 1,
+        borderColor: measurementPointColor,
+        backgroundColor: measurementPointColor,
+        pointStyle: 'rectRot',
+        parsing: false,
+        order: 1
+      })
+
+      if (chartSeparateCharts) {
+        filteredStations.forEach((station, stationIndex) => {
+          const { flowPoints, measurementPoints } = buildStationPoints(
+            station,
+            rowsByStation[station.id] || {},
+            chartPeriodRange
+          )
+
+          const datasets = []
+
+          if (flowPoints.length > 0) {
+            datasets.push(makeFlowDataset(station, stationIndex, flowPoints))
+          }
+
+          if (measurementPoints.length > 0) {
+            datasets.push(makeMeasurementDataset(station, measurementPoints))
+          }
+
+          if (datasets.length > 0) {
+            charts.push({
+              id: station.id,
+              title: `${station.name || '지점 없음'} ${station.code ? `(${station.code})` : ''}`.trim(),
+              subtitle: `${chartPeriodRange.label} · ${station.groupName || ''}`.trim(),
+              range: chartPeriodRange,
+              datasets,
+              height: 460
+            })
+          }
+        })
+      } else {
+        const datasets = []
+        filteredStations.forEach((station, stationIndex) => {
+          const { flowPoints, measurementPoints } = buildStationPoints(
+            station,
+            rowsByStation[station.id] || {},
+            chartPeriodRange
+          )
+
+          if (flowPoints.length > 0) {
+            datasets.push(makeFlowDataset(station, stationIndex, flowPoints))
+          }
+
+          if (measurementPoints.length > 0) {
+            datasets.push(makeMeasurementDataset(station, measurementPoints))
+          }
+        })
+
+        if (datasets.length > 0) {
+          charts.push({
+            id: 'combined-flow',
+            title: `환산유량 그래프 ${chartPeriodRange.label ? `(${chartPeriodRange.label})` : ''}`.trim(),
+            subtitle: `${filteredStations.length}개 지점`,
+            range: chartPeriodRange,
+            datasets,
+            height: 620
+          })
+        }
+      }
+
+      setGeneratedFlowCharts(charts)
+      setGeneratedFlowChartLabel(chartPeriodRange.label)
+      setFlowChartStatus(
+        charts.length > 0
+          ? `환산유량 차트 생성 완료${result.failCount > 0 ? ` (수위 자료 조회 실패 ${result.failCount}개 지점)` : ''}`
+          : '해당 기간에 생성할 환산유량 차트 자료가 없습니다.'
+      )
+    } catch (error) {
+      setFlowChartStatus(error instanceof Error ? error.message : '환산유량 차트 생성 실패')
+      setGeneratedFlowCharts([])
+    } finally {
+      setFlowChartLoading(false)
+    }
+  }
+
   const sectionColumns = [
   { key: 'name', label: '구간명', minWidth: '86px' },
   { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
@@ -4398,7 +4646,18 @@ const stationColumns = useMemo(
       </section>
 
       <section className="card">
-        <h2>수위 자료</h2>
+        <div className="section-header">
+          <h2>수위 자료</h2>
+          <div className="grid-actions">
+            <button
+              className="btn secondary"
+              onClick={() => setShowConvertedFlow((prev) => !prev)}
+              disabled={historyTimes.length === 0}
+            >
+              {showConvertedFlow ? '환산유량 숨기기' : '환산유량 추가'}
+            </button>
+          </div>
+        </div>
         {stationColumns.length === 0 ? (
           <div className="muted">선택된 지점이 없습니다.</div>
         ) : historyTimes.length === 0 ? (
@@ -4408,6 +4667,7 @@ const stationColumns = useMemo(
             stationColumns={stationColumns}
             times={historyTimes}
             ascending={historyMode === 'all'}
+            showConvertedFlow={showConvertedFlow}
           />
         )}
         <p className="muted" style={{ marginTop: '8px' }}>
@@ -4420,7 +4680,10 @@ const stationColumns = useMemo(
           <h2>차트 생성</h2>
           <div className="grid-actions">
             <button className="btn secondary" onClick={generateInstrumentCharts} disabled={chartLoading}>
-              {chartLoading ? '생성 중...' : '차트 생성'}
+              {chartLoading ? '생성 중...' : '수위 차트 생성'}
+            </button>
+            <button className="btn secondary" onClick={generateInstrumentFlowCharts} disabled={flowChartLoading}>
+              {flowChartLoading ? '생성 중...' : '유량 차트 생성'}
             </button>
           </div>
         </div>
@@ -4530,6 +4793,11 @@ const stationColumns = useMemo(
             {chartStatus}
           </div>
         ) : null}
+        {flowChartStatus ? (
+          <div className="muted" style={{ marginTop: '4px' }}>
+            {flowChartStatus}
+          </div>
+        ) : null}
 
         <div className="chart-settings">
           <div className="chart-setting-card">
@@ -4608,6 +4876,28 @@ const stationColumns = useMemo(
                 height={chart.height}
                 yMin={instrumentChartYMin}
                 yMax={instrumentChartYMax}
+                yAxisTitle="수위 h(m)"
+                tooltipValueLabel="h"
+                zoomX={instrumentChartZoomX}
+                zoomY={instrumentChartZoomY}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {generatedFlowCharts.length > 0 ? (
+          <div style={{ marginTop: '14px' }}>
+            <h3 style={{ marginBottom: '8px' }}>유량 차트 {generatedFlowChartLabel ? `(${generatedFlowChartLabel})` : ''}</h3>
+            {generatedFlowCharts.map((chart) => (
+              <InstrumentWaterLevelChart
+                key={chart.id}
+                title={chart.title}
+                subtitle={chart.subtitle}
+                datasets={chart.datasets}
+                range={chart.range}
+                height={chart.height}
+                yAxisTitle="환산유량 Q(m³/s)"
+                tooltipValueLabel="Q"
                 zoomX={instrumentChartZoomX}
                 zoomY={instrumentChartZoomY}
               />
