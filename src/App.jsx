@@ -978,39 +978,24 @@ const extractGroupsFromStationRows = (rows) => {
       '그룹 없음'
     ).trim() || '그룹 없음'
 
-    const groupOrderCandidates = [
-      bucket.rows.info?.row?.payload?.groupOrder,
-      bucket.rows.sections?.row?.payload?.groupOrder,
-      bucket.rows.measurements?.row?.payload?.groupOrder,
-      bucket.rows.processPlan?.row?.payload?.groupOrder,
-      bucket.legacyRows[0]?.row?.payload?.groupOrder,
-      basePayload.groupOrder
-    ]
-      .map(num)
-      .filter((value) => value !== null)
+      const preferredPayload =
+      bucket.rows.info?.row?.payload ||
+      bucket.rows.sections?.row?.payload ||
+      bucket.rows.measurements?.row?.payload ||
+      bucket.rows.processPlan?.row?.payload ||
+      bucket.legacyRows[0]?.row?.payload ||
+      basePayload
 
-    const stationOrderCandidates = [
-      bucket.rows.info?.row?.payload?.stationOrder,
-      bucket.rows.sections?.row?.payload?.stationOrder,
-      bucket.rows.measurements?.row?.payload?.stationOrder,
-      bucket.rows.processPlan?.row?.payload?.stationOrder,
-      bucket.legacyRows[0]?.row?.payload?.stationOrder,
-      basePayload.stationOrder
-    ]
-      .map(num)
-      .filter((value) => value !== null)
+    const groupOrder = num(preferredPayload?.groupOrder)
+    const stationOrder = num(preferredPayload?.stationOrder)
 
     return {
       id: bucket.stationId,
       station,
       groupId,
       groupName,
-      groupOrder: groupOrderCandidates.length
-        ? Math.min(...groupOrderCandidates, bucket.groupOrder ?? bucket.order)
-        : bucket.groupOrder ?? bucket.order,
-      stationOrder: stationOrderCandidates.length
-        ? Math.min(...stationOrderCandidates, bucket.stationOrder ?? bucket.order)
-        : bucket.stationOrder ?? bucket.order
+      groupOrder: groupOrder ?? bucket.groupOrder ?? bucket.order,
+      stationOrder: stationOrder ?? bucket.stationOrder ?? bucket.order
     }
   })
 
