@@ -481,6 +481,36 @@ function moveArrayItem(items, fromIndex, toIndex) {
   return next
 }
 
+const sortGroupsAndStationsByOrder = (groups) => {
+  return (Array.isArray(groups) ? groups : [])
+    .slice()
+    .sort((a, b) => {
+      const ao = num(a?.order ?? a?.groupOrder ?? 0)
+      const bo = num(b?.order ?? b?.groupOrder ?? 0)
+
+      if (ao !== null && bo !== null && ao !== bo) return ao - bo
+      if (ao !== null && bo === null) return -1
+      if (ao === null && bo !== null) return 1
+
+      return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+    })
+    .map((group) => ({
+      ...group,
+      stations: (Array.isArray(group.stations) ? group.stations : [])
+        .slice()
+        .sort((a, b) => {
+          const ao = num(a?.order ?? a?.stationOrder ?? 0)
+          const bo = num(b?.order ?? b?.stationOrder ?? 0)
+
+          if (ao !== null && bo !== null && ao !== bo) return ao - bo
+          if (ao !== null && bo === null) return -1
+          if (ao === null && bo !== null) return 1
+
+          return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+        })
+    }))
+}
+
 const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
 
 
@@ -815,6 +845,7 @@ const extractGroupsFromStationRows = (rows) => {
 
     const baseRow = rowCandidates[0] || null
     const basePayload = baseRow?.payload || {}
+
     const coreCandidates = [
       bucket.rows.info?.row?.payload?.station,
       bucket.rows.sections?.row?.payload?.station,
@@ -919,6 +950,7 @@ const extractGroupsFromStationRows = (rows) => {
   })
 
   const grouped = new Map()
+
   stationEntries.forEach((entry) => {
     if (!grouped.has(entry.groupId)) {
       grouped.set(entry.groupId, {
@@ -938,24 +970,15 @@ const extractGroupsFromStationRows = (rows) => {
     group.stations.push({ station: entry.station, order: entry.stationOrder ?? 0 })
   })
 
-  return Array.from(grouped.values())
-    .sort((a, b) => {
-      const orderDiff = (a.order ?? 0) - (b.order ?? 0)
-      if (orderDiff !== 0) return orderDiff
-      return String(a.name || '').localeCompare(String(b.name || ''), 'ko')
-    })
-    .map((group) => ({
-      id: group.id,
-      name: group.name || '그룹 없음',
-      stations: group.stations
-        .slice()
-        .sort((a, b) => {
-          const orderDiff = (a.order ?? 0) - (b.order ?? 0)
-          if (orderDiff !== 0) return orderDiff
-          return String(a.station.name || '').localeCompare(String(b.station.name || ''), 'ko')
-        })
-        .map(({ station }) => station)
+  const result = Array.from(grouped.values()).map((group) => ({
+    ...group,
+    stations: group.stations.map(({ station, order }) => ({
+      ...station,
+      order
     }))
+  }))
+
+  return sortGroupsAndStationsByOrder(result)
 }
 const cloneSerializable = (value) => {
   if (value === undefined) return undefined
