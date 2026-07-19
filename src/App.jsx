@@ -613,12 +613,52 @@ const toTimeValue = (value) => {
 
 const buildAppStatePayload = (groups, clientId) => {
   const now = new Date().toISOString()
+
+  const orderedGroups = normalizeGroups(groups).map((group, groupOrder) => ({
+    ...group,
+    groupOrder,
+    stations: (group.stations || []).map((station, stationOrder) => ({
+      ...station,
+      stationOrder
+    }))
+  }))
+
   return {
-    groups: normalizeGroups(groups),
-    stations: flattenGroupsToStations(groups),
+    groups: orderedGroups,
+    stations: flattenGroupsToStations(orderedGroups),
     savedAt: now,
     clientId
   }
+}
+
+const sortGroupsAndStationsByOrder = (groups) => {
+  return (Array.isArray(groups) ? groups : [])
+    .slice()
+    .sort((a, b) => {
+      const ao = num(a?.groupOrder)
+      const bo = num(b?.groupOrder)
+
+      if (ao !== null && bo !== null && ao !== bo) return ao - bo
+      if (ao !== null && bo === null) return -1
+      if (ao === null && bo !== null) return 1
+
+      return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+    })
+    .map((group) => ({
+      ...group,
+      stations: (Array.isArray(group.stations) ? group.stations : [])
+        .slice()
+        .sort((a, b) => {
+          const ao = num(a?.stationOrder)
+          const bo = num(b?.stationOrder)
+
+          if (ao !== null && bo !== null && ao !== bo) return ao - bo
+          if (ao !== null && bo === null) return -1
+          if (ao === null && bo !== null) return 1
+
+          return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+        })
+    }))
 }
 
 const extractGroupsFromAppStatePayload = (payload) => {
@@ -626,17 +666,19 @@ const extractGroupsFromAppStatePayload = (payload) => {
   const loadedStations = payload?.stations
 
   if (Array.isArray(loadedGroups) && loadedGroups.length > 0) {
-    return normalizeGroups(loadedGroups)
+    return sortGroupsAndStationsByOrder(normalizeGroups(loadedGroups))
   }
 
   if (Array.isArray(loadedStations) && loadedStations.length > 0) {
-    return normalizeGroups([
-      {
-        id: makeId(),
-        name: '그룹 1',
-        stations: loadedStations
-      }
-    ])
+    return sortGroupsAndStationsByOrder(
+      normalizeGroups([
+        {
+          id: makeId(),
+          name: '그룹 1',
+          stations: loadedStations
+        }
+      ])
+    )
   }
 
   return null
@@ -5351,8 +5393,32 @@ export default function App() {
         deletedCount += 1
       }
 
-      const savedAt = new Date().toISOString()
-      const durationMs = Math.max(0, Math.round((typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now()) - saveStartedAt))
+            const savedAt = new Date().toISOString()
+
+      const mainPayload = buildAppStatePayload(currentGroups, CLIENT_ID)
+      const { error: mainSaveError } = await supabase
+        .from('app_state')
+        .upsert(
+          {
+            id: APP_STATE_ID,
+            payload: mainPayload,
+            updated_at: savedAt
+          },
+          { onConflict: 'id' }
+        )
+
+      if (mainSaveError) {
+        throw mainSaveError
+      }
+
+      const durationMs = Math.max(
+        0,
+        Math.round(
+          (typeof performance !== 'undefined' && performance.now
+            ? performance.now()
+            : Date.now()) - saveStartedAt
+        )
+      )
       lastCommittedGroupsRef.current = cloneSerializable(currentGroups)
       lastServerUpdatedAtRef.current = savedAt
       lastServerRevisionRef.current = null
@@ -5414,35 +5480,30 @@ export default function App() {
     }
   }
 
-  useEffect(() => {
+    useEffect(() => {
     const loadAppState = async () => {
       let stationRows = []
       let scopedData = null
       let legacyData = null
-      let loadedFromV4 = false
+
+      try {
+        scopedData = await readServerAppState(APP_STATE_ID)
+      } catch (error) {
+        console.error('loadStations scoped error:', error)
+      }
+
+      if (!scopedData) {
+        try {
+          legacyData = await readServerAppState(APP_STATE_LEGACY_ID)
+        } catch (error) {
+          console.error('loadStations legacy error:', error)
+        }
+      }
 
       try {
         stationRows = await readServerStationRows()
       } catch (error) {
         console.error('loadStations v3 error:', error)
-      }
-
-      if (Array.isArray(stationRows) && stationRows.length > 0) {
-        loadedFromV4 = true
-      } else {
-        try {
-          scopedData = await readServerAppState(APP_STATE_ID)
-        } catch (error) {
-          console.error('loadStations scoped error:', error)
-        }
-
-        if (!scopedData) {
-          try {
-            legacyData = await readServerAppState(APP_STATE_LEGACY_ID)
-          } catch (error) {
-            console.error('loadStations legacy error:', error)
-          }
-        }
       }
 
       const localDraft = safeReadJson(APP_STATE_DRAFT_STORAGE_KEY, null)
@@ -5455,7 +5516,18 @@ export default function App() {
       let serverRevision = null
       let shouldMigrate = false
 
-      if (loadedFromV4) {
+      const chosenServerData = scopedData || legacyData
+      const serverGroups = chosenServerData
+        ? extractGroupsFromAppStatePayload(chosenServerData.payload)
+        : null
+
+      if (serverGroups && serverGroups.length > 0) {
+        nextGroups = serverGroups
+        savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
+        serverUpdatedAt = String(chosenServerData?.updated_at || '')
+        serverRevision = toSafeRevision(chosenServerData?.revision)
+        sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
+      } else if (Array.isArray(stationRows) && stationRows.length > 0) {
         nextGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
         savedAt = String(
           stationRows.reduce((latest, row) => {
@@ -5464,37 +5536,24 @@ export default function App() {
             return String(ts) > String(latest) ? ts : latest
           }, '')
         )
-        serverUpdatedAt = String(
-          stationRows.reduce((latest, row) => {
-            const ts = String(row?.updated_at || '')
-            if (!latest) return ts
-            return String(ts) > String(latest) ? ts : latest
-          }, '')
-        )
-        const revisions = stationRows.map((row) => toSafeRevision(row?.revision)).filter((v) => v !== null)
+        serverUpdatedAt = savedAt
+        const revisions = stationRows
+          .map((row) => toSafeRevision(row?.revision))
+          .filter((v) => v !== null)
         serverRevision = revisions.length > 0 ? Math.max(...revisions) : null
         sourceLabel = '서버 V4'
       } else {
-        const chosenServerData = scopedData || legacyData
-        const serverGroups = chosenServerData ? extractGroupsFromAppStatePayload(chosenServerData.payload) : null
+        const localDraftGroups = Array.isArray(localDraft?.groups)
+          ? normalizeGroups(localDraft.groups)
+          : null
 
-        if (serverGroups && serverGroups.length > 0) {
-          nextGroups = serverGroups
-          savedAt = String(chosenServerData?.payload?.savedAt || chosenServerData?.updated_at || '')
-          serverUpdatedAt = String(chosenServerData?.updated_at || '')
-          serverRevision = toSafeRevision(chosenServerData?.revision)
-          sourceLabel = scopedData ? '서버' : '서버(레거시 이관)'
+        if (localDraftGroups && localDraftGroups.length > 0) {
+          nextGroups = localDraftGroups
+          savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
+          sourceLabel = '로컬 복구'
           shouldMigrate = true
         } else {
-          const localDraftGroups = Array.isArray(localDraft?.groups) ? normalizeGroups(localDraft.groups) : null
-          if (localDraftGroups && localDraftGroups.length > 0) {
-            nextGroups = localDraftGroups
-            savedAt = String(localDraft?.updatedAt || localSync?.savedAt || '')
-            sourceLabel = '로컬 복구'
-            shouldMigrate = true
-          } else {
-            savedAt = String(localSync?.savedAt || '')
-          }
+          savedAt = String(localSync?.savedAt || '')
         }
       }
 
