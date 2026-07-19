@@ -511,6 +511,71 @@ const sortGroupsAndStationsByOrder = (groups) => {
     }))
 }
 
+const applyDraftOrderToGroups = (loadedGroups, draftGroups) => {
+  const draftGroupOrder = new Map()
+  const draftStationOrder = new Map()
+
+  ;(Array.isArray(draftGroups) ? draftGroups : []).forEach((group, groupIndex) => {
+    draftGroupOrder.set(group.id, groupIndex)
+    draftStationOrder.set(
+      group.id,
+      new Map(
+        (Array.isArray(group.stations) ? group.stations : []).map((station, stationIndex) => [
+          station.id,
+          stationIndex
+        ])
+      )
+    )
+  })
+
+  const fallbackGroupOrder = (group) => num(group?.order ?? group?.groupOrder ?? 0)
+  const fallbackStationOrder = (station) => num(station?.order ?? station?.stationOrder ?? 0)
+
+  return (Array.isArray(loadedGroups) ? loadedGroups : [])
+    .slice()
+    .sort((a, b) => {
+      const ai = draftGroupOrder.has(a.id) ? draftGroupOrder.get(a.id) : null
+      const bi = draftGroupOrder.has(b.id) ? draftGroupOrder.get(b.id) : null
+
+      if (ai !== null && bi !== null && ai !== bi) return ai - bi
+      if (ai !== null) return -1
+      if (bi !== null) return 1
+
+      const ao = fallbackGroupOrder(a)
+      const bo = fallbackGroupOrder(b)
+      if (ao !== null && bo !== null && ao !== bo) return ao - bo
+      if (ao !== null && bo === null) return -1
+      if (ao === null && bo !== null) return 1
+
+      return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+    })
+    .map((group) => {
+      const draftStations = draftStationOrder.get(group.id) || new Map()
+
+      return {
+        ...group,
+        stations: (Array.isArray(group.stations) ? group.stations : [])
+          .slice()
+          .sort((a, b) => {
+            const ai = draftStations.has(a.id) ? draftStations.get(a.id) : null
+            const bi = draftStations.has(b.id) ? draftStations.get(b.id) : null
+
+            if (ai !== null && bi !== null && ai !== bi) return ai - bi
+            if (ai !== null) return -1
+            if (bi !== null) return 1
+
+            const ao = fallbackStationOrder(a)
+            const bo = fallbackStationOrder(b)
+            if (ao !== null && bo !== null && ao !== bo) return ao - bo
+            if (ao !== null && bo === null) return -1
+            if (ao === null && bo !== null) return 1
+
+            return String(a?.name || '').localeCompare(String(b?.name || ''), 'ko')
+          })
+      }
+    })
+}
+
 const DEFAULT_GROUPS = normalizeGroups(buildInitialGroups())
 
 
@@ -5479,7 +5544,15 @@ export default function App() {
       let shouldMigrate = false
 
       if (loadedFromV4) {
-        nextGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
+  const serverGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
+  const draftGroups = Array.isArray(localDraft?.groups)
+    ? normalizeGroups(localDraft.groups)
+    : null
+
+  nextGroups =
+    draftGroups && draftGroups.length > 0
+      ? applyDraftOrderToGroups(serverGroups, draftGroups)
+      : serverGroups
         savedAt = String(
           stationRows.reduce((latest, row) => {
             const ts = String(row?.updated_at || '')
