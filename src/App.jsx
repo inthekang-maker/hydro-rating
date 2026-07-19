@@ -3251,6 +3251,10 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
   const bottomSpacer = Math.max(0, (totalRows - endIndex) * rowHeight)
   const colCount = 1 + stationColumns.reduce((acc, col) => acc + (showConvertedFlow ? 2 : 1), 0)
 
+  // 첫 번째 헤더줄 높이만큼 두 번째 줄을 내려줌
+  const headerRowHeight = 56
+  const subHeaderTop = showConvertedFlow ? headerRowHeight : 0
+
   useEffect(() => {
     setScrollTop(0)
     if (containerRef.current) {
@@ -3269,7 +3273,10 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
         borderRadius: '10px'
       }}
     >
-      <table className="spreadsheet" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
+      <table
+        className="spreadsheet"
+        style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}
+      >
         <thead>
           <tr>
             <th
@@ -3278,13 +3285,14 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                 position: 'sticky',
                 top: 0,
                 left: 0,
-                zIndex: 4,
+                zIndex: 6,
                 background: '#fff',
                 whiteSpace: 'nowrap'
               }}
             >
               시간
             </th>
+
             {stationColumns.map((col) => (
               <th
                 key={col.station.id}
@@ -3292,7 +3300,7 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                 style={{
                   position: 'sticky',
                   top: 0,
-                  zIndex: 3,
+                  zIndex: 5,
                   background: '#fff',
                   whiteSpace: 'nowrap',
                   minWidth: showConvertedFlow ? '184px' : '96px'
@@ -3305,6 +3313,7 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
               </th>
             ))}
           </tr>
+
           {showConvertedFlow ? (
             <tr>
               {stationColumns.map((col) => (
@@ -3312,8 +3321,8 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                   <th
                     style={{
                       position: 'sticky',
-                      top: 0,
-                      zIndex: 3,
+                      top: subHeaderTop,
+                      zIndex: 4,
                       background: '#fff',
                       whiteSpace: 'nowrap',
                       minWidth: '92px'
@@ -3324,8 +3333,8 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                   <th
                     style={{
                       position: 'sticky',
-                      top: 0,
-                      zIndex: 3,
+                      top: subHeaderTop,
+                      zIndex: 4,
                       background: '#fff',
                       whiteSpace: 'nowrap',
                       minWidth: '92px'
@@ -3338,12 +3347,14 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
             </tr>
           ) : null}
         </thead>
+
         <tbody>
           {topSpacer > 0 ? (
             <tr aria-hidden="true">
               <td colSpan={colCount} style={{ height: `${topSpacer}px`, padding: 0, border: 'none' }} />
             </tr>
           ) : null}
+
           {visibleTimes.map((time) => (
             <tr key={time} style={{ height: `${rowHeight}px` }}>
               <td
@@ -3358,23 +3369,30 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
               >
                 {formatYmdhm(time)}
               </td>
+
               {stationColumns.map((col) =>
                 showConvertedFlow ? (
                   <React.Fragment key={`${col.station.id}-${time}`}>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                      {col.rowsMap?.[time] === null || col.rowsMap?.[time] === undefined || col.rowsMap?.[time] === ''
+                      {col.rowsMap?.[time] === null ||
+                      col.rowsMap?.[time] === undefined ||
+                      col.rowsMap?.[time] === ''
                         ? ''
                         : fmt(col.rowsMap[time], 2)}
                     </td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                      {col.flowRowsMap?.[time] === null || col.flowRowsMap?.[time] === undefined || col.flowRowsMap?.[time] === ''
+                      {col.flowRowsMap?.[time] === null ||
+                      col.flowRowsMap?.[time] === undefined ||
+                      col.flowRowsMap?.[time] === ''
                         ? ''
                         : fmt(col.flowRowsMap[time], 3)}
                     </td>
                   </React.Fragment>
                 ) : (
                   <td key={`${col.station.id}-${time}`} style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
-                    {col.rowsMap?.[time] === null || col.rowsMap?.[time] === undefined || col.rowsMap?.[time] === ''
+                    {col.rowsMap?.[time] === null ||
+                    col.rowsMap?.[time] === undefined ||
+                    col.rowsMap?.[time] === ''
                       ? ''
                       : fmt(col.rowsMap[time], 2)}
                   </td>
@@ -3382,6 +3400,7 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
               )}
             </tr>
           ))}
+
           {bottomSpacer > 0 ? (
             <tr aria-hidden="true">
               <td colSpan={colCount} style={{ height: `${bottomSpacer}px`, padding: 0, border: 'none' }} />
