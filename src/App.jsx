@@ -4915,6 +4915,29 @@ const resetHistory = () => {
         <span style={{ margin: 0 }}>{option.label}</span>
       </label>
     ))}
+    <label
+  style={{
+    display: 'grid',
+    gridTemplateColumns: '18px auto',
+    alignItems: 'center',
+    columnGap: '6px',
+    margin: 0,
+    cursor: 'pointer',
+    lineHeight: 1.2
+  }}
+>
+  <input
+    type="checkbox"
+    checked={chartSeparateCharts}
+    onChange={(e) => setChartSeparateCharts(e.target.checked)}
+    style={{
+      margin: 0,
+      width: '14px',
+      height: '14px'
+    }}
+  />
+  <span style={{ margin: 0 }}>각각 차트 생성</span>
+</label>
   </div>
 </div>
 
@@ -4962,15 +4985,6 @@ const resetHistory = () => {
   }}
   />
 </label>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="checkbox"
-                checked={chartSeparateCharts}
-                onChange={(e) => setChartSeparateCharts(e.target.checked)}
-              />
-              각각 차트 생성
-            </label>
           </div>
         </div>
 
