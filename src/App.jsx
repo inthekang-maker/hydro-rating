@@ -4172,7 +4172,7 @@ const resetHistory = () => {
   )
 }
 
-const handleDownloadHistoryCsv = () => {
+  const handleDownloadHistoryXlsx = () => {
   if (historyTimes.length === 0 || stationColumns.length === 0) {
     window.alert('내보낼 수위 자료가 없습니다.')
     return
@@ -4190,13 +4190,14 @@ const handleDownloadHistoryCsv = () => {
     }
   })
 
-  const lines = [headers]
-  historyTimes.forEach((time) => {
+  const rows = historyTimes.map((time) => {
     const row = [formatYmdhm(time)]
     stationColumns.forEach((col) => {
       const waterValue = col.rowsMap?.[time]
       row.push(
-        waterValue === null || waterValue === undefined || waterValue === ''
+        waterValue === null ||
+        waterValue === undefined ||
+        waterValue === ''
           ? ''
           : fmt(waterValue, 2)
       )
@@ -4204,26 +4205,23 @@ const handleDownloadHistoryCsv = () => {
       if (showConvertedFlow) {
         const flowValue = col.flowRowsMap?.[time]
         row.push(
-          flowValue === null || flowValue === undefined || flowValue === ''
+          flowValue === null ||
+          flowValue === undefined ||
+          flowValue === ''
             ? ''
             : fmt(flowValue, 3)
         )
       }
     })
-    lines.push(row)
+    return row
   })
 
-  const csv = lines
-    .map((cells) => cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-    .join('\n')
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
 
-  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  const fileName = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.xlsx`
+  XLSX.writeFile(workbook, fileName)
 }
 
   const chartPeriodRange = useMemo(
