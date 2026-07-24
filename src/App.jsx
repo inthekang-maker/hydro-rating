@@ -217,7 +217,27 @@ function parseThreshold(note) {
 
 function parseDateTime(value) {
   if (!value) return null
-  const d = new Date(value)
+
+  // 이미 Date 객체면 그대로 사용
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value
+  }
+
+  const s = String(value).trim()
+
+  // HRFCO ymdhm 형식: 202607240810
+  if (/^\d{12}$/.test(s)) {
+    const yyyy = Number(s.slice(0, 4))
+    const mm = Number(s.slice(4, 6))
+    const dd = Number(s.slice(6, 8))
+    const hh = Number(s.slice(8, 10))
+    const mi = Number(s.slice(10, 12))
+
+    const d = new Date(yyyy, mm - 1, dd, hh, mi, 0, 0)
+    return Number.isNaN(d.getTime()) ? null : d
+  }
+
+  const d = new Date(s)
   return Number.isNaN(d.getTime()) ? null : d
 }
 
@@ -225,6 +245,7 @@ function isMeasurementApplicableToSection(measurementDatetime, section) {
   const start = parseDateTime(section.periodStart)
   const end = parseDateTime(section.periodEnd)
   const measurementDate = parseDateTime(measurementDatetime)
+
   if (!start || !end || !measurementDate) return true
 
   const startYear = start.getFullYear()
