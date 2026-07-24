@@ -5002,19 +5002,24 @@ const resetHistory = () => {
           <div style={{ marginTop: '14px' }}>
             <h3 style={{ marginBottom: '8px' }}>유량 차트 {generatedFlowChartLabel ? `(${generatedFlowChartLabel})` : ''}</h3>
             {generatedFlowCharts.map((chart) => (
-              <InstrumentWaterLevelChart
-                key={chart.id}
-                title={chart.title}
-                subtitle={chart.subtitle}
-                datasets={chart.datasets}
-                range={chart.range}
-                height={chart.height}
-                yAxisTitle="환산유량 Q(m³/s)"
-                tooltipValueLabel="Q"
-                zoomX={instrumentChartZoomX}
-                zoomY={instrumentChartZoomY}
-              />
-            ))}
+  <InstrumentWaterLevelChart
+    key={chart.id}
+    title={chart.title}
+    subtitle={chart.subtitle}
+    datasets={chart.datasets}
+    range={chart.range}
+    height={chart.height}
+
+    yMin={instrumentChartYMin}
+    yMax={instrumentChartYMax}
+
+    yAxisTitle="환산유량 Q(m³/s)"
+    tooltipValueLabel="Q"
+
+    zoomX={instrumentChartZoomX}
+    zoomY={instrumentChartZoomY}
+  />
+))}
           </div>
         ) : null}
       </section>
