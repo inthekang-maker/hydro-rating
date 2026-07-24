@@ -6902,7 +6902,7 @@ export default function App() {
           </label>
         </div>
         <SpreadsheetGrid
-          title="3. 측정성과 입력"
+          title=""
           columns={measurementColumns}
           rows={filteredMeasurements}
           onRowsChange={(nextVisibleRows) => {
