@@ -1,3 +1,4 @@
+import * as XLSX from 'xlsx'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from './lib/supabaseClient'
 import {
@@ -4171,6 +4172,60 @@ const resetHistory = () => {
   )
 }
 
+const handleDownloadHistoryCsv = () => {
+  if (historyTimes.length === 0 || stationColumns.length === 0) {
+    window.alert('내보낼 수위 자료가 없습니다.')
+    return
+  }
+
+  const headers = ['시간']
+  stationColumns.forEach((col) => {
+    const name = col.station.name || '지점 없음'
+    const code = col.station.code ? ` (${col.station.code})` : ''
+    if (showConvertedFlow) {
+      headers.push(`${name}${code} 수위(h)`)
+      headers.push(`${name}${code} 환산유량(Q)`)
+    } else {
+      headers.push(`${name}${code}`)
+    }
+  })
+
+  const lines = [headers]
+  historyTimes.forEach((time) => {
+    const row = [formatYmdhm(time)]
+    stationColumns.forEach((col) => {
+      const waterValue = col.rowsMap?.[time]
+      row.push(
+        waterValue === null || waterValue === undefined || waterValue === ''
+          ? ''
+          : fmt(waterValue, 2)
+      )
+
+      if (showConvertedFlow) {
+        const flowValue = col.flowRowsMap?.[time]
+        row.push(
+          flowValue === null || flowValue === undefined || flowValue === ''
+            ? ''
+            : fmt(flowValue, 3)
+        )
+      }
+    })
+    lines.push(row)
+  })
+
+  const csv = lines
+    .map((cells) => cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
   const chartPeriodRange = useMemo(
     () => getInstrumentChartPeriodRange(chartPeriodKey, chartCustomStartTime, chartCustomEndTime),
     [chartPeriodKey, chartCustomStartTime, chartCustomEndTime]
@@ -4780,14 +4835,22 @@ const resetHistory = () => {
         <div className="section-header">
           <h2>수위 자료</h2>
           <div className="grid-actions">
-            <button
-              className="btn secondary"
-              onClick={() => setShowConvertedFlow((prev) => !prev)}
-              disabled={historyTimes.length === 0}
-            >
-              {showConvertedFlow ? '환산유량 숨기기' : '환산유량 추가'}
-            </button>
-          </div>
+  <button
+    className="btn secondary"
+    onClick={handleDownloadHistoryXlsx}
+    disabled={historyTimes.length === 0}
+  >
+    엑셀 저장
+  </button>
+
+  <button
+    className="btn secondary"
+    onClick={() => setShowConvertedFlow((prev) => !prev)}
+    disabled={historyTimes.length === 0}
+  >
+    {showConvertedFlow ? '환산유량 숨기기' : '환산유량 추가'}
+  </button>
+</div>
         </div>
         {stationColumns.length === 0 ? (
           <div className="muted">선택된 지점이 없습니다.</div>
