@@ -5095,6 +5095,94 @@ export default function App() {
   const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
   const [activeTab, setActiveTab] = useState('management')
   const [instrumentSubTab, setInstrumentSubTab] = useState('current')
+  const [swipeStart, setSwipeStart] = useState(null)
+    const tabFlow = useMemo(
+    () => [
+      { activeTab: 'management', instrumentSubTab: null },
+      { activeTab: 'process', instrumentSubTab: null },
+      { activeTab: 'instrument', instrumentSubTab: 'current' },
+      { activeTab: 'instrument', instrumentSubTab: 'history' }
+    ],
+    []
+  )
+
+  const getCurrentSwipeIndex = () => {
+    return tabFlow.findIndex((item) => {
+      if (item.activeTab !== activeTab) return false
+      if (item.activeTab === 'instrument') {
+        return item.instrumentSubTab === instrumentSubTab
+      }
+      return true
+    })
+  }
+
+  const moveSwipeTab = (direction) => {
+    const currentIndex = getCurrentSwipeIndex()
+    if (currentIndex < 0) return
+
+    const nextIndex = currentIndex + direction
+    if (nextIndex < 0 || nextIndex >= tabFlow.length) return
+
+    const next = tabFlow[nextIndex]
+    setActiveTab(next.activeTab)
+    if (next.activeTab === 'instrument') {
+      setInstrumentSubTab(next.instrumentSubTab || 'current')
+    }
+  }
+
+  const shouldIgnoreSwipeTarget = (target) => {
+    if (!(target instanceof Element)) return true
+    return Boolean(
+      target.closest(
+        'input, select, textarea, button, .table-wrap, .chart-wrapper, .chart-box, .chart-legend'
+      )
+    )
+  }
+
+  const handleTouchStart = (e) => {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return
+    if (shouldIgnoreSwipeTarget(e.target)) return
+
+    const touch = e.touches[0]
+    if (!touch) return
+
+    setSwipeStart({
+      x: touch.clientX,
+      y: touch.clientY
+    })
+  }
+
+  const handleTouchEnd = (e) => {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return
+    if (!swipeStart) return
+
+    const touch = e.changedTouches[0]
+    if (!touch) {
+      setSwipeStart(null)
+      return
+    }
+
+    const dx = touch.clientX - swipeStart.x
+    const dy = touch.clientY - swipeStart.y
+
+    const minDistance = 50
+    if (Math.abs(dx) < minDistance || Math.abs(dx) < Math.abs(dy)) {
+      setSwipeStart(null)
+      return
+    }
+
+    if (dx < 0) {
+      moveSwipeTab(1)
+    } else {
+      moveSwipeTab(-1)
+    }
+
+    setSwipeStart(null)
+  }
+
+  const handleTouchCancel = () => {
+    setSwipeStart(null)
+  }
   const [hrfcoApiKey, setHrfcoApiKey] = useState(() => {
     try {
       return localStorage.getItem(HRFCO_API_KEY_STORAGE_KEY_SCOPED) || ''
@@ -6454,8 +6542,13 @@ export default function App() {
     { key: 'partialOpen', label: '공사영향' }
   ]
 
-  return (
-    <div className="app">
+    return (
+    <div
+      className="app"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+    >
       <header className="header">
         <div>
           <h1>지점별 자료 관리 PWA</h1>
