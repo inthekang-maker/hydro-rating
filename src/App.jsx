@@ -1419,25 +1419,32 @@ const fetchLatestHrfcoWaterLevel = async (apiKey, stationName, referenceTime = n
 }
 
 const buildCurrentWaterEntries = (station, currentValue, previousValue, currentTime = '') => {
-  const historicalValues = (station.measurements || [])
-    .map((measurement) => roundTo(measurement.h, 2))
-    .filter((value) => value !== null)
-    .sort((a, b) => a - b)
+  const historicalEntries = (station.measurements || [])
+    .map((measurement) => {
+      const value = roundTo(measurement.h, 2)
+      if (value === null) return null
 
-  const entries = historicalValues.map((value) => ({
-    value,
-    display: fmt(value, 2),
-    isCurrent: false,
-    exactMatch: false,
-    trend: '',
-    currentTime: ''
-  }))
+      return {
+        value,
+        display: fmt(value, 2),
+        isCurrent: false,
+        exactMatch: false,
+        trend: '',
+        currentTime: '',
+        measurementYear: getYearLabel(measurement.datetime)
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.value - b.value)
+
+  const entries = historicalEntries
 
   if (currentValue !== null && currentValue !== undefined) {
     const currentRounded = roundTo(currentValue, 2)
     if (currentRounded !== null) {
-      const exactMatch = historicalValues.some((value) => value === currentRounded)
+      const exactMatch = historicalEntries.some((item) => item.value === currentRounded)
       const previousRounded = roundTo(previousValue, 2)
+
       let symbol = '-'
       if (previousRounded !== null) {
         if (currentRounded > previousRounded) symbol = '▲'
@@ -1450,7 +1457,8 @@ const buildCurrentWaterEntries = (station, currentValue, previousValue, currentT
         isCurrent: true,
         exactMatch,
         trend: symbol === '▲' ? 'up' : symbol === '▼' ? 'down' : 'same',
-        currentTime
+        currentTime,
+        measurementYear: getYearLabel(currentTime || new Date())
       })
     }
   }
@@ -3444,6 +3452,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const topScrollRef = useRef(null)
   const bodyScrollRef = useRef(null)
   const [scrollContentWidth, setScrollContentWidth] = useState(0)
+  const currentYear = String(new Date().getFullYear())
 
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
@@ -3726,8 +3735,15 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                       {stationColumns.map((col) => {
                         const entry = col.entries[rowIndex]
                         const isCurrent = Boolean(entry?.isCurrent)
-                        const bg = isCurrent ? (entry.exactMatch ? '#bfefff' : '#ff6b6b') : undefined
-                        const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
+                        const isThisYear = entry?.measurementYear === currentYear
+
+const bg = isCurrent
+  ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
+  : isThisYear
+    ? '#fff8cc'
+    : undefined
+
+const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
                         return (
                           <td
                             key={`${col.station.id}-${rowIndex}`}
