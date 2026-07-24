@@ -3793,8 +3793,10 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [flowChartStatus, setFlowChartStatus] = useState('')
   const [generatedFlowCharts, setGeneratedFlowCharts] = useState([])
   const [generatedFlowChartLabel, setGeneratedFlowChartLabel] = useState('')
-  const [instrumentChartYMin, setInstrumentChartYMin] = useState('')
-  const [instrumentChartYMax, setInstrumentChartYMax] = useState('')
+  const [waterChartYMin, setWaterChartYMin] = useState('')
+  const [waterChartYMax, setWaterChartYMax] = useState('')
+  const [flowChartYMin, setFlowChartYMin] = useState('')
+  const [flowChartYMax, setFlowChartYMax] = useState('')
   const [instrumentChartZoomX, setInstrumentChartZoomX] = useState(1)
   const [instrumentChartZoomY, setInstrumentChartZoomY] = useState(1)
 
@@ -4913,30 +4915,54 @@ const resetHistory = () => {
         ) : null}
 
         <div className="chart-settings">
-          <div className="chart-setting-card">
-            <h3>축 설정</h3>
-            <div className="chart-setting-grid">
-              <label>
-                Y축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMin}
-                  onChange={(e) => setInstrumentChartYMin(e.target.value)}
-                />
-              </label>
-              <label>
-                Y축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={instrumentChartYMax}
-                  onChange={(e) => setInstrumentChartYMax(e.target.value)}
-                />
-              </label>
-            </div>
-          </div>
-        </div>
+  <div className="chart-setting-card">
+    <h3>수위 그래프 축 설정</h3>
+    <div className="chart-setting-grid">
+      <label>
+        Y축 최소
+        <input
+          type="number"
+          step="any"
+          value={waterChartYMin}
+          onChange={(e) => setWaterChartYMin(e.target.value)}
+        />
+      </label>
+      <label>
+        Y축 최대
+        <input
+          type="number"
+          step="any"
+          value={waterChartYMax}
+          onChange={(e) => setWaterChartYMax(e.target.value)}
+        />
+      </label>
+    </div>
+  </div>
+
+  <div className="chart-setting-card">
+    <h3>환산유량 그래프 축 설정</h3>
+    <div className="chart-setting-grid">
+      <label>
+        Y축 최소
+        <input
+          type="number"
+          step="any"
+          value={flowChartYMin}
+          onChange={(e) => setFlowChartYMin(e.target.value)}
+        />
+      </label>
+      <label>
+        Y축 최대
+        <input
+          type="number"
+          step="any"
+          value={flowChartYMax}
+          onChange={(e) => setFlowChartYMax(e.target.value)}
+        />
+      </label>
+    </div>
+  </div>
+</div>
 
 
         <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
@@ -4980,20 +5006,20 @@ const resetHistory = () => {
         {generatedCharts.length > 0 ? (
           <div style={{ marginTop: '14px' }}>
             {generatedCharts.map((chart) => (
-              <InstrumentWaterLevelChart
-                key={chart.id}
-                title={chart.title}
-                subtitle={chart.subtitle}
-                datasets={chart.datasets}
-                range={chart.range}
-                height={chart.height}
-                yMin={instrumentChartYMin}
-                yMax={instrumentChartYMax}
-                yAxisTitle="수위 h(m)"
-                tooltipValueLabel="h"
-                zoomX={instrumentChartZoomX}
-                zoomY={instrumentChartZoomY}
-              />
+             <InstrumentWaterLevelChart
+  key={chart.id}
+  title={chart.title}
+  subtitle={chart.subtitle}
+  datasets={chart.datasets}
+  range={chart.range}
+  height={chart.height}
+  yMin={waterChartYMin}
+  yMax={waterChartYMax}
+  yAxisTitle="수위 h(m)"
+  tooltipValueLabel="h"
+  zoomX={instrumentChartZoomX}
+  zoomY={instrumentChartZoomY}
+/> 
             ))}
           </div>
         ) : null}
@@ -5003,22 +5029,19 @@ const resetHistory = () => {
             <h3 style={{ marginBottom: '8px' }}>유량 차트 {generatedFlowChartLabel ? `(${generatedFlowChartLabel})` : ''}</h3>
             {generatedFlowCharts.map((chart) => (
   <InstrumentWaterLevelChart
-    key={chart.id}
-    title={chart.title}
-    subtitle={chart.subtitle}
-    datasets={chart.datasets}
-    range={chart.range}
-    height={chart.height}
-
-    yMin={instrumentChartYMin}
-    yMax={instrumentChartYMax}
-
-    yAxisTitle="환산유량 Q(m³/s)"
-    tooltipValueLabel="Q"
-
-    zoomX={instrumentChartZoomX}
-    zoomY={instrumentChartZoomY}
-  />
+  key={chart.id}
+  title={chart.title}
+  subtitle={chart.subtitle}
+  datasets={chart.datasets}
+  range={chart.range}
+  height={chart.height}
+  yMin={flowChartYMin}
+  yMax={flowChartYMax}
+  yAxisTitle="환산유량 Q(m³/s)"
+  tooltipValueLabel="Q"
+  zoomX={instrumentChartZoomX}
+  zoomY={instrumentChartZoomY}
+/>
 ))}
           </div>
         ) : null}
