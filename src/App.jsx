@@ -70,6 +70,17 @@ const fmt = (v, digits = 3) => {
   return Number.isFinite(n) ? n.toFixed(digits) : ''
 }
 
+const sanitizeExcelSheetName = (name) => {
+  const raw = String(name || '').trim().replace(/[\/:?*\[\]]/g, ' ').replace(/\s+/g, ' ')
+  const trimmed = raw.replace(/^'+|'+$/g, '').trim()
+  return (trimmed || 'Sheet').slice(0, 31)
+}
+
+const formatMeasurementDatetimeForExport = (value) => {
+  const parsed = parseDateTime(value)
+  return parsed ? formatDateTimeDisplay(parsed) : String(value || '')
+}
+
 const formatTick = (value) => {
   const n = Number(value)
   if (!Number.isFinite(n)) return `${value}`
@@ -6266,6 +6277,58 @@ export default function App() {
   const selectedSections = selectedStation?.sections || []
   const selectedMeasurements = selectedStation?.measurements || []
 
+  const handleExportSelectedGroupMeasurements = () => {
+    if (!selectedGroup) {
+      window.alert('내보낼 그룹을 선택해 주세요.')
+      return
+    }
+
+    const workbook = XLSX.utils.book_new()
+    const stations = Array.isArray(selectedGroup.stations) ? selectedGroup.stations : []
+    const usedNames = new Map()
+    const yearFilter = measurementYearFilter
+
+    stations.forEach((station, index) => {
+      const baseName = sanitizeExcelSheetName(station?.name || `지점 ${index + 1}`)
+      let sheetName = baseName
+      let suffix = 2
+      while (usedNames.has(sheetName)) {
+        const extra = `_${suffix}`
+        sheetName = sanitizeExcelSheetName(`${baseName.slice(0, 31 - extra.length)}${extra}`)
+        suffix += 1
+      }
+      usedNames.set(sheetName, true)
+
+      const headers = ['측정일시', '수위(h)', '유량(Q)', '측정장비']
+      const rows = (Array.isArray(station.measurements) ? station.measurements : [])
+        .filter((measurement) => {
+          if (yearFilter === '전체') return true
+          return getYearLabel(measurement?.datetime) === yearFilter
+        })
+        .slice()
+        .sort((a, b) => {
+          const ad = parseDateTime(a?.datetime)?.getTime() ?? 0
+          const bd = parseDateTime(b?.datetime)?.getTime() ?? 0
+          if (ad !== bd) return ad - bd
+          return String(a?.datetime || '').localeCompare(String(b?.datetime || ''))
+        })
+        .map((measurement) => [
+          formatMeasurementDatetimeForExport(measurement?.datetime),
+          measurement?.h ?? '',
+          measurement?.q ?? '',
+          measurement?.device ?? ''
+        ])
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+    })
+
+    const groupName = sanitizeExcelSheetName(selectedGroup.name || '그룹')
+    const yearLabel = yearFilter === '전체' ? '전체' : `${yearFilter}년`
+    const fileName = `${groupName}_측정성과입력_${yearLabel}_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.xlsx`
+    XLSX.writeFile(workbook, fileName)
+  }
+
   const tableAutoStyle = SHARED_TABLE_STYLE
 
   const handleMeasurementRowsChange = (nextVisibleRows) => {
@@ -6811,6 +6874,18 @@ export default function App() {
       </section>
 
       <section className="card">
+        <div className="section-header">
+          <h2>3. 측정성과 입력</h2>
+          <div className="grid-actions">
+            <button
+              className="btn secondary"
+              onClick={handleExportSelectedGroupMeasurements}
+              disabled={!selectedGroup}
+            >
+              그룹 엑셀 저장
+            </button>
+          </div>
+        </div>
         <div className="grid-actions" style={{ justifyContent: 'flex-end', marginBottom: '10px' }}>
           <label>
             연도별
