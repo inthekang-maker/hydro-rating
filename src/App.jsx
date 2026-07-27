@@ -3193,7 +3193,7 @@ function InstrumentWaterLevelChart({
   )
 
   return (
-    <div className="subcard" style={{ marginBottom: '16px' }}>
+  <div className="subcard" data-swipe-zone="instrument" style={{ marginBottom: '16px' }}>
       <h3 style={{ marginBottom: '6px' }}>{title}</h3>
       {subtitle ? <p className="muted" style={{ marginBottom: '10px' }}>{subtitle}</p> : null}
       <div style={{ overflow: 'auto' }}>
@@ -3304,16 +3304,17 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
   }, [stationColumns, times, ascending, showConvertedFlow])
 
   return (
-    <div
-      ref={containerRef}
-      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-      style={{
-        maxHeight: `${height}px`,
-        overflow: 'auto',
-        border: '1px solid rgba(0,0,0,0.12)',
-        borderRadius: '10px'
-      }}
-    >
+     <div
+  ref={containerRef}
+  data-swipe-zone="instrument"
+  onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+  style={{
+    maxHeight: `${height}px`,
+    overflow: 'auto',
+    border: '1px solid rgba(0,0,0,0.12)',
+    borderRadius: '10px'
+  }}
+>
       <table
         className="spreadsheet"
         style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}
@@ -5216,55 +5217,73 @@ export default function App() {
     }
   }
 
-  const shouldIgnoreSwipeTarget = (target) => {
-    if (!(target instanceof Element)) return true
-    return Boolean(
-      target.closest(
-        'input, select, textarea, button, .table-wrap, .chart-wrapper, .chart-box, .chart-legend'
-      )
+  const getSwipeZone = (target) => {
+  if (!(target instanceof Element)) return null
+  if (target.closest('[data-swipe-zone="instrument"]')) return 'instrument'
+  return null
+}
+
+const shouldIgnoreSwipeTarget = (target) => {
+  if (!(target instanceof Element)) return true
+
+  // instrument 영역은 예외적으로 스와이프 허용
+  if (getSwipeZone(target)) return false
+
+  // 기존 제외 규칙 유지
+  return Boolean(
+    target.closest(
+      'input, select, textarea, button, .table-wrap, .chart-wrapper, .chart-box, .chart-legend'
     )
-  }
+  )
+}
 
-  const handleTouchStart = (e) => {
-    if (typeof window === 'undefined' || window.innerWidth > 768) return
-    if (shouldIgnoreSwipeTarget(e.target)) return
+const handleTouchStart = (e) => {
+  if (typeof window === 'undefined' || window.innerWidth > 768) return
+  if (shouldIgnoreSwipeTarget(e.target)) return
 
-    const touch = e.touches[0]
-    if (!touch) return
+  const touch = e.touches[0]
+  if (!touch) return
 
-    setSwipeStart({
-      x: touch.clientX,
-      y: touch.clientY
-    })
-  }
+  setSwipeStart({
+    x: touch.clientX,
+    y: touch.clientY,
+    zone: getSwipeZone(e.target) || 'default'
+  })
+}
 
-  const handleTouchEnd = (e) => {
-    if (typeof window === 'undefined' || window.innerWidth > 768) return
-    if (!swipeStart) return
+const handleTouchEnd = (e) => {
+  if (typeof window === 'undefined' || window.innerWidth > 768) return
+  if (!swipeStart) return
 
-    const touch = e.changedTouches[0]
-    if (!touch) {
-      setSwipeStart(null)
-      return
-    }
-
-    const dx = touch.clientX - swipeStart.x
-    const dy = touch.clientY - swipeStart.y
-
-    const minDistance = 50
-    if (Math.abs(dx) < minDistance || Math.abs(dx) < Math.abs(dy)) {
-      setSwipeStart(null)
-      return
-    }
-
-    if (dx < 0) {
-      moveSwipeTab(1)
-    } else {
-      moveSwipeTab(-1)
-    }
-
+  const touch = e.changedTouches[0]
+  if (!touch) {
     setSwipeStart(null)
+    return
   }
+
+  const dx = touch.clientX - swipeStart.x
+  const dy = touch.clientY - swipeStart.y
+  const absDx = Math.abs(dx)
+  const absDy = Math.abs(dy)
+
+  const minDistance =
+    swipeStart.zone === 'instrument'
+      ? Math.max(180, Math.round(window.innerWidth * 0.45))
+      : 50
+
+  const horizontalRatio = absDy === 0 ? Infinity : absDx / absDy
+  const minRatio = swipeStart.zone === 'instrument' ? 1.7 : 1.35
+
+  if (absDx < minDistance || horizontalRatio < minRatio) {
+    setSwipeStart(null)
+    return
+  }
+
+  if (dx < 0) moveSwipeTab(1)
+  else moveSwipeTab(-1)
+
+  setSwipeStart(null)
+}
 
   const handleTouchCancel = () => {
     setSwipeStart(null)
