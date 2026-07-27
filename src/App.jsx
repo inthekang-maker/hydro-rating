@@ -2855,15 +2855,19 @@ const summaryStationRows = useMemo(() => {
     <h2>측정성과 공정률 요약</h2>
     <div className="grid-actions">
       <button
-        type="button"
-        className="btn secondary"
-        onClick={() => {
-          setSummaryDraftIds(summarySelectedIds)
-          setSummaryExcludeOpen((prev) => !prev)
-        }}
-      >
-        {summaryExcludeOpen ? '옵션 닫기' : '미포함 옵션'}
-      </button>
+  type="button"
+  className="btn secondary"
+  onClick={() => {
+    setSummaryDraftIds(summarySelectedIds)
+    setSummaryExcludeOpen((prev) => !prev)
+  }}
+>
+  {summaryExcludeOpen
+    ? `옵션 닫기 (${summaryDraftIds.length}개 선택)`
+    : summarySelectedIds.length > 0
+      ? `미포함 옵션 (${summarySelectedIds.length}개 선택)`
+      : '미포함 옵션'}
+</button>
     </div>
   </div>
 
