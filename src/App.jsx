@@ -2558,6 +2558,9 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
   const [stationFilter, setStationFilter] = useState('전체')
+  const [summaryExcludeOpen, setSummaryExcludeOpen] = useState(false)
+  const [summaryDraftIds, setSummaryDraftIds] = useState([])
+  const [summarySelectedIds, setSummarySelectedIds] = useState([])
 
   const monthLabels = useMemo(
     () => Array.from({ length: 12 }, (_, idx) => `${idx + 1}월`),
@@ -2622,6 +2625,39 @@ function ProcessRatePage({ groups, onUpdateStation }) {
       })
   }, [groups, groupFilter, classificationFilter, stationFilter])
 
+  const summaryExcludeMode = groupFilter === '전체' ? 'group' : 'station'
+
+const summaryExcludeOptions = useMemo(() => {
+  if (summaryExcludeMode === 'group') {
+    return groups.map((group) => ({
+      id: group.id,
+      label: group.name || '그룹 없음'
+    }))
+  }
+
+  const targetGroups =
+    groupFilter === '전체'
+      ? groups
+      : groups.filter((group) => (group.name || '그룹 없음') === groupFilter)
+
+  return targetGroups.flatMap((group) =>
+    (group.stations || []).map((station) => ({
+      id: station.id,
+      label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`
+    }))
+  )
+}, [groups, groupFilter, summaryExcludeMode])
+  useEffect(() => {
+  const validIds = new Set(summaryExcludeOptions.map((item) => item.id))
+  setSummaryDraftIds((prev) => prev.filter((id) => validIds.has(id)))
+  setSummarySelectedIds((prev) => prev.filter((id) => validIds.has(id)))
+}, [summaryExcludeOptions])
+
+useEffect(() => {
+  setSummaryExcludeOpen(false)
+  setSummaryDraftIds([])
+}, [groupFilter])
+
   const stationRows = useMemo(() => {
     return filteredStations.map((station) => {
       const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
@@ -2654,11 +2690,48 @@ function ProcessRatePage({ groups, onUpdateStation }) {
     })
   }, [filteredStations, currentYear])
 
-const summary = useMemo(() => {
+const summaryStations = useMemo(() => {
+  const excluded = new Set(summarySelectedIds)
+  return filteredStations.filter((station) => !excluded.has(station.id))
+}, [filteredStations, summarySelectedIds])
+
+const summaryStationRows = useMemo(() => {
+  return summaryStations.map((station) => {
+    const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
+    const actualValues = Array.from({ length: 12 }, () => 0)
+
+    ;(station.measurements || []).forEach((measurement) => {
+      const d = parseDateTime(measurement.datetime)
+      if (!d || d.getFullYear() !== currentYear) return
+      actualValues[d.getMonth()] += 1
+    })
+
+    const monthlyRates = planValues.map((plan, idx) =>
+      plan > 0 ? (actualValues[idx] / plan) * 100 : null
+    )
+    const cumulativeRates = planValues.map((_, idx) => {
+      const planSum = sum(planValues.slice(0, idx + 1))
+      const actualSum = sum(actualValues.slice(0, idx + 1))
+      return planSum > 0 ? (actualSum / planSum) * 100 : null
+    })
+
+    return {
+      station,
+      planValues,
+      actualValues,
+      monthlyRates,
+      cumulativeRates,
+      planTotal: sum(planValues),
+      actualTotal: sum(actualValues)
+    }
+  })
+}, [summaryStations, currentYear])
+
+  const summary = useMemo(() => {
   const planTotals = Array.from({ length: 12 }, () => 0)
   const actualTotals = Array.from({ length: 12 }, () => 0)
 
-  stationRows.forEach((row) => {
+  summaryStationRows.forEach((row) => {
     row.planValues.forEach((value, idx) => {
       planTotals[idx] += toNumber(value)
     })
@@ -2696,7 +2769,7 @@ const summary = useMemo(() => {
     cumulativePlanGrandTotal: sum(planTotals),
     cumulativeActualGrandTotal: sum(actualTotals)
   }
-}, [stationRows])
+}, [summaryStationRows])
 
   const updateProcessPlan = (stationId, monthIndex, value) => {
     const nextValue = String(value)
@@ -2773,21 +2846,145 @@ const summary = useMemo(() => {
       </section>
 
       <section className="card">
-        <h2>측정성과 공정률 요약</h2>
-        <CopyableMatrixTable
-            headers={['구분', ...monthLabels, '총']}
-            rows={[
-              ['측정 계획', ...summary.planTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.planGrandTotal)],
-              ['유량측정 실적', ...summary.actualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.actualGrandTotal)],
-              ['누적측정 계획', ...summary.cumulativePlanTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativePlanGrandTotal)],
-              ['누적측정 실적', ...summary.cumulativeActualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativeActualGrandTotal)],
-              ['월별 공정률', ...summary.monthlyRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })],
-              ['누적 공정률', ...summary.cumulativeRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })]
-            ]}
-            tableClassName="spreadsheet"
-            style={{ width: 'max-content', minWidth: '100%' }}
-          />
-      </section>
+  <div className="section-header">
+    <h2>측정성과 공정률 요약</h2>
+    <div className="grid-actions">
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={() => {
+          setSummaryDraftIds(summarySelectedIds)
+          setSummaryExcludeOpen((prev) => !prev)
+        }}
+      >
+        {summaryExcludeOpen ? '옵션 닫기' : '미포함 옵션'}
+      </button>
+    </div>
+  </div>
+
+  {summaryExcludeOpen ? (
+    <div
+      style={{
+        border: '1px solid #d0d7de',
+        borderRadius: '8px',
+        padding: '10px',
+        background: '#fff',
+        marginBottom: '10px',
+        maxWidth: '520px'
+      }}
+    >
+      <div className="grid-actions" style={{ marginBottom: '8px' }}>
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => setSummaryDraftIds(summaryExcludeOptions.map((item) => item.id))}
+        >
+          전체 선택
+        </button>
+        <button
+          type="button"
+          className="btn secondary"
+          onClick={() => setSummaryDraftIds([])}
+        >
+          선택 해제
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gap: '4px',
+          maxHeight: '240px',
+          overflowY: 'auto',
+          paddingRight: '2px'
+        }}
+      >
+        {summaryExcludeOptions.map((item) => {
+          const checked = summaryDraftIds.includes(item.id)
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() =>
+                setSummaryDraftIds((prev) =>
+                  prev.includes(item.id)
+                    ? prev.filter((id) => id !== item.id)
+                    : [...prev, item.id]
+                )
+              }
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '18px 1fr',
+                alignItems: 'center',
+                columnGap: '8px',
+                width: '100%',
+                textAlign: 'left',
+                padding: '8px 10px',
+                border: '1px solid #d0d7de',
+                borderRadius: '6px',
+                background: checked ? '#e8f1ff' : '#fff',
+                boxSizing: 'border-box',
+                minHeight: '40px'
+              }}
+            >
+              <input
+                type="checkbox"
+                readOnly
+                checked={checked}
+                style={{
+                  width: '14px',
+                  height: '14px',
+                  margin: 0,
+                  accentColor: '#1f6feb',
+                  justifySelf: 'center'
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '13px',
+                  lineHeight: '1.3',
+                  whiteSpace: 'normal',
+                  wordBreak: 'keep-all',
+                  overflowWrap: 'break-word'
+                }}
+              >
+                {item.label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="grid-actions" style={{ marginTop: '8px' }}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            setSummarySelectedIds(summaryDraftIds)
+            setSummaryExcludeOpen(false)
+          }}
+        >
+          확인
+        </button>
+      </div>
+    </div>
+  ) : null}
+
+  <CopyableMatrixTable
+    headers={['구분', ...monthLabels, '총']}
+    rows={[
+      ['측정 계획', ...summary.planTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.planGrandTotal)],
+      ['유량측정 실적', ...summary.actualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.actualGrandTotal)],
+      ['누적측정 계획', ...summary.cumulativePlanTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativePlanGrandTotal)],
+      ['누적측정 실적', ...summary.cumulativeActualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativeActualGrandTotal)],
+      ['월별 공정률', ...summary.monthlyRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })],
+      ['누적 공정률', ...summary.cumulativeRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })]
+    ]}
+    tableClassName="spreadsheet"
+    style={{ width: 'max-content', minWidth: '100%' }}
+  />
+</section>
       <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
     </div>
   )
