@@ -2692,8 +2692,13 @@ useEffect(() => {
 
 const summaryStations = useMemo(() => {
   const excluded = new Set(summarySelectedIds)
+
+  if (summaryExcludeMode === 'group') {
+    return filteredStations.filter((station) => !excluded.has(station.groupId))
+  }
+
   return filteredStations.filter((station) => !excluded.has(station.id))
-}, [filteredStations, summarySelectedIds])
+}, [filteredStations, summarySelectedIds, summaryExcludeMode])
 
 const summaryStationRows = useMemo(() => {
   return summaryStations.map((station) => {
