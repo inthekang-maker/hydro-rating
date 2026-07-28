@@ -6612,18 +6612,6 @@ const handleTouchEnd = (e) => {
     }))
   }, [selectedSections])
 
-  const measurementYearOptions = useMemo(() => {
-    const years = Array.from(
-      new Set(
-        selectedMeasurements
-          .map((measurement) => getYearLabel(measurement.datetime))
-          .filter((year) => year !== '미정')
-      )
-    ).sort(compareYearLabel)
-
-    return ['전체', ...years]
-  }, [selectedMeasurements])
-
     const measurementYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
@@ -6655,13 +6643,6 @@ const handleTouchEnd = (e) => {
   }, [selectedStationId])
   // 여기까지 추가
 
-  const filteredMeasurements = useMemo(() => {
-    if (measurementYearFilter === '전체') return selectedMeasurements
-    return selectedMeasurements.filter(
-      (measurement) => getYearLabel(measurement.datetime) === measurementYearFilter
-    )
-  }, [selectedMeasurements, measurementYearFilter])
-  
   const filteredMeasurements = useMemo(() => {
     if (measurementYearFilter === '전체') return selectedMeasurements
     return selectedMeasurements.filter(
