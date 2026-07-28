@@ -76,6 +76,15 @@ const sanitizeExcelSheetName = (name) => {
   return (trimmed || 'Sheet').slice(0, 31)
 }
 
+const getAutoWidth = (values, { min = 10, max = 28, padding = 2 } = {}) => {
+  const maxLen = values.reduce((acc, value) => {
+    const len = String(value ?? '').length
+    return Math.max(acc, len)
+  }, 0)
+
+  return Math.min(max, Math.max(min, maxLen + padding))
+}
+
 const formatMeasurementDatetimeForExport = (value) => {
   const parsed = parseDateTime(value)
   return parsed ? formatDateTimeDisplay(parsed) : String(value || '')
@@ -4435,8 +4444,14 @@ const resetHistory = () => {
   })
 
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
+
+const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
+worksheet['!cols'] = [
+  { wch: getAutoWidth(aColumnValues) }
+]
+
+const workbook = XLSX.utils.book_new()
+XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
 
   const fileName = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.xlsx`
   XLSX.writeFile(workbook, fileName)
@@ -6548,7 +6563,13 @@ const handleTouchEnd = (e) => {
         ])
 
       const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
-      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+
+const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
+worksheet['!cols'] = [
+  { wch: getAutoWidth(aColumnValues) }
+]
+
+XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
     })
 
     const groupName = sanitizeExcelSheetName(selectedGroup.name || '그룹')
