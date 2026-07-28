@@ -5386,6 +5386,9 @@ export default function App() {
   const [measurementYearFilter, setMeasurementYearFilter] = useState('전체')
   const [relativeErrorYearFilter, setRelativeErrorYearFilter] = useState('전체')
   const [relativeErrorSort, setRelativeErrorSort] = useState('기본')
+  const [graphExcludeOpen, setGraphExcludeOpen] = useState(false)
+  const [graphDraftYears, setGraphDraftYears] = useState([])
+  const [graphExcludedYears, setGraphExcludedYears] = useState([])
   const [activeTab, setActiveTab] = useState('management')
   const [instrumentSubTab, setInstrumentSubTab] = useState('current')
   const [swipeStart, setSwipeStart] = useState(null)
@@ -6621,6 +6624,44 @@ const handleTouchEnd = (e) => {
     return ['전체', ...years]
   }, [selectedMeasurements])
 
+    const measurementYearOptions = useMemo(() => {
+    const years = Array.from(
+      new Set(
+        selectedMeasurements
+          .map((measurement) => getYearLabel(measurement.datetime))
+          .filter((year) => year !== '미정')
+      )
+    ).sort(compareYearLabel)
+
+    return ['전체', ...years]
+  }, [selectedMeasurements])
+
+  // 여기부터 추가
+  const graphExcludeOptions = useMemo(
+    () => measurementYearOptions.filter((year) => year !== '전체'),
+    [measurementYearOptions]
+  )
+
+  useEffect(() => {
+    const validYears = new Set(graphExcludeOptions)
+    setGraphDraftYears((prev) => prev.filter((year) => validYears.has(year)))
+    setGraphExcludedYears((prev) => prev.filter((year) => validYears.has(year)))
+  }, [graphExcludeOptions])
+
+  useEffect(() => {
+    setGraphExcludeOpen(false)
+    setGraphDraftYears([])
+    setGraphExcludedYears([])
+  }, [selectedStationId])
+  // 여기까지 추가
+
+  const filteredMeasurements = useMemo(() => {
+    if (measurementYearFilter === '전체') return selectedMeasurements
+    return selectedMeasurements.filter(
+      (measurement) => getYearLabel(measurement.datetime) === measurementYearFilter
+    )
+  }, [selectedMeasurements, measurementYearFilter])
+  
   const filteredMeasurements = useMemo(() => {
     if (measurementYearFilter === '전체') return selectedMeasurements
     return selectedMeasurements.filter(
@@ -6660,10 +6701,16 @@ const handleTouchEnd = (e) => {
   })
 }, [selectedMeasurements, selectedSections])
 
-  const graphMeasurementGroups = useMemo(() => {
+  const graphMeasurementRows = useMemo(() => {
+  if (graphExcludedYears.length === 0) return relativeErrorsRaw
+  const excluded = new Set(graphExcludedYears)
+  return relativeErrorsRaw.filter((row) => !excluded.has(row.measurementYear))
+}, [relativeErrorsRaw, graphExcludedYears])
+
+const graphMeasurementGroups = useMemo(() => {
   const map = new Map()
 
-  relativeErrorsRaw.forEach((measurement) => {
+  graphMeasurementRows.forEach((measurement) => {
     const year = getYearLabel(measurement.datetime)
     const device = normalizeDeviceLabel(measurement.device)
     const key = `${year}__${device}`
@@ -6685,7 +6732,7 @@ const handleTouchEnd = (e) => {
       ...group,
       items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
     }))
-}, [relativeErrorsRaw])
+}, [graphMeasurementRows])
 
   const filteredRelativeErrors = useMemo(() => {
     let rows = relativeErrorsRaw
@@ -7242,7 +7289,133 @@ const handleTouchEnd = (e) => {
       </section>
 
       <section className="card chart-card">
-        <h2>6. 그래프</h2>
+        <div className="section-header">
+  <h2>6. 그래프</h2>
+  <div className="grid-actions">
+    <button
+      type="button"
+      className="btn secondary"
+      onClick={() => {
+        setGraphDraftYears(graphExcludedYears)
+        setGraphExcludeOpen((prev) => !prev)
+      }}
+    >
+      {graphExcludeOpen
+        ? `옵션 닫기 (${graphDraftYears.length}개 선택)`
+        : graphExcludedYears.length > 0
+          ? `미포함 옵션 (${graphExcludedYears.length}개 선택)`
+          : '미포함 옵션'}
+    </button>
+  </div>
+</div>
+{graphExcludeOpen ? (
+  <div
+    style={{
+      border: '1px solid #d0d7de',
+      borderRadius: '8px',
+      padding: '10px',
+      background: '#fff',
+      marginBottom: '10px',
+      maxWidth: '520px'
+    }}
+  >
+    <div className="grid-actions" style={{ marginBottom: '8px' }}>
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={() => setGraphDraftYears(graphExcludeOptions)}
+      >
+        전체 선택
+      </button>
+      <button
+        type="button"
+        className="btn secondary"
+        onClick={() => setGraphDraftYears([])}
+      >
+        선택 해제
+      </button>
+    </div>
+
+    <div
+      style={{
+        display: 'grid',
+        gap: '4px',
+        maxHeight: '240px',
+        overflowY: 'auto',
+        paddingRight: '2px'
+      }}
+    >
+      {graphExcludeOptions.map((year) => {
+        const checked = graphDraftYears.includes(year)
+
+        return (
+          <button
+            key={year}
+            type="button"
+            onClick={() =>
+              setGraphDraftYears((prev) =>
+                prev.includes(year)
+                  ? prev.filter((item) => item !== year)
+                  : [...prev, year]
+              )
+            }
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '18px 1fr',
+              alignItems: 'center',
+              columnGap: '8px',
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 10px',
+              border: '1px solid #d0d7de',
+              borderRadius: '6px',
+              background: checked ? '#e8f1ff' : '#fff',
+              boxSizing: 'border-box',
+              minHeight: '40px'
+            }}
+          >
+            <input
+              type="checkbox"
+              readOnly
+              checked={checked}
+              style={{
+                width: '14px',
+                height: '14px',
+                margin: 0,
+                accentColor: '#1f6feb',
+                justifySelf: 'center'
+              }}
+            />
+            <span
+              style={{
+                fontSize: '13px',
+                lineHeight: '1.3',
+                whiteSpace: 'normal',
+                wordBreak: 'keep-all',
+                overflowWrap: 'break-word'
+              }}
+            >
+              {year}년
+            </span>
+          </button>
+        )
+      })}
+    </div>
+
+    <div className="grid-actions" style={{ marginTop: '8px' }}>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => {
+          setGraphExcludedYears(graphDraftYears)
+          setGraphExcludeOpen(false)
+        }}
+      >
+        확인
+      </button>
+    </div>
+  </div>
+) : null}
 
         <div className="chart-settings">
           <div className="chart-setting-card">
