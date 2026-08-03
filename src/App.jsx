@@ -338,9 +338,9 @@ function normalizeStation(station) {
     classification: station.classification || '일반 지점',
     sections: Array.isArray(station.sections)
       ? station.sections.map((section) => ({
-          ...section,
-          hOffset: section.hOffset ?? '0'
-        }))
+        ...section,
+        hOffset: section.hOffset ?? '0'
+      }))
       : [],
     measurements: Array.isArray(station.measurements) ? station.measurements : [],
     processPlan: Array.isArray(station.processPlan)
@@ -613,18 +613,18 @@ const applyDraftOrderToGroups = (loadedGroups, draftGroups) => {
   const draftGroupOrder = new Map()
   const draftStationOrder = new Map()
 
-  ;(Array.isArray(draftGroups) ? draftGroups : []).forEach((group, groupIndex) => {
-    draftGroupOrder.set(group.id, groupIndex)
-    draftStationOrder.set(
-      group.id,
-      new Map(
-        (Array.isArray(group.stations) ? group.stations : []).map((station, stationIndex) => [
-          station.id,
-          stationIndex
-        ])
+    ; (Array.isArray(draftGroups) ? draftGroups : []).forEach((group, groupIndex) => {
+      draftGroupOrder.set(group.id, groupIndex)
+      draftStationOrder.set(
+        group.id,
+        new Map(
+          (Array.isArray(group.stations) ? group.stations : []).map((station, stationIndex) => [
+            station.id,
+            stationIndex
+          ])
+        )
       )
-    )
-  })
+    })
 
   const fallbackGroupOrder = (group) => num(group?.order ?? group?.groupOrder ?? 0)
   const fallbackStationOrder = (station) => num(station?.order ?? station?.stationOrder ?? 0)
@@ -902,29 +902,29 @@ const buildStationRecordDescriptors = (groups, scope) => {
   normalizeGroups(groups).forEach((group, groupIndex) => {
     (group.stations || []).forEach((station, stationIndex) => {
       const normalizedStation = normalizeStation(station)
-      ;[
-        APP_STATE_STATION_ROW_VARIANTS.INFO,
-        APP_STATE_STATION_ROW_VARIANTS.SECTIONS,
-        APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS,
-        APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN
-      ].forEach((variant) => {
-        records.push({
-          rowId: makeScopedStationRowId(scope, normalizedStation.id, variant),
-          stationId: normalizedStation.id,
-          groupId: group.id,
-          groupName: group.name || '그룹 없음',
-          groupOrder: groupIndex,
-          stationOrder: stationIndex,
-          rowType: variant,
-          payload: buildStationRecordPayload(
-            group,
-            groupIndex,
-            normalizedStation,
-            stationIndex,
-            variant
-          )
+        ;[
+          APP_STATE_STATION_ROW_VARIANTS.INFO,
+          APP_STATE_STATION_ROW_VARIANTS.SECTIONS,
+          APP_STATE_STATION_ROW_VARIANTS.MEASUREMENTS,
+          APP_STATE_STATION_ROW_VARIANTS.PROCESS_PLAN
+        ].forEach((variant) => {
+          records.push({
+            rowId: makeScopedStationRowId(scope, normalizedStation.id, variant),
+            stationId: normalizedStation.id,
+            groupId: group.id,
+            groupName: group.name || '그룹 없음',
+            groupOrder: groupIndex,
+            stationOrder: stationIndex,
+            rowType: variant,
+            payload: buildStationRecordPayload(
+              group,
+              groupIndex,
+              normalizedStation,
+              stationIndex,
+              variant
+            )
+          })
         })
-      })
     })
   })
   return records
@@ -1076,7 +1076,7 @@ const extractGroupsFromStationRows = (rows) => {
       '그룹 없음'
     ).trim() || '그룹 없음'
 
-      const preferredPayload =
+    const preferredPayload =
       bucket.rows.info?.row?.payload ||
       bucket.rows.sections?.row?.payload ||
       bucket.rows.measurements?.row?.payload ||
@@ -1210,7 +1210,7 @@ const mergeIdObjectArrayThreeWay = (base = [], current = [], remote = []) => {
 
   const orderedIds = []
   const pushIds = (items) => {
-    ;(Array.isArray(items) ? items : []).forEach((item) => {
+    ; (Array.isArray(items) ? items : []).forEach((item) => {
       if (!item || item.id === undefined || item.id === null) return
       if (!orderedIds.includes(item.id)) orderedIds.push(item.id)
     })
@@ -1858,15 +1858,15 @@ function SpreadsheetGrid({
 
   const tableStyle = isCompactTable && !isMobile
     ? {
-        tableLayout: 'auto',
-        width: '100%',
-        minWidth: '100%'
-      }
+      tableLayout: 'auto',
+      width: '100%',
+      minWidth: '100%'
+    }
     : {
-        tableLayout: 'auto',
-        width: 'max-content',
-        minWidth: '100%'
-      }
+      tableLayout: 'auto',
+      width: 'max-content',
+      minWidth: '100%'
+    }
 
   const normalizeRange = (range) => {
     if (!range) return null
@@ -2143,17 +2143,17 @@ function SpreadsheetGrid({
                       <input
                         className="cell-input"
                         style={{
-  display: 'block',
-  minWidth: cellMinWidth,
-  width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
-  boxSizing: 'border-box',
+                          display: 'block',
+                          minWidth: cellMinWidth,
+                          width: isStretchDesktop ? '100%' : (cellWidth || '100%'),
+                          boxSizing: 'border-box',
 
-  minHeight: isMobile ? '34px' : '35px',
-  padding: isMobile ? '4px' : '6px',
+                          minHeight: isMobile ? '34px' : '35px',
+                          padding: isMobile ? '4px' : '6px',
 
-  fontSize: isMobile ? '12px' : '13px',
-  fontWeight: '400'
-}}
+                          fontSize: isMobile ? '12px' : '13px',
+                          fontWeight: '400'
+                        }}
                         data-cell={`${rowIndex}-${colIndex}`}
                         type={col.type || 'text'}
                         value={row[col.key] ?? ''}
@@ -2692,47 +2692,47 @@ function ProcessRatePage({ groups, onUpdateStation }) {
 
   const summaryExcludeMode = groupFilter === '전체' ? 'group' : 'station'
 
-const summaryExcludeOptions = useMemo(() => {
-  if (summaryExcludeMode === 'group') {
-    return groups.map((group) => ({
-      id: group.id,
-      label: group.name || '그룹 없음'
-    }))
-  }
+  const summaryExcludeOptions = useMemo(() => {
+    if (summaryExcludeMode === 'group') {
+      return groups.map((group) => ({
+        id: group.id,
+        label: group.name || '그룹 없음'
+      }))
+    }
 
-  const targetGroups =
-    groupFilter === '전체'
-      ? groups
-      : groups.filter((group) => (group.name || '그룹 없음') === groupFilter)
+    const targetGroups =
+      groupFilter === '전체'
+        ? groups
+        : groups.filter((group) => (group.name || '그룹 없음') === groupFilter)
 
-  return targetGroups.flatMap((group) =>
-    (group.stations || []).map((station) => ({
-      id: station.id,
-      label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`
-    }))
-  )
-}, [groups, groupFilter, summaryExcludeMode])
+    return targetGroups.flatMap((group) =>
+      (group.stations || []).map((station) => ({
+        id: station.id,
+        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`
+      }))
+    )
+  }, [groups, groupFilter, summaryExcludeMode])
   useEffect(() => {
-  const validIds = new Set(summaryExcludeOptions.map((item) => item.id))
-  setSummaryDraftIds((prev) => prev.filter((id) => validIds.has(id)))
-  setSummarySelectedIds((prev) => prev.filter((id) => validIds.has(id)))
-}, [summaryExcludeOptions])
+    const validIds = new Set(summaryExcludeOptions.map((item) => item.id))
+    setSummaryDraftIds((prev) => prev.filter((id) => validIds.has(id)))
+    setSummarySelectedIds((prev) => prev.filter((id) => validIds.has(id)))
+  }, [summaryExcludeOptions])
 
-useEffect(() => {
-  setSummaryExcludeOpen(false)
-  setSummaryDraftIds([])
-}, [groupFilter])
+  useEffect(() => {
+    setSummaryExcludeOpen(false)
+    setSummaryDraftIds([])
+  }, [groupFilter])
 
   const stationRows = useMemo(() => {
     return filteredStations.map((station) => {
       const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
       const actualValues = Array.from({ length: 12 }, () => 0)
 
-      ;(station.measurements || []).forEach((measurement) => {
-        const d = parseDateTime(measurement.datetime)
-        if (!d || d.getFullYear() !== currentYear) return
-        actualValues[d.getMonth()] += 1
-      })
+        ; (station.measurements || []).forEach((measurement) => {
+          const d = parseDateTime(measurement.datetime)
+          if (!d || d.getFullYear() !== currentYear) return
+          actualValues[d.getMonth()] += 1
+        })
 
       const monthlyRates = planValues.map((plan, idx) =>
         plan > 0 ? (actualValues[idx] / plan) * 100 : null
@@ -2755,91 +2755,91 @@ useEffect(() => {
     })
   }, [filteredStations, currentYear])
 
-const summaryStations = useMemo(() => {
-  const excluded = new Set(summarySelectedIds)
+  const summaryStations = useMemo(() => {
+    const excluded = new Set(summarySelectedIds)
 
-  if (summaryExcludeMode === 'group') {
-    return filteredStations.filter((station) => !excluded.has(station.groupId))
-  }
+    if (summaryExcludeMode === 'group') {
+      return filteredStations.filter((station) => !excluded.has(station.groupId))
+    }
 
-  return filteredStations.filter((station) => !excluded.has(station.id))
-}, [filteredStations, summarySelectedIds, summaryExcludeMode])
+    return filteredStations.filter((station) => !excluded.has(station.id))
+  }, [filteredStations, summarySelectedIds, summaryExcludeMode])
 
-const summaryStationRows = useMemo(() => {
-  return summaryStations.map((station) => {
-    const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
-    const actualValues = Array.from({ length: 12 }, () => 0)
+  const summaryStationRows = useMemo(() => {
+    return summaryStations.map((station) => {
+      const planValues = Array.from({ length: 12 }, (_, idx) => toNumber(station.processPlan?.[idx]))
+      const actualValues = Array.from({ length: 12 }, () => 0)
 
-    ;(station.measurements || []).forEach((measurement) => {
-      const d = parseDateTime(measurement.datetime)
-      if (!d || d.getFullYear() !== currentYear) return
-      actualValues[d.getMonth()] += 1
+        ; (station.measurements || []).forEach((measurement) => {
+          const d = parseDateTime(measurement.datetime)
+          if (!d || d.getFullYear() !== currentYear) return
+          actualValues[d.getMonth()] += 1
+        })
+
+      const monthlyRates = planValues.map((plan, idx) =>
+        plan > 0 ? (actualValues[idx] / plan) * 100 : null
+      )
+      const cumulativeRates = planValues.map((_, idx) => {
+        const planSum = sum(planValues.slice(0, idx + 1))
+        const actualSum = sum(actualValues.slice(0, idx + 1))
+        return planSum > 0 ? (actualSum / planSum) * 100 : null
+      })
+
+      return {
+        station,
+        planValues,
+        actualValues,
+        monthlyRates,
+        cumulativeRates,
+        planTotal: sum(planValues),
+        actualTotal: sum(actualValues)
+      }
+    })
+  }, [summaryStations, currentYear])
+
+  const summary = useMemo(() => {
+    const planTotals = Array.from({ length: 12 }, () => 0)
+    const actualTotals = Array.from({ length: 12 }, () => 0)
+
+    summaryStationRows.forEach((row) => {
+      row.planValues.forEach((value, idx) => {
+        planTotals[idx] += toNumber(value)
+      })
+      row.actualValues.forEach((value, idx) => {
+        actualTotals[idx] += toNumber(value)
+      })
     })
 
-    const monthlyRates = planValues.map((plan, idx) =>
-      plan > 0 ? (actualValues[idx] / plan) * 100 : null
+    const cumulativePlanTotals = planTotals.map((_, idx) =>
+      sum(planTotals.slice(0, idx + 1))
     )
-    const cumulativeRates = planValues.map((_, idx) => {
-      const planSum = sum(planValues.slice(0, idx + 1))
-      const actualSum = sum(actualValues.slice(0, idx + 1))
+    const cumulativeActualTotals = actualTotals.map((_, idx) =>
+      sum(actualTotals.slice(0, idx + 1))
+    )
+
+    const monthlyRates = planTotals.map((plan, idx) =>
+      plan > 0 ? (actualTotals[idx] / plan) * 100 : null
+    )
+
+    const cumulativeRates = planTotals.map((_, idx) => {
+      const planSum = sum(planTotals.slice(0, idx + 1))
+      const actualSum = sum(actualTotals.slice(0, idx + 1))
       return planSum > 0 ? (actualSum / planSum) * 100 : null
     })
 
     return {
-      station,
-      planValues,
-      actualValues,
+      planTotals,
+      actualTotals,
+      cumulativePlanTotals,
+      cumulativeActualTotals,
       monthlyRates,
       cumulativeRates,
-      planTotal: sum(planValues),
-      actualTotal: sum(actualValues)
+      planGrandTotal: sum(planTotals),
+      actualGrandTotal: sum(actualTotals),
+      cumulativePlanGrandTotal: sum(planTotals),
+      cumulativeActualGrandTotal: sum(actualTotals)
     }
-  })
-}, [summaryStations, currentYear])
-
-  const summary = useMemo(() => {
-  const planTotals = Array.from({ length: 12 }, () => 0)
-  const actualTotals = Array.from({ length: 12 }, () => 0)
-
-  summaryStationRows.forEach((row) => {
-    row.planValues.forEach((value, idx) => {
-      planTotals[idx] += toNumber(value)
-    })
-    row.actualValues.forEach((value, idx) => {
-      actualTotals[idx] += toNumber(value)
-    })
-  })
-
-  const cumulativePlanTotals = planTotals.map((_, idx) =>
-    sum(planTotals.slice(0, idx + 1))
-  )
-  const cumulativeActualTotals = actualTotals.map((_, idx) =>
-    sum(actualTotals.slice(0, idx + 1))
-  )
-
-  const monthlyRates = planTotals.map((plan, idx) =>
-    plan > 0 ? (actualTotals[idx] / plan) * 100 : null
-  )
-
-  const cumulativeRates = planTotals.map((_, idx) => {
-    const planSum = sum(planTotals.slice(0, idx + 1))
-    const actualSum = sum(actualTotals.slice(0, idx + 1))
-    return planSum > 0 ? (actualSum / planSum) * 100 : null
-  })
-
-  return {
-    planTotals,
-    actualTotals,
-    cumulativePlanTotals,
-    cumulativeActualTotals,
-    monthlyRates,
-    cumulativeRates,
-    planGrandTotal: sum(planTotals),
-    actualGrandTotal: sum(actualTotals),
-    cumulativePlanGrandTotal: sum(planTotals),
-    cumulativeActualGrandTotal: sum(actualTotals)
-  }
-}, [summaryStationRows])
+  }, [summaryStationRows])
 
   const updateProcessPlan = (stationId, monthIndex, value) => {
     const nextValue = String(value)
@@ -2874,191 +2874,191 @@ const summaryStationRows = useMemo(() => {
       <section className="card">
         <h2>측정성과 공정률</h2>
         <div className="row">
-  <label>
-    그룹
-    <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
-      {groupOptions.map((groupName) => (
-        <option key={groupName} value={groupName}>
-          {groupName}
-        </option>
-      ))}
-    </select>
-  </label>
+          <label>
+            그룹
+            <select value={groupFilter} onChange={(e) => setGroupFilter(e.target.value)}>
+              {groupOptions.map((groupName) => (
+                <option key={groupName} value={groupName}>
+                  {groupName}
+                </option>
+              ))}
+            </select>
+          </label>
 
-  <label>
-    분류
-    <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
-      <option value="전체">전체</option>
-      <option value="자동유량">자동유량</option>
-      <option value="일반 지점">일반 지점</option>
-    </select>
-  </label>
+          <label>
+            분류
+            <select value={classificationFilter} onChange={(e) => setClassificationFilter(e.target.value)}>
+              <option value="전체">전체</option>
+              <option value="자동유량">자동유량</option>
+              <option value="일반 지점">일반 지점</option>
+            </select>
+          </label>
 
-  <label>
-    지점
-    <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
-      {stationOptions.map((stationOption) =>
-        stationOption === '전체' ? (
-          <option key="전체" value="전체">전체</option>
-        ) : (
-          <option key={stationOption.id} value={stationOption.id}>
-            {stationOption.label}
-          </option>
-        )
-      )}
-    </select>
-  </label>
+          <label>
+            지점
+            <select value={stationFilter} onChange={(e) => setStationFilter(e.target.value)}>
+              {stationOptions.map((stationOption) =>
+                stationOption === '전체' ? (
+                  <option key="전체" value="전체">전체</option>
+                ) : (
+                  <option key={stationOption.id} value={stationOption.id}>
+                    {stationOption.label}
+                  </option>
+                )
+              )}
+            </select>
+          </label>
 
-  <div className="muted" style={{ alignSelf: 'end' }}>
-    기준 연도: {currentYear}년
-  </div>
-</div>
+          <div className="muted" style={{ alignSelf: 'end' }}>
+            기준 연도: {currentYear}년
+          </div>
+        </div>
       </section>
 
       <section className="card">
-  <div className="section-header">
-    <h2>측정성과 공정률 요약</h2>
-    <div className="grid-actions">
-      <button
-  type="button"
-  className="btn secondary"
-  onClick={() => {
-    setSummaryDraftIds(summarySelectedIds)
-    setSummaryExcludeOpen((prev) => !prev)
-  }}
->
-  {summaryExcludeOpen
-    ? `옵션 닫기 (${summaryDraftIds.length}개 선택)`
-    : summarySelectedIds.length > 0
-      ? `미포함 옵션 (${summarySelectedIds.length}개 선택)`
-      : '미포함 옵션'}
-</button>
-    </div>
-  </div>
-
-  {summaryExcludeOpen ? (
-    <div
-      style={{
-        border: '1px solid #d0d7de',
-        borderRadius: '8px',
-        padding: '10px',
-        background: '#fff',
-        marginBottom: '10px',
-        maxWidth: '520px'
-      }}
-    >
-      <div className="grid-actions" style={{ marginBottom: '8px' }}>
-        <button
-          type="button"
-          className="btn secondary"
-          onClick={() => setSummaryDraftIds(summaryExcludeOptions.map((item) => item.id))}
-        >
-          전체 선택
-        </button>
-        <button
-          type="button"
-          className="btn secondary"
-          onClick={() => setSummaryDraftIds([])}
-        >
-          선택 해제
-        </button>
-      </div>
-
-      <div
-        style={{
-          display: 'grid',
-          gap: '4px',
-          maxHeight: '240px',
-          overflowY: 'auto',
-          paddingRight: '2px'
-        }}
-      >
-        {summaryExcludeOptions.map((item) => {
-          const checked = summaryDraftIds.includes(item.id)
-
-          return (
+        <div className="section-header">
+          <h2>측정성과 공정률 요약</h2>
+          <div className="grid-actions">
             <button
-              key={item.id}
               type="button"
-              onClick={() =>
-                setSummaryDraftIds((prev) =>
-                  prev.includes(item.id)
-                    ? prev.filter((id) => id !== item.id)
-                    : [...prev, item.id]
-                )
-              }
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '18px 1fr',
-                alignItems: 'center',
-                columnGap: '8px',
-                width: '100%',
-                textAlign: 'left',
-                padding: '8px 10px',
-                border: '1px solid #d0d7de',
-                borderRadius: '6px',
-                background: checked ? '#e8f1ff' : '#fff',
-                boxSizing: 'border-box',
-                minHeight: '40px'
+              className="btn secondary"
+              onClick={() => {
+                setSummaryDraftIds(summarySelectedIds)
+                setSummaryExcludeOpen((prev) => !prev)
               }}
             >
-              <input
-                type="checkbox"
-                readOnly
-                checked={checked}
-                style={{
-                  width: '14px',
-                  height: '14px',
-                  margin: 0,
-                  accentColor: '#1f6feb',
-                  justifySelf: 'center'
-                }}
-              />
-              <span
-                style={{
-                  fontSize: '13px',
-                  lineHeight: '1.3',
-                  whiteSpace: 'normal',
-                  wordBreak: 'keep-all',
-                  overflowWrap: 'break-word'
+              {summaryExcludeOpen
+                ? `옵션 닫기 (${summaryDraftIds.length}개 선택)`
+                : summarySelectedIds.length > 0
+                  ? `미포함 옵션 (${summarySelectedIds.length}개 선택)`
+                  : '미포함 옵션'}
+            </button>
+          </div>
+        </div>
+
+        {summaryExcludeOpen ? (
+          <div
+            style={{
+              border: '1px solid #d0d7de',
+              borderRadius: '8px',
+              padding: '10px',
+              background: '#fff',
+              marginBottom: '10px',
+              maxWidth: '520px'
+            }}
+          >
+            <div className="grid-actions" style={{ marginBottom: '8px' }}>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setSummaryDraftIds(summaryExcludeOptions.map((item) => item.id))}
+              >
+                전체 선택
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => setSummaryDraftIds([])}
+              >
+                선택 해제
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gap: '4px',
+                maxHeight: '240px',
+                overflowY: 'auto',
+                paddingRight: '2px'
+              }}
+            >
+              {summaryExcludeOptions.map((item) => {
+                const checked = summaryDraftIds.includes(item.id)
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() =>
+                      setSummaryDraftIds((prev) =>
+                        prev.includes(item.id)
+                          ? prev.filter((id) => id !== item.id)
+                          : [...prev, item.id]
+                      )
+                    }
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '18px 1fr',
+                      alignItems: 'center',
+                      columnGap: '8px',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '8px 10px',
+                      border: '1px solid #d0d7de',
+                      borderRadius: '6px',
+                      background: checked ? '#e8f1ff' : '#fff',
+                      boxSizing: 'border-box',
+                      minHeight: '40px'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      readOnly
+                      checked={checked}
+                      style={{
+                        width: '14px',
+                        height: '14px',
+                        margin: 0,
+                        accentColor: '#1f6feb',
+                        justifySelf: 'center'
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        lineHeight: '1.3',
+                        whiteSpace: 'normal',
+                        wordBreak: 'keep-all',
+                        overflowWrap: 'break-word'
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="grid-actions" style={{ marginTop: '8px' }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setSummarySelectedIds(summaryDraftIds)
+                  setSummaryExcludeOpen(false)
                 }}
               >
-                {item.label}
-              </span>
-            </button>
-          )
-        })}
-      </div>
+                확인
+              </button>
+            </div>
+          </div>
+        ) : null}
 
-      <div className="grid-actions" style={{ marginTop: '8px' }}>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            setSummarySelectedIds(summaryDraftIds)
-            setSummaryExcludeOpen(false)
-          }}
-        >
-          확인
-        </button>
-      </div>
-    </div>
-  ) : null}
-
-  <CopyableMatrixTable
-    headers={['구분', ...monthLabels, '총']}
-    rows={[
-      ['측정 계획', ...summary.planTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.planGrandTotal)],
-      ['유량측정 실적', ...summary.actualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.actualGrandTotal)],
-      ['누적측정 계획', ...summary.cumulativePlanTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativePlanGrandTotal)],
-      ['누적측정 실적', ...summary.cumulativeActualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativeActualGrandTotal)],
-      ['월별 공정률', ...summary.monthlyRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })],
-      ['누적 공정률', ...summary.cumulativeRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })]
-    ]}
-    tableClassName="spreadsheet"
-    style={{ width: 'max-content', minWidth: '100%' }}
-  />
-</section>
+        <CopyableMatrixTable
+          headers={['구분', ...monthLabels, '총']}
+          rows={[
+            ['측정 계획', ...summary.planTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.planGrandTotal)],
+            ['유량측정 실적', ...summary.actualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.actualGrandTotal)],
+            ['누적측정 계획', ...summary.cumulativePlanTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativePlanGrandTotal)],
+            ['누적측정 실적', ...summary.cumulativeActualTotals.map((v) => fmt(v, 0)), renderGrandTotal(summary.cumulativeActualGrandTotal)],
+            ['월별 공정률', ...summary.monthlyRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.monthlyRates[11] ?? null, { percent: true })],
+            ['누적 공정률', ...summary.cumulativeRates.map((v) => (v === null ? '' : `${fmt(v, 1)}%`)), renderGrandTotal(summary.cumulativeRates[11] ?? null, { percent: true })]
+          ]}
+          tableClassName="spreadsheet"
+          style={{ width: 'max-content', minWidth: '100%' }}
+        />
+      </section>
       <ProcessPlanMatrix stationRows={stationRows} monthLabels={monthLabels} onUpdateStation={onUpdateStation} />
     </div>
   )
@@ -3161,14 +3161,14 @@ const sortYmdhmList = (values, ascending = true) => {
 const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilter, stationSelection) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) =>
-        (group.stations || []).map((station, stationIndex) => ({
-          ...station,
-          groupId: group.id,
-          groupName: group.name || '그룹 없음',
-          groupIndex,
-          stationIndex
-        }))
-      )
+      (group.stations || []).map((station, stationIndex) => ({
+        ...station,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
+    )
     : []
 
   return flattened
@@ -3192,16 +3192,16 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
 const buildInstrumentStationOptions = (groups, groupFilter) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) => {
-        if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-        return (group.stations || []).map((station, stationIndex) => ({
-          id: station.id,
-          label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
-          groupId: group.id,
-          groupName: group.name || '그룹 없음',
-          groupIndex,
-          stationIndex
-        }))
-      })
+      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
+      return (group.stations || []).map((station, stationIndex) => ({
+        id: station.id,
+        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
+    })
     : []
 
   return ['전체', ...flattened]
@@ -3464,7 +3464,7 @@ function InstrumentWaterLevelChart({
   )
 
   return (
-  <div className="subcard" data-swipe-zone="instrument" style={{ marginBottom: '16px' }}>
+    <div className="subcard" data-swipe-zone="instrument" style={{ marginBottom: '16px' }}>
       <h3 style={{ marginBottom: '6px' }}>{title}</h3>
       {subtitle ? <p className="muted" style={{ marginBottom: '10px' }}>{subtitle}</p> : null}
       <div style={{ overflow: 'auto' }}>
@@ -3575,17 +3575,17 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
   }, [stationColumns, times, ascending, showConvertedFlow])
 
   return (
-     <div
-  ref={containerRef}
-  data-swipe-zone="instrument"
-  onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-  style={{
-    maxHeight: `${height}px`,
-    overflow: 'auto',
-    border: '1px solid rgba(0,0,0,0.12)',
-    borderRadius: '10px'
-  }}
->
+    <div
+      ref={containerRef}
+      data-swipe-zone="instrument"
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      style={{
+        maxHeight: `${height}px`,
+        overflow: 'auto',
+        border: '1px solid rgba(0,0,0,0.12)',
+        borderRadius: '10px'
+      }}
+    >
       <table
         className="spreadsheet"
         style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}
@@ -3688,15 +3688,15 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                   <React.Fragment key={`${col.station.id}-${time}`}>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
                       {col.rowsMap?.[time] === null ||
-                      col.rowsMap?.[time] === undefined ||
-                      col.rowsMap?.[time] === ''
+                        col.rowsMap?.[time] === undefined ||
+                        col.rowsMap?.[time] === ''
                         ? ''
                         : fmt(col.rowsMap[time], 2)}
                     </td>
                     <td style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
                       {col.flowRowsMap?.[time] === null ||
-                      col.flowRowsMap?.[time] === undefined ||
-                      col.flowRowsMap?.[time] === ''
+                        col.flowRowsMap?.[time] === undefined ||
+                        col.flowRowsMap?.[time] === ''
                         ? ''
                         : fmt(col.flowRowsMap[time], 3)}
                     </td>
@@ -3704,8 +3704,8 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
                 ) : (
                   <td key={`${col.station.id}-${time}`} style={{ whiteSpace: 'nowrap', textAlign: 'center' }}>
                     {col.rowsMap?.[time] === null ||
-                    col.rowsMap?.[time] === undefined ||
-                    col.rowsMap?.[time] === ''
+                      col.rowsMap?.[time] === undefined ||
+                      col.rowsMap?.[time] === ''
                       ? ''
                       : fmt(col.rowsMap[time], 2)}
                   </td>
@@ -4021,13 +4021,13 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                         const isCurrent = Boolean(entry?.isCurrent)
                         const isThisYear = entry?.measurementYear === currentYear
 
-const bg = isCurrent
-  ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
-  : isThisYear
-    ? '#fff8cc'
-    : undefined
+                        const bg = isCurrent
+                          ? (entry.exactMatch ? '#bfefff' : '#ff6b6b')
+                          : isThisYear
+                            ? '#fff8cc'
+                            : undefined
 
-const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
+                        const fg = isCurrent && !entry.exactMatch ? '#ffffff' : undefined
                         return (
                           <td
                             key={`${col.station.id}-${rowIndex}`}
@@ -4176,7 +4176,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     setStationPickerOpen(false)
   }
 
-const stationColumns = useMemo(
+  const stationColumns = useMemo(
     () =>
       filteredStations.map((station) => {
         const rowsMap = historyRowsByStation[station.id] || {}
@@ -4193,7 +4193,7 @@ const stationColumns = useMemo(
       }),
     [filteredStations, historyRowsByStation]
   )
-const resetHistory = () => {
+  const resetHistory = () => {
     setHistoryRowsByStation({})
     setHistoryTimes([])
     setHistoryLoadedLabel('')
@@ -4226,10 +4226,10 @@ const resetHistory = () => {
       }
 
       const map = {}
-      ;(result.rows || []).forEach((row) => {
-        map[row.ymdhm] = row.value
-        times.push(row.ymdhm)
-      })
+        ; (result.rows || []).forEach((row) => {
+          map[row.ymdhm] = row.value
+          times.push(row.ymdhm)
+        })
       rowsByStation[result.stationId] = map
     })
 
@@ -4265,11 +4265,11 @@ const resetHistory = () => {
             range.start,
             range.end
           )
-          ;(rows || []).forEach((row) => {
-            if (!rowMap.has(row.ymdhm)) {
-              rowMap.set(row.ymdhm, row.value)
-            }
-          })
+            ; (rows || []).forEach((row) => {
+              if (!rowMap.has(row.ymdhm)) {
+                rowMap.set(row.ymdhm, row.value)
+              }
+            })
         } catch {
           // 월 단위 중 일부가 실패해도 나머지 구간은 계속 시도한다.
         }
@@ -4301,10 +4301,10 @@ const resetHistory = () => {
       }
 
       const map = {}
-      ;(result.rows || []).forEach((row) => {
-        map[row.ymdhm] = row.value
-        times.push(row.ymdhm)
-      })
+        ; (result.rows || []).forEach((row) => {
+          map[row.ymdhm] = row.value
+          times.push(row.ymdhm)
+        })
       rowsByStation[result.stationId] = map
     })
 
@@ -4421,97 +4421,97 @@ const resetHistory = () => {
   }
 
   const handleLoadCustomPeriod = async () => {
-  const startTimeRaw = parseDateTime(customStartTime)
-  const endTimeRaw = parseDateTime(customEndTime)
+    const startTimeRaw = parseDateTime(customStartTime)
+    const endTimeRaw = parseDateTime(customEndTime)
 
-  if (!startTimeRaw || !endTimeRaw) {
-    window.alert('시작 시간과 종료 시간을 모두 입력해 주세요.')
-    return
+    if (!startTimeRaw || !endTimeRaw) {
+      window.alert('시작 시간과 종료 시간을 모두 입력해 주세요.')
+      return
+    }
+
+    const startTime = floorToTenMinuteSlot(startTimeRaw)
+    const endTime = floorToTenMinuteSlot(endTimeRaw)
+
+    if (!startTime || !endTime) {
+      window.alert('시간 형식이 올바르지 않습니다.')
+      return
+    }
+
+    if (startTime > endTime) {
+      window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
+      return
+    }
+
+    setHistoryMode('period')
+    setPeriodKey('custom')
+    resetHistory()
+    await applyHistorySlice(
+      startTime,
+      endTime,
+      'custom',
+      false,
+      false,
+      `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
+    )
   }
-
-  const startTime = floorToTenMinuteSlot(startTimeRaw)
-  const endTime = floorToTenMinuteSlot(endTimeRaw)
-
-  if (!startTime || !endTime) {
-    window.alert('시간 형식이 올바르지 않습니다.')
-    return
-  }
-
-  if (startTime > endTime) {
-    window.alert('시작 시간은 종료 시간보다 이전이어야 합니다.')
-    return
-  }
-
-  setHistoryMode('period')
-  setPeriodKey('custom')
-  resetHistory()
-  await applyHistorySlice(
-    startTime,
-    endTime,
-    'custom',
-    false,
-    false,
-    `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
-  )
-}
 
   const handleDownloadHistoryXlsx = () => {
-  if (historyTimes.length === 0 || stationColumns.length === 0) {
-    window.alert('내보낼 수위 자료가 없습니다.')
-    return
-  }
-
-  const headers = ['시간']
-  stationColumns.forEach((col) => {
-    const name = col.station.name || '지점 없음'
-    const code = col.station.code ? ` (${col.station.code})` : ''
-    if (showConvertedFlow) {
-      headers.push(`${name}${code} 수위(h)`)
-      headers.push(`${name}${code} 환산유량(Q)`)
-    } else {
-      headers.push(`${name}${code}`)
+    if (historyTimes.length === 0 || stationColumns.length === 0) {
+      window.alert('내보낼 수위 자료가 없습니다.')
+      return
     }
-  })
 
-  const rows = historyTimes.map((time) => {
-    const row = [formatYmdhm(time)]
+    const headers = ['시간']
     stationColumns.forEach((col) => {
-      const waterValue = col.rowsMap?.[time]
-      row.push(
-        waterValue === null ||
-        waterValue === undefined ||
-        waterValue === ''
-          ? ''
-          : fmt(waterValue, 2)
-      )
-
+      const name = col.station.name || '지점 없음'
+      const code = col.station.code ? ` (${col.station.code})` : ''
       if (showConvertedFlow) {
-        const flowValue = col.flowRowsMap?.[time]
-        row.push(
-          flowValue === null ||
-          flowValue === undefined ||
-          flowValue === ''
-            ? ''
-            : fmt(flowValue, 3)
-        )
+        headers.push(`${name}${code} 수위(h)`)
+        headers.push(`${name}${code} 환산유량(Q)`)
+      } else {
+        headers.push(`${name}${code}`)
       }
     })
-    return row
-  })
 
-  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
+    const rows = historyTimes.map((time) => {
+      const row = [formatYmdhm(time)]
+      stationColumns.forEach((col) => {
+        const waterValue = col.rowsMap?.[time]
+        row.push(
+          waterValue === null ||
+            waterValue === undefined ||
+            waterValue === ''
+            ? ''
+            : fmt(waterValue, 2)
+        )
 
-const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
-worksheet['!cols'] = [
-  { wch: getAutoWidth(aColumnValues) }
-]
+        if (showConvertedFlow) {
+          const flowValue = col.flowRowsMap?.[time]
+          row.push(
+            flowValue === null ||
+              flowValue === undefined ||
+              flowValue === ''
+              ? ''
+              : fmt(flowValue, 3)
+          )
+        }
+      })
+      return row
+    })
 
-const workbook = XLSX.utils.book_new()
-XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
 
-  const fileName = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.xlsx`
-  XLSX.writeFile(workbook, fileName)
-}
+    const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
+    worksheet['!cols'] = [
+      { wch: getAutoWidth(aColumnValues) }
+    ]
+
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
+
+    const fileName = `수위자료_${formatDateTimeDisplay(new Date()).replace(/[:\s]/g, '_')}.xlsx`
+    XLSX.writeFile(workbook, fileName)
+  }
 
   const chartPeriodRange = useMemo(
     () => getInstrumentChartPeriodRange(chartPeriodKey, chartCustomStartTime, chartCustomEndTime),
@@ -4844,18 +4844,18 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
   }
 
   const sectionColumns = [
-  { key: 'name', label: '구간명', minWidth: '86px' },
-  { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
-  { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
-  { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
-  { key: 'a', label: 'A', minWidth: '64px' },
-  { key: 'b', label: 'B', minWidth: '64px' },
-  { key: 'c', label: 'C', minWidth: '64px' },
-  { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
-  { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
-]
+    { key: 'name', label: '구간명', minWidth: '86px' },
+    { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
+    { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
+    { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
+    { key: 'a', label: 'A', minWidth: '64px' },
+    { key: 'b', label: 'B', minWidth: '64px' },
+    { key: 'c', label: 'C', minWidth: '64px' },
+    { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
+    { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
+    { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+    { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+  ]
 
   const measurementColumns = [
     { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
@@ -4980,56 +4980,56 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
                   paddingRight: '2px'
                 }}
               >
-              {stationOptions.map((station) => {
-  const checked = stationDraftIds.includes(station.id)
+                {stationOptions.map((station) => {
+                  const checked = stationDraftIds.includes(station.id)
 
-  return (
-    <button
-      key={station.id}
-      type="button"
-      onClick={() => toggleStationDraft(station.id)}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '18px 1fr',
-        alignItems: 'center',
-        columnGap: '8px',
-        width: '100%',
-        textAlign: 'left',
-        padding: '8px 10px',
-        border: '1px solid #d0d7de',
-        borderRadius: '6px',
-        background: checked ? '#e8f1ff' : '#fff',
-        boxSizing: 'border-box',
-        minHeight: '40px'
-      }}
-    >
-      <input
-        type="checkbox"
-        readOnly
-        checked={checked}
-        style={{
-          width: '14px',
-          height: '14px',
-          margin: 0,
-          accentColor: '#1f6feb',
-          justifySelf: 'center'
-        }}
-      />
+                  return (
+                    <button
+                      key={station.id}
+                      type="button"
+                      onClick={() => toggleStationDraft(station.id)}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '18px 1fr',
+                        alignItems: 'center',
+                        columnGap: '8px',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        border: '1px solid #d0d7de',
+                        borderRadius: '6px',
+                        background: checked ? '#e8f1ff' : '#fff',
+                        boxSizing: 'border-box',
+                        minHeight: '40px'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        readOnly
+                        checked={checked}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          margin: 0,
+                          accentColor: '#1f6feb',
+                          justifySelf: 'center'
+                        }}
+                      />
 
-      <span
-        style={{
-          fontSize: '13px',
-          lineHeight: '1.3',
-          whiteSpace: 'normal',
-          wordBreak: 'keep-all',
-          overflowWrap: 'break-word'
-        }}
-      >
-        {station.label}
-      </span>
-    </button>
-  )
-})}  
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          lineHeight: '1.3',
+                          whiteSpace: 'normal',
+                          wordBreak: 'keep-all',
+                          overflowWrap: 'break-word'
+                        }}
+                      >
+                        {station.label}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
 
               <div className="grid-actions" style={{ marginTop: '8px' }}>
@@ -5040,7 +5040,7 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
             </div>
           ) : null}
 
-<label>
+          <label>
             API 키
             <input
               type="text"
@@ -5057,48 +5057,48 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
           </div>
 
           <label style={{ minWidth: '250px' }}>
-  시작시간
-  <input
-    type="datetime-local"
-    step="600"
-    value={customStartTime}
-    onChange={(e) => {
-      const d = parseDateTime(e.target.value)
-      if (!d) {
-        setCustomStartTime('')
-        return
-      }
-      const rounded = floorToTenMinuteSlot(d)
-      setCustomStartTime(formatDateTimeLocal(rounded))
-    }}
-     style={{
-      width: '240px',
-      maxWidth: '100%'
-    }}
-  />
-</label>
+            시작시간
+            <input
+              type="datetime-local"
+              step="600"
+              value={customStartTime}
+              onChange={(e) => {
+                const d = parseDateTime(e.target.value)
+                if (!d) {
+                  setCustomStartTime('')
+                  return
+                }
+                const rounded = floorToTenMinuteSlot(d)
+                setCustomStartTime(formatDateTimeLocal(rounded))
+              }}
+              style={{
+                width: '240px',
+                maxWidth: '100%'
+              }}
+            />
+          </label>
 
-<label style={{ minWidth: '250px' }}>
-  종료시간
-  <input
-    type="datetime-local"
-    step="600"
-    value={customEndTime}
-    onChange={(e) => {
-      const d = parseDateTime(e.target.value)
-      if (!d) {
-        setCustomEndTime('')
-        return
-      }
-      const rounded = floorToTenMinuteSlot(d)
-      setCustomEndTime(formatDateTimeLocal(rounded))
-    }}
-     style={{
-      width: '240px',
-      maxWidth: '100%'
-    }}
-  />
-</label>
+          <label style={{ minWidth: '250px' }}>
+            종료시간
+            <input
+              type="datetime-local"
+              step="600"
+              value={customEndTime}
+              onChange={(e) => {
+                const d = parseDateTime(e.target.value)
+                if (!d) {
+                  setCustomEndTime('')
+                  return
+                }
+                const rounded = floorToTenMinuteSlot(d)
+                setCustomEndTime(formatDateTimeLocal(rounded))
+              }}
+              style={{
+                width: '240px',
+                maxWidth: '100%'
+              }}
+            />
+          </label>
 
           <div className="grid-actions" style={{ alignSelf: 'end' }}>
             <button className="btn secondary" onClick={handleLoadCustomPeriod} disabled={historyLoading}>
@@ -5122,22 +5122,22 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
         <div className="section-header">
           <h2>수위 자료</h2>
           <div className="grid-actions">
-  <button
-    className="btn secondary"
-    onClick={handleDownloadHistoryXlsx}
-    disabled={historyTimes.length === 0}
-  >
-    엑셀 저장
-  </button>
+            <button
+              className="btn secondary"
+              onClick={handleDownloadHistoryXlsx}
+              disabled={historyTimes.length === 0}
+            >
+              엑셀 저장
+            </button>
 
-  <button
-    className="btn secondary"
-    onClick={() => setShowConvertedFlow((prev) => !prev)}
-    disabled={historyTimes.length === 0}
-  >
-    {showConvertedFlow ? '환산유량 숨기기' : '환산유량 추가'}
-  </button>
-</div>
+            <button
+              className="btn secondary"
+              onClick={() => setShowConvertedFlow((prev) => !prev)}
+              disabled={historyTimes.length === 0}
+            >
+              {showConvertedFlow ? '환산유량 숨기기' : '환산유량 추가'}
+            </button>
+          </div>
         </div>
         {stationColumns.length === 0 ? (
           <div className="muted">선택된 지점이 없습니다.</div>
@@ -5170,110 +5170,110 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
         </div>
 
         <div className="row" style={{ alignItems: 'flex-start' }}>
-        <div style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
-  <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
-    기간 선택
-  </div>
+          <div style={{ minWidth: '220px', display: 'flex', flexDirection: 'column' }}>
+            <div className="muted" style={{ fontWeight: 600, marginBottom: '6px' }}>
+              기간 선택
+            </div>
 
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-    {chartPeriodOptions.map((option) => (
-      <label
-        key={option.key}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '18px auto',
-          alignItems: 'center',
-          columnGap: '6px',
-          margin: 0,
-          cursor: 'pointer',
-          lineHeight: 1.2
-        }}
-      >
-        <input
-          type="radio"
-          name="instrument-chart-period"
-          value={option.key}
-          checked={chartPeriodKey === option.key}
-          onChange={() => setChartPeriodKey(option.key)}
-          style={{
-            margin: 0,
-            width: '14px',
-            height: '14px'
-          }}
-        />
-        <span style={{ margin: 0 }}>{option.label}</span>
-      </label>
-    ))}
-    <label
-  style={{
-    display: 'grid',
-    gridTemplateColumns: '18px auto',
-    alignItems: 'center',
-    columnGap: '6px',
-    margin: 0,
-    cursor: 'pointer',
-    lineHeight: 1.2
-  }}
->
-  <input
-    type="checkbox"
-    checked={chartSeparateCharts}
-    onChange={(e) => setChartSeparateCharts(e.target.checked)}
-    style={{
-      margin: 0,
-      width: '14px',
-      height: '14px'
-    }}
-  />
-  <span style={{ margin: 0 }}>각각 차트 생성</span>
-</label>
-  </div>
-</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {chartPeriodOptions.map((option) => (
+                <label
+                  key={option.key}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '18px auto',
+                    alignItems: 'center',
+                    columnGap: '6px',
+                    margin: 0,
+                    cursor: 'pointer',
+                    lineHeight: 1.2
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="instrument-chart-period"
+                    value={option.key}
+                    checked={chartPeriodKey === option.key}
+                    onChange={() => setChartPeriodKey(option.key)}
+                    style={{
+                      margin: 0,
+                      width: '14px',
+                      height: '14px'
+                    }}
+                  />
+                  <span style={{ margin: 0 }}>{option.label}</span>
+                </label>
+              ))}
+              <label
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '18px auto',
+                  alignItems: 'center',
+                  columnGap: '6px',
+                  margin: 0,
+                  cursor: 'pointer',
+                  lineHeight: 1.2
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={chartSeparateCharts}
+                  onChange={(e) => setChartSeparateCharts(e.target.checked)}
+                  style={{
+                    margin: 0,
+                    width: '14px',
+                    height: '14px'
+                  }}
+                />
+                <span style={{ margin: 0 }}>각각 차트 생성</span>
+              </label>
+            </div>
+          </div>
 
           <div style={{ minWidth: '220px', display: 'grid', gap: '10px' }}>
             <label>
-  시작시간
-  <input
-    type="datetime-local"
-    step="600"
-    value={chartCustomStartTime}
-    onChange={(e) => {
-      const d = parseDateTime(e.target.value)
-      if (!d) {
-        setChartCustomStartTime('')
-        return
-      }
-      const rounded = floorToTenMinuteSlot(d)
-      setChartCustomStartTime(formatDateTimeLocal(rounded))
-    }}
-    disabled={chartPeriodKey !== 'custom'}
-     style={{
-    width: '240px'
-  }}
-  />
-</label>
+              시작시간
+              <input
+                type="datetime-local"
+                step="600"
+                value={chartCustomStartTime}
+                onChange={(e) => {
+                  const d = parseDateTime(e.target.value)
+                  if (!d) {
+                    setChartCustomStartTime('')
+                    return
+                  }
+                  const rounded = floorToTenMinuteSlot(d)
+                  setChartCustomStartTime(formatDateTimeLocal(rounded))
+                }}
+                disabled={chartPeriodKey !== 'custom'}
+                style={{
+                  width: '240px'
+                }}
+              />
+            </label>
 
-<label>
-  종료시간
-  <input
-    type="datetime-local"
-    step="600"
-    value={chartCustomEndTime}
-    onChange={(e) => {
-      const d = parseDateTime(e.target.value)
-      if (!d) {
-        setChartCustomEndTime('')
-        return
-      }
-      const rounded = floorToTenMinuteSlot(d)
-      setChartCustomEndTime(formatDateTimeLocal(rounded))
-    }}
-    disabled={chartPeriodKey !== 'custom'}
-    style={{
-    width: '240px'
-  }}
-  />
-</label>
+            <label>
+              종료시간
+              <input
+                type="datetime-local"
+                step="600"
+                value={chartCustomEndTime}
+                onChange={(e) => {
+                  const d = parseDateTime(e.target.value)
+                  if (!d) {
+                    setChartCustomEndTime('')
+                    return
+                  }
+                  const rounded = floorToTenMinuteSlot(d)
+                  setChartCustomEndTime(formatDateTimeLocal(rounded))
+                }}
+                disabled={chartPeriodKey !== 'custom'}
+                style={{
+                  width: '240px'
+                }}
+              />
+            </label>
           </div>
         </div>
 
@@ -5295,54 +5295,54 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
         ) : null}
 
         <div className="chart-settings">
-  <div className="chart-setting-card">
-    <h3>수위 그래프 축 설정</h3>
-    <div className="chart-setting-grid">
-      <label>
-        Y축 최소
-        <input
-          type="number"
-          step="any"
-          value={waterChartYMin}
-          onChange={(e) => setWaterChartYMin(e.target.value)}
-        />
-      </label>
-      <label>
-        Y축 최대
-        <input
-          type="number"
-          step="any"
-          value={waterChartYMax}
-          onChange={(e) => setWaterChartYMax(e.target.value)}
-        />
-      </label>
-    </div>
-  </div>
+          <div className="chart-setting-card">
+            <h3>수위 그래프 축 설정</h3>
+            <div className="chart-setting-grid">
+              <label>
+                Y축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={waterChartYMin}
+                  onChange={(e) => setWaterChartYMin(e.target.value)}
+                />
+              </label>
+              <label>
+                Y축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={waterChartYMax}
+                  onChange={(e) => setWaterChartYMax(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
 
-  <div className="chart-setting-card">
-    <h3>환산유량 그래프 축 설정</h3>
-    <div className="chart-setting-grid">
-      <label>
-        Y축 최소
-        <input
-          type="number"
-          step="any"
-          value={flowChartYMin}
-          onChange={(e) => setFlowChartYMin(e.target.value)}
-        />
-      </label>
-      <label>
-        Y축 최대
-        <input
-          type="number"
-          step="any"
-          value={flowChartYMax}
-          onChange={(e) => setFlowChartYMax(e.target.value)}
-        />
-      </label>
-    </div>
-  </div>
-</div>
+          <div className="chart-setting-card">
+            <h3>환산유량 그래프 축 설정</h3>
+            <div className="chart-setting-grid">
+              <label>
+                Y축 최소
+                <input
+                  type="number"
+                  step="any"
+                  value={flowChartYMin}
+                  onChange={(e) => setFlowChartYMin(e.target.value)}
+                />
+              </label>
+              <label>
+                Y축 최대
+                <input
+                  type="number"
+                  step="any"
+                  value={flowChartYMax}
+                  onChange={(e) => setFlowChartYMax(e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        </div>
 
 
         <div style={{ display: 'grid', gap: '10px', marginTop: '12px' }}>
@@ -5386,20 +5386,20 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
         {generatedCharts.length > 0 ? (
           <div style={{ marginTop: '14px' }}>
             {generatedCharts.map((chart) => (
-             <InstrumentWaterLevelChart
-  key={chart.id}
-  title={chart.title}
-  subtitle={chart.subtitle}
-  datasets={chart.datasets}
-  range={chart.range}
-  height={chart.height}
-  yMin={waterChartYMin}
-  yMax={waterChartYMax}
-  yAxisTitle="수위 h(m)"
-  tooltipValueLabel="h"
-  zoomX={instrumentChartZoomX}
-  zoomY={instrumentChartZoomY}
-/> 
+              <InstrumentWaterLevelChart
+                key={chart.id}
+                title={chart.title}
+                subtitle={chart.subtitle}
+                datasets={chart.datasets}
+                range={chart.range}
+                height={chart.height}
+                yMin={waterChartYMin}
+                yMax={waterChartYMax}
+                yAxisTitle="수위 h(m)"
+                tooltipValueLabel="h"
+                zoomX={instrumentChartZoomX}
+                zoomY={instrumentChartZoomY}
+              />
             ))}
           </div>
         ) : null}
@@ -5408,21 +5408,21 @@ XLSX.utils.book_append_sheet(workbook, worksheet, '수위자료')
           <div style={{ marginTop: '14px' }}>
             <h3 style={{ marginBottom: '8px' }}>유량 차트 {generatedFlowChartLabel ? `(${generatedFlowChartLabel})` : ''}</h3>
             {generatedFlowCharts.map((chart) => (
-  <InstrumentWaterLevelChart
-  key={chart.id}
-  title={chart.title}
-  subtitle={chart.subtitle}
-  datasets={chart.datasets}
-  range={chart.range}
-  height={chart.height}
-  yMin={flowChartYMin}
-  yMax={flowChartYMax}
-  yAxisTitle="환산유량 Q(m³/s)"
-  tooltipValueLabel="Q"
-  zoomX={instrumentChartZoomX}
-  zoomY={instrumentChartZoomY}
-/>
-))}
+              <InstrumentWaterLevelChart
+                key={chart.id}
+                title={chart.title}
+                subtitle={chart.subtitle}
+                datasets={chart.datasets}
+                range={chart.range}
+                height={chart.height}
+                yMin={flowChartYMin}
+                yMax={flowChartYMax}
+                yAxisTitle="환산유량 Q(m³/s)"
+                tooltipValueLabel="Q"
+                zoomX={instrumentChartZoomX}
+                zoomY={instrumentChartZoomY}
+              />
+            ))}
           </div>
         ) : null}
       </section>
@@ -5463,7 +5463,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('management')
   const [instrumentSubTab, setInstrumentSubTab] = useState('current')
   const [swipeStart, setSwipeStart] = useState(null)
-    const tabFlow = useMemo(
+  const tabFlow = useMemo(
     () => [
       { activeTab: 'management', instrumentSubTab: null },
       { activeTab: 'process', instrumentSubTab: null },
@@ -5498,72 +5498,72 @@ export default function App() {
   }
 
   const getSwipeZone = (target) => {
-  if (!(target instanceof Element)) return null
-  if (target.closest('[data-swipe-zone="instrument"]')) return 'instrument'
-  return null
-}
+    if (!(target instanceof Element)) return null
+    if (target.closest('[data-swipe-zone="instrument"]')) return 'instrument'
+    return null
+  }
 
-const shouldIgnoreSwipeTarget = (target) => {
-  if (!(target instanceof Element)) return true
+  const shouldIgnoreSwipeTarget = (target) => {
+    if (!(target instanceof Element)) return true
 
-  // instrument 영역은 예외적으로 스와이프 허용
-  if (getSwipeZone(target)) return false
+    // instrument 영역은 예외적으로 스와이프 허용
+    if (getSwipeZone(target)) return false
 
-  // 기존 제외 규칙 유지
-  return Boolean(
-    target.closest(
-      'input, select, textarea, button, .table-wrap, .chart-wrapper, .chart-box, .chart-legend'
+    // 기존 제외 규칙 유지
+    return Boolean(
+      target.closest(
+        'input, select, textarea, button, .table-wrap, .chart-wrapper, .chart-box, .chart-legend'
+      )
     )
-  )
-}
-
-const handleTouchStart = (e) => {
-  if (typeof window === 'undefined' || window.innerWidth > 768) return
-  if (shouldIgnoreSwipeTarget(e.target)) return
-
-  const touch = e.touches[0]
-  if (!touch) return
-
-  setSwipeStart({
-    x: touch.clientX,
-    y: touch.clientY,
-    zone: getSwipeZone(e.target) || 'default'
-  })
-}
-
-const handleTouchEnd = (e) => {
-  if (typeof window === 'undefined' || window.innerWidth > 768) return
-  if (!swipeStart) return
-
-  const touch = e.changedTouches[0]
-  if (!touch) {
-    setSwipeStart(null)
-    return
   }
 
-  const dx = touch.clientX - swipeStart.x
-  const dy = touch.clientY - swipeStart.y
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
+  const handleTouchStart = (e) => {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return
+    if (shouldIgnoreSwipeTarget(e.target)) return
 
-  const minDistance =
-    swipeStart.zone === 'instrument'
-      ? Math.max(180, Math.round(window.innerWidth * 0.45))
-      : 50
+    const touch = e.touches[0]
+    if (!touch) return
 
-  const horizontalRatio = absDy === 0 ? Infinity : absDx / absDy
-  const minRatio = swipeStart.zone === 'instrument' ? 1.7 : 1.35
-
-  if (absDx < minDistance || horizontalRatio < minRatio) {
-    setSwipeStart(null)
-    return
+    setSwipeStart({
+      x: touch.clientX,
+      y: touch.clientY,
+      zone: getSwipeZone(e.target) || 'default'
+    })
   }
 
-  if (dx < 0) moveSwipeTab(1)
-  else moveSwipeTab(-1)
+  const handleTouchEnd = (e) => {
+    if (typeof window === 'undefined' || window.innerWidth > 768) return
+    if (!swipeStart) return
 
-  setSwipeStart(null)
-}
+    const touch = e.changedTouches[0]
+    if (!touch) {
+      setSwipeStart(null)
+      return
+    }
+
+    const dx = touch.clientX - swipeStart.x
+    const dy = touch.clientY - swipeStart.y
+    const absDx = Math.abs(dx)
+    const absDy = Math.abs(dy)
+
+    const minDistance =
+      swipeStart.zone === 'instrument'
+        ? Math.max(180, Math.round(window.innerWidth * 0.45))
+        : 50
+
+    const horizontalRatio = absDy === 0 ? Infinity : absDx / absDy
+    const minRatio = swipeStart.zone === 'instrument' ? 1.7 : 1.35
+
+    if (absDx < minDistance || horizontalRatio < minRatio) {
+      setSwipeStart(null)
+      return
+    }
+
+    if (dx < 0) moveSwipeTab(1)
+    else moveSwipeTab(-1)
+
+    setSwipeStart(null)
+  }
 
   const handleTouchCancel = () => {
     setSwipeStart(null)
@@ -6086,15 +6086,15 @@ const handleTouchEnd = (e) => {
       let shouldMigrate = false
 
       if (loadedFromV4) {
-  const serverGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
-  const draftGroups = Array.isArray(localDraft?.groups)
-    ? normalizeGroups(localDraft.groups)
-    : null
+        const serverGroups = extractGroupsFromStationRows(stationRows) || DEFAULT_GROUPS
+        const draftGroups = Array.isArray(localDraft?.groups)
+          ? normalizeGroups(localDraft.groups)
+          : null
 
-  nextGroups =
-    draftGroups && draftGroups.length > 0
-      ? applyDraftOrderToGroups(serverGroups, draftGroups)
-      : serverGroups
+        nextGroups =
+          draftGroups && draftGroups.length > 0
+            ? applyDraftOrderToGroups(serverGroups, draftGroups)
+            : serverGroups
         savedAt = String(
           stationRows.reduce((latest, row) => {
             const ts = String(row?.updated_at || '')
@@ -6620,12 +6620,12 @@ const handleTouchEnd = (e) => {
 
       const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows])
 
-const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
-worksheet['!cols'] = [
-  { wch: getAutoWidth(aColumnValues) }
-]
+      const aColumnValues = [headers[0], ...rows.map((row) => row[0])]
+      worksheet['!cols'] = [
+        { wch: getAutoWidth(aColumnValues) }
+      ]
 
-XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
     })
 
     const groupName = sanitizeExcelSheetName(selectedGroup.name || '그룹')
@@ -6689,7 +6689,7 @@ XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
     }))
   }, [selectedSections])
 
-    const measurementYearOptions = useMemo(() => {
+  const measurementYearOptions = useMemo(() => {
     const years = Array.from(
       new Set(
         selectedMeasurements
@@ -6728,69 +6728,69 @@ XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
   }, [selectedMeasurements, measurementYearFilter])
 
   const relativeErrorsRaw = useMemo(() => {
-  return selectedMeasurements.map((measurement, index) => {
-    const rawH = num(measurement.h)
-    const section = findSectionByH(
-      measurement.h,
-      selectedSections,
-      measurement.datetime
-    )
+    return selectedMeasurements.map((measurement, index) => {
+      const rawH = num(measurement.h)
+      const section = findSectionByH(
+        measurement.h,
+        selectedSections,
+        measurement.datetime
+      )
 
-    const offset = section ? (num(section.hOffset) ?? 0) : 0
-    const H = rawH === null ? null : rawH + offset
+      const offset = section ? (num(section.hOffset) ?? 0) : 0
+      const H = rawH === null ? null : rawH + offset
 
-    const measuredQ = num(measurement.q)
-    const curveQ = section && rawH !== null ? calcQ(measurement.h, section) : null
+      const measuredQ = num(measurement.q)
+      const curveQ = section && rawH !== null ? calcQ(measurement.h, section) : null
 
-    let error = null
-    if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
-      error = ((measuredQ - curveQ) / curveQ) * 100
-    }
+      let error = null
+      if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
+        error = ((measuredQ - curveQ) / curveQ) * 100
+      }
 
-    return {
-      ...measurement,
-      H,
-      sectionName: section?.name || '',
-      curveQ,
-      error,
-      measurementYear: getYearLabel(measurement.datetime),
-      _order: index
-    }
-  })
-}, [selectedMeasurements, selectedSections])
+      return {
+        ...measurement,
+        H,
+        sectionName: section?.name || '',
+        curveQ,
+        error,
+        measurementYear: getYearLabel(measurement.datetime),
+        _order: index
+      }
+    })
+  }, [selectedMeasurements, selectedSections])
 
   const graphMeasurementRows = useMemo(() => {
-  if (graphExcludedYears.length === 0) return relativeErrorsRaw
-  const excluded = new Set(graphExcludedYears)
-  return relativeErrorsRaw.filter((row) => !excluded.has(row.measurementYear))
-}, [relativeErrorsRaw, graphExcludedYears])
+    if (graphExcludedYears.length === 0) return relativeErrorsRaw
+    const excluded = new Set(graphExcludedYears)
+    return relativeErrorsRaw.filter((row) => !excluded.has(row.measurementYear))
+  }, [relativeErrorsRaw, graphExcludedYears])
 
-const graphMeasurementGroups = useMemo(() => {
-  const map = new Map()
+  const graphMeasurementGroups = useMemo(() => {
+    const map = new Map()
 
-  graphMeasurementRows.forEach((measurement) => {
-    const year = getYearLabel(measurement.datetime)
-    const device = normalizeDeviceLabel(measurement.device)
-    const key = `${year}__${device}`
+    graphMeasurementRows.forEach((measurement) => {
+      const year = getYearLabel(measurement.datetime)
+      const device = normalizeDeviceLabel(measurement.device)
+      const key = `${year}__${device}`
 
-    if (!map.has(key)) {
-      map.set(key, {
-        year,
-        device,
-        items: []
-      })
-    }
+      if (!map.has(key)) {
+        map.set(key, {
+          year,
+          device,
+          items: []
+        })
+      }
 
-    map.get(key).items.push(measurement)
-  })
+      map.get(key).items.push(measurement)
+    })
 
-  return Array.from(map.values())
-    .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
-    .map((group) => ({
-      ...group,
-      items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
-    }))
-}, [graphMeasurementRows])
+    return Array.from(map.values())
+      .sort((a, b) => compareYearLabel(a.year, b.year) || a.device.localeCompare(b.device, 'ko'))
+      .map((group) => ({
+        ...group,
+        items: group.items.slice().sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)))
+      }))
+  }, [graphMeasurementRows])
 
   const filteredRelativeErrors = useMemo(() => {
     let rows = relativeErrorsRaw
@@ -6849,31 +6849,31 @@ const graphMeasurementGroups = useMemo(() => {
   }, [selectedSections, curveRowsBySection])
 
   const measurementDatasets = useMemo(() => {
-  return graphMeasurementGroups.map((group) => {
-    const color = yearColorMap[group.year] || YEAR_COLORS[0]
-    const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
+    return graphMeasurementGroups.map((group) => {
+      const color = yearColorMap[group.year] || YEAR_COLORS[0]
+      const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
 
-    return {
-      label: `${group.year}년 ${group.device} 측정성과`,
-      data: group.items
-        .map((measurement) => ({
-          x: num(measurement.q),
-          y: num(measurement.H)
-        }))
-        .filter((point) => point.x !== null && point.y !== null),
-      showLine: false,
-      pointRadius: 5,
-      pointHoverRadius: 6,
-      borderWidth: 1,
-      backgroundColor: color,
-      borderColor: color,
-      pointStyle: deviceStyle.pointStyle,
-      parsing: false,
-      legendSymbol: deviceStyle.symbol,
-      legendColor: color
-    }
-  })
-}, [graphMeasurementGroups, yearColorMap])
+      return {
+        label: `${group.year}년 ${group.device} 측정성과`,
+        data: group.items
+          .map((measurement) => ({
+            x: num(measurement.q),
+            y: num(measurement.H)
+          }))
+          .filter((point) => point.x !== null && point.y !== null),
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        borderWidth: 1,
+        backgroundColor: color,
+        borderColor: color,
+        pointStyle: deviceStyle.pointStyle,
+        parsing: false,
+        legendSymbol: deviceStyle.symbol,
+        legendColor: color
+      }
+    })
+  }, [graphMeasurementGroups, yearColorMap])
 
   const legendItems = useMemo(() => {
     const items = []
@@ -6985,18 +6985,18 @@ const graphMeasurementGroups = useMemo(() => {
   const currentStationCode = selectedStation?.code || ''
 
   const sectionColumns = [
-  { key: 'name', label: '구간명', minWidth: '86px' },
-  { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
-  { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
-  { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
-  { key: 'a', label: 'A', minWidth: '64px' },
-  { key: 'b', label: 'B', minWidth: '64px' },
-  { key: 'c', label: 'C', minWidth: '64px' },
-  { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
-  { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
-  { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
-  { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
-]
+    { key: 'name', label: '구간명', minWidth: '86px' },
+    { key: 'hMin', label: '적용수위 시작', minWidth: '96px' },
+    { key: 'hMax', label: '적용수위 끝', minWidth: '96px' },
+    { key: 'hOffset', label: 'H = h + ( )', type: 'number', minWidth: '96px' },
+    { key: 'a', label: 'A', minWidth: '64px' },
+    { key: 'b', label: 'B', minWidth: '64px' },
+    { key: 'c', label: 'C', minWidth: '64px' },
+    { key: 'lowNote', label: '저수위 외삽', minWidth: '120px' },
+    { key: 'highNote', label: '고수위 외삽', minWidth: '120px' },
+    { key: 'periodStart', label: '적용시작', minWidth: '250px', mobileMinWidth: '130px' },
+    { key: 'periodEnd', label: '적용종료', minWidth: '250px', mobileMinWidth: '130px' }
+  ]
 
   const measurementColumns = [
     { key: 'datetime', label: '측정일시', minWidth: '250px', mobileMinWidth: '130px' },
@@ -7010,7 +7010,7 @@ const graphMeasurementGroups = useMemo(() => {
     { key: 'partialOpen', label: '공사영향' }
   ]
 
-    return (
+  return (
     <div
       className="app"
       onTouchStart={handleTouchStart}
@@ -7020,9 +7020,7 @@ const graphMeasurementGroups = useMemo(() => {
       <header className="header">
         <div>
           <h1>지점별 자료 관리 PWA</h1>
-          <p>셀 형태 입력, Excel 붙여넣기, 환산유량표, 그래프, 상대오차 계산</p>
         </div>
-        <p className="muted">그룹과 지점을 선택해서 관리합니다.</p>
         <div style={{ marginTop: '8px', fontSize: '13px', fontWeight: 600 }}>
           저장 상태: {saveStatus}
           {lastSavedAt ? ` · ${formatDateTimeDisplay(new Date(lastSavedAt))}` : ''}
@@ -7074,232 +7072,154 @@ const graphMeasurementGroups = useMemo(() => {
 
       <div style={{ display: activeTab === 'management' ? 'block' : 'none' }}>
 
-      <section className="card">
-        <h2>1. 그룹 / 지점 선택 / 기본정보</h2>
-        <div className="row">
-          <label>
-            그룹 선택
-            <select
-              value={selectedGroupId}
-              onChange={(e) => handleGroupChange(e.target.value)}
-            >
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name || '그룹 없음'}
-                </option>
-              ))}
-            </select>
-          </label>
+        <section className="card">
+          <h2>1. 그룹 / 지점 선택 / 기본정보</h2>
+          <div className="row">
+            <label>
+              그룹 선택
+              <select
+                value={selectedGroupId}
+                onChange={(e) => handleGroupChange(e.target.value)}
+              >
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name || '그룹 없음'}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <label>
-            그룹명
-            <input
-              value={currentGroupName}
-              onChange={(e) => updateSelectedGroup({ name: e.target.value })}
-            />
-          </label>
+            <label>
+              그룹명
+              <input
+                value={currentGroupName}
+                onChange={(e) => updateSelectedGroup({ name: e.target.value })}
+              />
+            </label>
 
-          <div className="grid-actions" style={{ alignSelf: 'end' }}>
-            <button className="btn" onClick={addGroup}>
-              + 그룹 추가
-            </button>
-            <button className="btn danger" onClick={deleteSelectedGroup} disabled={!selectedGroup}>
-              - 그룹 삭제
-            </button>
-            <button className="btn secondary" onClick={() => moveSelectedGroup(-1)} disabled={!canMoveGroupUp}>
-              ▲ 그룹 위로
-            </button>
-            <button className="btn secondary" onClick={() => moveSelectedGroup(1)} disabled={!canMoveGroupDown}>
-              ▼ 그룹 아래로
-            </button>
-          </div>
-        </div>
-
-        <div className="row" style={{ marginTop: '12px' }}>
-          <label>
-            지점 선택
-            <select
-              value={selectedStationId}
-              onChange={(e) => handleStationChange(e.target.value)}
-            >
-              {selectedGroupStations.map((station) => (
-                <option key={station.id} value={station.id}>
-                  {station.name || '이름 없음'}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            지점명
-            <input
-              value={currentStationName}
-              onChange={(e) =>
-                selectedStation && updateStation(selectedStation.id, { name: e.target.value })
-              }
-            />
-          </label>
-
-          <label>
-            지점코드
-            <input
-              value={currentStationCode}
-              onChange={(e) =>
-                selectedStation && updateStation(selectedStation.id, { code: e.target.value })
-              }
-            />
-          </label>
-
-          <label>
-            분류
-            <select
-              value={selectedStation?.classification || '일반 지점'}
-              onChange={(e) =>
-                selectedStation &&
-                updateStation(selectedStation.id, { classification: e.target.value })
-              }
-            >
-              <option value="자동유량">자동유량</option>
-              <option value="일반 지점">일반 지점</option>
-            </select>
-          </label>
-
-          <div className="grid-actions" style={{ alignSelf: 'end' }}>
-            <button className="btn" onClick={addStation}>
-              + 지점 추가
-            </button>
-            <button
-              className="btn danger"
-              onClick={deleteSelectedStation}
-              disabled={!selectedStation}
-            >
-              - 지점 삭제
-            </button>
-            <button className="btn secondary" onClick={() => moveSelectedStation(-1)} disabled={!canMoveStationUp}>
-              ▲ 지점 위로
-            </button>
-            <button className="btn secondary" onClick={() => moveSelectedStation(1)} disabled={!canMoveStationDown}>
-              ▼ 지점 아래로
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="card">
-        <SpreadsheetGrid
-          title="2. 곡선식 입력"
-          columns={sectionColumns}
-          rows={selectedSections}
-          onRowsChange={updateSelectedSections}
-          createEmptyRow={createEmptySection}
-          onDeleteRow={(rowId) =>
-            updateSelectedSections(selectedSections.filter((section) => section.id !== rowId))
-          }
-          addButtonLabel={{
-            label: '+ 구간 추가',
-            onClick: () =>
-              updateSelectedSections([...selectedSections, createEmptySection()])
-          }}
-        />
-      </section>
-
-      <section className="card">
-        <div className="section-header">
-          <h2>3. 측정성과 입력</h2>
-          <div className="grid-actions">
-            <button
-              className="btn secondary"
-              onClick={handleExportSelectedGroupMeasurements}
-              disabled={!selectedGroup}
-            >
-              그룹 엑셀 저장
-            </button>
-          </div>
-        </div>
-        <div className="grid-actions" style={{ justifyContent: 'flex-end', marginBottom: '10px' }}>
-          <label>
-            연도별
-            <select
-              value={measurementYearFilter}
-              onChange={(e) => setMeasurementYearFilter(e.target.value)}
-            >
-              {measurementYearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year === '전체' ? '전체' : `${year}년`}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <SpreadsheetGrid
-          title=""
-          columns={measurementColumns}
-          rows={filteredMeasurements}
-          onRowsChange={(nextVisibleRows) => {
-            const visibleIds = new Set(filteredMeasurements.map((row) => row.id))
-            const nextById = new Map(nextVisibleRows.map((row) => [row.id, row]))
-            const updated = selectedMeasurements.map((row) => nextById.get(row.id) || row)
-            const appended = nextVisibleRows.filter((row) => !visibleIds.has(row.id))
-            updateSelectedMeasurements([...updated, ...appended])
-          }}
-          createEmptyRow={createEmptyMeasurement}
-          onDeleteRow={(rowId) =>
-            updateSelectedMeasurements(
-              selectedMeasurements.filter((measurement) => measurement.id !== rowId)
-            )
-          }
-          addButtonLabel={{
-            label: '+ 측정성과 추가',
-            onClick: () =>
-              updateSelectedMeasurements([
-                ...selectedMeasurements,
-                createEmptyMeasurement()
-              ])
-          }}
-        />
-      </section>
-
-      <section className="card">
-        <div className="section-header">
-          <h2>4. 수위별 환산유량표</h2>
-          <button
-            className="btn secondary"
-            onClick={() => setCurveTableOpen((prev) => !prev)}
-          >
-            {curveTableOpen ? '접기' : '펼치기'}
-          </button>
-        </div>
-
-        {curveTableOpen &&
-          curveRowsBySection.map(({ section, rows }) => (
-            <div className="subcard" key={section.id}>
-              <h3>
-                {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
-              </h3>
-              <p className="muted">
-                 Q = {section.a} × (h - {section.b})^{section.c}
-                {section.lowNote ? ` / ${section.lowNote}` : ''}
-                {section.highNote ? ` / ${section.highNote}` : ''}
-              </p>
-              <CopyableMatrixTable
-                  headers={['수위(m)', '유량(m³/s)']}
-                  rows={rows.map((r) => [fmt(r.h, 2), fmt(r.q, 3)])}
-                  tableClassName="spreadsheet flow-table"
-                  style={tableAutoStyle}
-                />
+            <div className="grid-actions" style={{ alignSelf: 'end' }}>
+              <button className="btn" onClick={addGroup}>
+                + 그룹 추가
+              </button>
+              <button className="btn danger" onClick={deleteSelectedGroup} disabled={!selectedGroup}>
+                - 그룹 삭제
+              </button>
+              <button className="btn secondary" onClick={() => moveSelectedGroup(-1)} disabled={!canMoveGroupUp}>
+                ▲ 그룹 위로
+              </button>
+              <button className="btn secondary" onClick={() => moveSelectedGroup(1)} disabled={!canMoveGroupDown}>
+                ▼ 그룹 아래로
+              </button>
             </div>
-          ))}
-      </section>
+          </div>
 
-      <section className="card">
-        <div className="section-header">
-          <h2>5. 상대오차 계산</h2>
-          <div className="grid-actions">
+          <div className="row" style={{ marginTop: '12px' }}>
+            <label>
+              지점 선택
+              <select
+                value={selectedStationId}
+                onChange={(e) => handleStationChange(e.target.value)}
+              >
+                {selectedGroupStations.map((station) => (
+                  <option key={station.id} value={station.id}>
+                    {station.name || '이름 없음'}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              지점명
+              <input
+                value={currentStationName}
+                onChange={(e) =>
+                  selectedStation && updateStation(selectedStation.id, { name: e.target.value })
+                }
+              />
+            </label>
+
+            <label>
+              지점코드
+              <input
+                value={currentStationCode}
+                onChange={(e) =>
+                  selectedStation && updateStation(selectedStation.id, { code: e.target.value })
+                }
+              />
+            </label>
+
+            <label>
+              분류
+              <select
+                value={selectedStation?.classification || '일반 지점'}
+                onChange={(e) =>
+                  selectedStation &&
+                  updateStation(selectedStation.id, { classification: e.target.value })
+                }
+              >
+                <option value="자동유량">자동유량</option>
+                <option value="일반 지점">일반 지점</option>
+              </select>
+            </label>
+
+            <div className="grid-actions" style={{ alignSelf: 'end' }}>
+              <button className="btn" onClick={addStation}>
+                + 지점 추가
+              </button>
+              <button
+                className="btn danger"
+                onClick={deleteSelectedStation}
+                disabled={!selectedStation}
+              >
+                - 지점 삭제
+              </button>
+              <button className="btn secondary" onClick={() => moveSelectedStation(-1)} disabled={!canMoveStationUp}>
+                ▲ 지점 위로
+              </button>
+              <button className="btn secondary" onClick={() => moveSelectedStation(1)} disabled={!canMoveStationDown}>
+                ▼ 지점 아래로
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <SpreadsheetGrid
+            title="2. 곡선식 입력"
+            columns={sectionColumns}
+            rows={selectedSections}
+            onRowsChange={updateSelectedSections}
+            createEmptyRow={createEmptySection}
+            onDeleteRow={(rowId) =>
+              updateSelectedSections(selectedSections.filter((section) => section.id !== rowId))
+            }
+            addButtonLabel={{
+              label: '+ 구간 추가',
+              onClick: () =>
+                updateSelectedSections([...selectedSections, createEmptySection()])
+            }}
+          />
+        </section>
+
+        <section className="card">
+          <div className="section-header">
+            <h2>3. 측정성과 입력</h2>
+            <div className="grid-actions">
+              <button
+                className="btn secondary"
+                onClick={handleExportSelectedGroupMeasurements}
+                disabled={!selectedGroup}
+              >
+                그룹 엑셀 저장
+              </button>
+            </div>
+          </div>
+          <div className="grid-actions" style={{ justifyContent: 'flex-end', marginBottom: '10px' }}>
             <label>
               연도별
               <select
-                value={relativeErrorYearFilter}
-                onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
+                value={measurementYearFilter}
+                onChange={(e) => setMeasurementYearFilter(e.target.value)}
               >
                 {measurementYearOptions.map((year) => (
                   <option key={year} value={year}>
@@ -7308,390 +7228,468 @@ const graphMeasurementGroups = useMemo(() => {
                 ))}
               </select>
             </label>
-            <label>
-              수위(h) 정렬
-              <select
-                value={relativeErrorSort}
-                onChange={(e) => setRelativeErrorSort(e.target.value)}
-              >
-                <option value="기본">기본</option>
-                <option value="오름차순">오름차순</option>
-                <option value="내림차순">내림차순</option>
-              </select>
-            </label>
           </div>
-        </div>
-        <CopyableMatrixTable
-  headers={[
-    '측정일시',
-    '수위(h)',
-    '수위(H)',
-    '측정유량',
-    '곡선식 적용구간',
-    '곡선식 유량',
-    '상대오차(%)'
-  ]}
-  rows={filteredRelativeErrors.map((row) => [
-    row.datetime,
-    row.h,
-    row.H === null ? '' : fmt(row.H, 2),
-    row.q,
-    row.sectionName,
-    row.curveQ === null ? '' : fmt(row.curveQ, 3),
-    row.error === null ? '' : fmt(row.error, 2)
-  ])}
-  tableClassName="spreadsheet flow-table"
-  style={tableAutoStyle}
-/>
-        <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
-      </section>
-
-      <section className="card chart-card">
-        <div className="section-header">
-  <h2>6. 그래프</h2>
-  <div className="grid-actions">
-    <button
-      type="button"
-      className="btn secondary"
-      onClick={() => {
-        setGraphDraftYears(graphExcludedYears)
-        setGraphExcludeOpen((prev) => !prev)
-      }}
-    >
-      {graphExcludeOpen
-        ? `옵션 닫기 (${graphDraftYears.length}개 선택)`
-        : graphExcludedYears.length > 0
-          ? `미포함 옵션 (${graphExcludedYears.length}개 선택)`
-          : '미포함 옵션'}
-    </button>
-  </div>
-</div>
-{graphExcludeOpen ? (
-  <div
-    style={{
-      border: '1px solid #d0d7de',
-      borderRadius: '8px',
-      padding: '10px',
-      background: '#fff',
-      marginBottom: '10px',
-      maxWidth: '520px'
-    }}
-  >
-    <div className="grid-actions" style={{ marginBottom: '8px' }}>
-      <button
-        type="button"
-        className="btn secondary"
-        onClick={() => setGraphDraftYears(graphExcludeOptions)}
-      >
-        전체 선택
-      </button>
-      <button
-        type="button"
-        className="btn secondary"
-        onClick={() => setGraphDraftYears([])}
-      >
-        선택 해제
-      </button>
-    </div>
-
-    <div
-      style={{
-        display: 'grid',
-        gap: '4px',
-        maxHeight: '240px',
-        overflowY: 'auto',
-        paddingRight: '2px'
-      }}
-    >
-      {graphExcludeOptions.map((year) => {
-        const checked = graphDraftYears.includes(year)
-
-        return (
-          <button
-            key={year}
-            type="button"
-            onClick={() =>
-              setGraphDraftYears((prev) =>
-                prev.includes(year)
-                  ? prev.filter((item) => item !== year)
-                  : [...prev, year]
+          <SpreadsheetGrid
+            title=""
+            columns={measurementColumns}
+            rows={filteredMeasurements}
+            onRowsChange={(nextVisibleRows) => {
+              const visibleIds = new Set(filteredMeasurements.map((row) => row.id))
+              const nextById = new Map(nextVisibleRows.map((row) => [row.id, row]))
+              const updated = selectedMeasurements.map((row) => nextById.get(row.id) || row)
+              const appended = nextVisibleRows.filter((row) => !visibleIds.has(row.id))
+              updateSelectedMeasurements([...updated, ...appended])
+            }}
+            createEmptyRow={createEmptyMeasurement}
+            onDeleteRow={(rowId) =>
+              updateSelectedMeasurements(
+                selectedMeasurements.filter((measurement) => measurement.id !== rowId)
               )
             }
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '18px 1fr',
-              alignItems: 'center',
-              columnGap: '8px',
-              width: '100%',
-              textAlign: 'left',
-              padding: '8px 10px',
-              border: '1px solid #d0d7de',
-              borderRadius: '6px',
-              background: checked ? '#e8f1ff' : '#fff',
-              boxSizing: 'border-box',
-              minHeight: '40px'
+            addButtonLabel={{
+              label: '+ 측정성과 추가',
+              onClick: () =>
+                updateSelectedMeasurements([
+                  ...selectedMeasurements,
+                  createEmptyMeasurement()
+                ])
             }}
-          >
-            <input
-              type="checkbox"
-              readOnly
-              checked={checked}
-              style={{
-                width: '14px',
-                height: '14px',
-                margin: 0,
-                accentColor: '#1f6feb',
-                justifySelf: 'center'
-              }}
-            />
-            <span
-              style={{
-                fontSize: '13px',
-                lineHeight: '1.3',
-                whiteSpace: 'normal',
-                wordBreak: 'keep-all',
-                overflowWrap: 'break-word'
-              }}
+          />
+        </section>
+
+        <section className="card">
+          <div className="section-header">
+            <h2>4. 수위별 환산유량표</h2>
+            <button
+              className="btn secondary"
+              onClick={() => setCurveTableOpen((prev) => !prev)}
             >
-              {year}년
-            </span>
-          </button>
-        )
-      })}
-    </div>
+              {curveTableOpen ? '접기' : '펼치기'}
+            </button>
+          </div>
 
-    <div className="grid-actions" style={{ marginTop: '8px' }}>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => {
-          setGraphExcludedYears(graphDraftYears)
-          setGraphExcludeOpen(false)
-        }}
-      >
-        확인
-      </button>
-    </div>
-  </div>
-) : null}
+          {curveTableOpen &&
+            curveRowsBySection.map(({ section, rows }) => (
+              <div className="subcard" key={section.id}>
+                <h3>
+                  {section.name} / {section.hMin} ≤ h ≤ {section.hMax}
+                </h3>
+                <p className="muted">
+                  Q = {section.a} × (h - {section.b})^{section.c}
+                  {section.lowNote ? ` / ${section.lowNote}` : ''}
+                  {section.highNote ? ` / ${section.highNote}` : ''}
+                </p>
+                <CopyableMatrixTable
+                  headers={['수위(m)', '유량(m³/s)']}
+                  rows={rows.map((r) => [fmt(r.h, 2), fmt(r.q, 3)])}
+                  tableClassName="spreadsheet flow-table"
+                  style={tableAutoStyle}
+                />
+              </div>
+            ))}
+        </section>
 
-        <div className="chart-settings">
-          <div className="chart-setting-card">
-            <h3>축 설정</h3>
-            <div className="chart-setting-grid">
+        <section className="card">
+          <div className="section-header">
+            <h2>5. 상대오차 계산</h2>
+            <div className="grid-actions">
               <label>
-                X축 종류
+                연도별
                 <select
-                  value={chartConfig.xType}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xType: e.target.value }))
-                  }
+                  value={relativeErrorYearFilter}
+                  onChange={(e) => setRelativeErrorYearFilter(e.target.value)}
                 >
-                  <option value="logarithmic">logarithmic</option>
-                  <option value="linear">linear</option>
+                  {measurementYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year === '전체' ? '전체' : `${year}년`}
+                    </option>
+                  ))}
                 </select>
               </label>
               <label>
-                X축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.xMin}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xMin: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                X축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.xMax}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, xMax: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Y축 종류
+                수위(h) 정렬
                 <select
-                  value={chartConfig.yType}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, yType: e.target.value }))
-                  }
+                  value={relativeErrorSort}
+                  onChange={(e) => setRelativeErrorSort(e.target.value)}
                 >
-                  <option value="logarithmic">logarithmic</option>
-                  <option value="linear">linear</option>
+                  <option value="기본">기본</option>
+                  <option value="오름차순">오름차순</option>
+                  <option value="내림차순">내림차순</option>
                 </select>
               </label>
-              <label>
-                Y축 최소
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.yMin}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, yMin: e.target.value }))
-                  }
-                />
-              </label>
-              <label>
-                Y축 최대
-                <input
-                  type="number"
-                  step="any"
-                  value={chartConfig.yMax}
-                  onChange={(e) =>
-                    setChartConfig((prev) => ({ ...prev, yMax: e.target.value }))
-                  }
-                />
-              </label>
             </div>
           </div>
-        </div>
+          <CopyableMatrixTable
+            headers={[
+              '측정일시',
+              '수위(h)',
+              '수위(H)',
+              '측정유량',
+              '곡선식 적용구간',
+              '곡선식 유량',
+              '상대오차(%)'
+            ]}
+            rows={filteredRelativeErrors.map((row) => [
+              row.datetime,
+              row.h,
+              row.H === null ? '' : fmt(row.H, 2),
+              row.q,
+              row.sectionName,
+              row.curveQ === null ? '' : fmt(row.curveQ, 3),
+              row.error === null ? '' : fmt(row.error, 2)
+            ])}
+            tableClassName="spreadsheet flow-table"
+            style={tableAutoStyle}
+          />
+          <p className="muted">상대오차 = (측정 유량 - 곡선식 유량) / 곡선식 유량 × 100</p>
+        </section>
 
-        <div
-          className="chart-wrapper"
-          ref={chartWrapperRef}
-          style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
-        >
+        <section className="card chart-card">
+          <div className="section-header">
+            <h2>6. 그래프</h2>
+            <div className="grid-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => {
+                  setGraphDraftYears(graphExcludedYears)
+                  setGraphExcludeOpen((prev) => !prev)
+                }}
+              >
+                {graphExcludeOpen
+                  ? `옵션 닫기 (${graphDraftYears.length}개 선택)`
+                  : graphExcludedYears.length > 0
+                    ? `미포함 옵션 (${graphExcludedYears.length}개 선택)`
+                    : '미포함 옵션'}
+              </button>
+            </div>
+          </div>
+          {graphExcludeOpen ? (
+            <div
+              style={{
+                border: '1px solid #d0d7de',
+                borderRadius: '8px',
+                padding: '10px',
+                background: '#fff',
+                marginBottom: '10px',
+                maxWidth: '520px'
+              }}
+            >
+              <div className="grid-actions" style={{ marginBottom: '8px' }}>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setGraphDraftYears(graphExcludeOptions)}
+                >
+                  전체 선택
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => setGraphDraftYears([])}
+                >
+                  선택 해제
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gap: '4px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
+                  paddingRight: '2px'
+                }}
+              >
+                {graphExcludeOptions.map((year) => {
+                  const checked = graphDraftYears.includes(year)
+
+                  return (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() =>
+                        setGraphDraftYears((prev) =>
+                          prev.includes(year)
+                            ? prev.filter((item) => item !== year)
+                            : [...prev, year]
+                        )
+                      }
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '18px 1fr',
+                        alignItems: 'center',
+                        columnGap: '8px',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        border: '1px solid #d0d7de',
+                        borderRadius: '6px',
+                        background: checked ? '#e8f1ff' : '#fff',
+                        boxSizing: 'border-box',
+                        minHeight: '40px'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        readOnly
+                        checked={checked}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          margin: 0,
+                          accentColor: '#1f6feb',
+                          justifySelf: 'center'
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          lineHeight: '1.3',
+                          whiteSpace: 'normal',
+                          wordBreak: 'keep-all',
+                          overflowWrap: 'break-word'
+                        }}
+                      >
+                        {year}년
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="grid-actions" style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setGraphExcludedYears(graphDraftYears)
+                    setGraphExcludeOpen(false)
+                  }}
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="chart-settings">
+            <div className="chart-setting-card">
+              <h3>축 설정</h3>
+              <div className="chart-setting-grid">
+                <label>
+                  X축 종류
+                  <select
+                    value={chartConfig.xType}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, xType: e.target.value }))
+                    }
+                  >
+                    <option value="logarithmic">logarithmic</option>
+                    <option value="linear">linear</option>
+                  </select>
+                </label>
+                <label>
+                  X축 최소
+                  <input
+                    type="number"
+                    step="any"
+                    value={chartConfig.xMin}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, xMin: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  X축 최대
+                  <input
+                    type="number"
+                    step="any"
+                    value={chartConfig.xMax}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, xMax: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Y축 종류
+                  <select
+                    value={chartConfig.yType}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, yType: e.target.value }))
+                    }
+                  >
+                    <option value="logarithmic">logarithmic</option>
+                    <option value="linear">linear</option>
+                  </select>
+                </label>
+                <label>
+                  Y축 최소
+                  <input
+                    type="number"
+                    step="any"
+                    value={chartConfig.yMin}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, yMin: e.target.value }))
+                    }
+                  />
+                </label>
+                <label>
+                  Y축 최대
+                  <input
+                    type="number"
+                    step="any"
+                    value={chartConfig.yMax}
+                    onChange={(e) =>
+                      setChartConfig((prev) => ({ ...prev, yMax: e.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr',
-              gap: '10px',
-              marginBottom: '10px'
-            }}
+            className="chart-wrapper"
+            ref={chartWrapperRef}
+            style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch' }}
           >
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
+                display: 'grid',
+                gridTemplateColumns: '1fr',
+                gap: '10px',
+                marginBottom: '10px'
               }}
             >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                가로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX - chartZoomStep)}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  flexWrap: 'wrap'
+                }}
               >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomX}
-                onChange={(e) => changeChartZoomX(e.target.value)}
-                aria-label="그래프 가로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(chartZoomX + chartZoomStep)}
+                <span className="muted" style={{ minWidth: '44px' }}>
+                  가로
+                </span>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomX(chartZoomX - chartZoomStep)}
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min={chartZoomMin}
+                  max={chartZoomMax}
+                  step={chartZoomStep}
+                  value={chartZoomX}
+                  onChange={(e) => changeChartZoomX(e.target.value)}
+                  aria-label="그래프 가로 확대/축소"
+                  style={{ flex: '1 1 220px', minWidth: '180px' }}
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomX(chartZoomX + chartZoomStep)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomX(1)}
+                >
+                  기본
+                </button>
+                <span className="muted">{chartZoomX.toFixed(2)}x</span>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  flexWrap: 'wrap'
+                }}
               >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomX(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomX.toFixed(2)}x</span>
+                <span className="muted" style={{ minWidth: '44px' }}>
+                  세로
+                </span>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomY(chartZoomY - chartZoomStep)}
+                >
+                  -
+                </button>
+                <input
+                  type="range"
+                  min={chartZoomMin}
+                  max={chartZoomMax}
+                  step={chartZoomStep}
+                  value={chartZoomY}
+                  onChange={(e) => changeChartZoomY(e.target.value)}
+                  aria-label="그래프 세로 확대/축소"
+                  style={{ flex: '1 1 220px', minWidth: '180px' }}
+                />
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomY(chartZoomY + chartZoomStep)}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => changeChartZoomY(1)}
+                >
+                  기본
+                </button>
+                <span className="muted">{chartZoomY.toFixed(2)}x</span>
+              </div>
             </div>
 
             <div
+              className="chart-legend"
+              ref={legendRef}
+              style={{ top: legendPos.top, left: legendPos.left, touchAction: 'none' }}
+              onPointerDown={handleLegendPointerDown}
+            >
+              <div className="chart-legend-list">
+                {legendItems.map((item) => (
+                  <div key={item.label} className="chart-legend-item">
+                    {item.type === 'line' ? (
+                      <span
+                        className={`legend-line ${item.dash ? 'dashed' : ''}`}
+                        style={{ borderTopColor: item.color }}
+                      />
+                    ) : (
+                      <span className="legend-symbol" style={{ color: item.color }}>
+                        {item.symbol}
+                      </span>
+                    )}
+                    <span>{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div
+              className="chart-box"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap'
+                width: `${chartZoomXPercent}%`,
+                minWidth: '100%',
+                height: `${chartZoomYHeight}px`
               }}
             >
-              <span className="muted" style={{ minWidth: '44px' }}>
-                세로
-              </span>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY - chartZoomStep)}
-              >
-                -
-              </button>
-              <input
-                type="range"
-                min={chartZoomMin}
-                max={chartZoomMax}
-                step={chartZoomStep}
-                value={chartZoomY}
-                onChange={(e) => changeChartZoomY(e.target.value)}
-                aria-label="그래프 세로 확대/축소"
-                style={{ flex: '1 1 220px', minWidth: '180px' }}
-              />
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(chartZoomY + chartZoomStep)}
-              >
-                +
-              </button>
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => changeChartZoomY(1)}
-              >
-                기본
-              </button>
-              <span className="muted">{chartZoomY.toFixed(2)}x</span>
+              <Scatter data={chartData} options={chartOptions} />
             </div>
           </div>
-
-          <div
-            className="chart-legend"
-            ref={legendRef}
-            style={{ top: legendPos.top, left: legendPos.left, touchAction: 'none' }}
-            onPointerDown={handleLegendPointerDown}
-          >
-            <div className="chart-legend-list">
-              {legendItems.map((item) => (
-                <div key={item.label} className="chart-legend-item">
-                  {item.type === 'line' ? (
-                    <span
-                      className={`legend-line ${item.dash ? 'dashed' : ''}`}
-                      style={{ borderTopColor: item.color }}
-                    />
-                  ) : (
-                    <span className="legend-symbol" style={{ color: item.color }}>
-                      {item.symbol}
-                    </span>
-                  )}
-                  <span>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className="chart-box"
-            style={{
-              width: `${chartZoomXPercent}%`,
-              minWidth: '100%',
-              height: `${chartZoomYHeight}px`
-            }}
-          >
-            <Scatter data={chartData} options={chartOptions} />
-          </div>
-        </div>
-      </section>
+        </section>
       </div>
 
       <div style={{ display: activeTab === 'process' ? 'block' : 'none' }}>
