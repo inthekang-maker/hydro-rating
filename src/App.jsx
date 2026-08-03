@@ -215,8 +215,8 @@ function normalizeDeviceLabel(raw) {
 }
 
 function getYearLabel(datetime) {
-  const d = new Date(datetime)
-  if (Number.isNaN(d.getTime())) return '미정'
+  const d = parseDateTime(datetime)
+  if (!d) return '미정'
   return String(d.getFullYear())
 }
 
@@ -237,7 +237,7 @@ function parseThreshold(note) {
 }
 
 function parseDateTime(value) {
-  if (!value) return null
+  if (!value && value !== 0) return null
 
   // 이미 Date 객체면 그대로 사용
   if (value instanceof Date) {
@@ -245,6 +245,31 @@ function parseDateTime(value) {
   }
 
   const s = String(value).trim()
+  if (!s) return null
+
+  const buildDate = (year, month, day = 1, hour = 0, minute = 0) => {
+    const d = new Date(year, month - 1, day, hour, minute, 0, 0)
+    if (Number.isNaN(d.getTime())) return null
+
+    // 자바스크립트의 날짜 보정(예: 2026-06-31 -> 7월 1일)을 막기 위해 역검증
+    if (
+      d.getFullYear() !== year ||
+      d.getMonth() + 1 !== month ||
+      d.getDate() !== day ||
+      d.getHours() !== hour ||
+      d.getMinutes() !== minute
+    ) {
+      return null
+    }
+
+    return d
+  }
+
+  const expandTwoDigitYear = (yy) => {
+    const n = Number(yy)
+    if (!Number.isFinite(n)) return null
+    return 2000 + n
+  }
 
   // HRFCO ymdhm 형식: 202607240810
   if (/^\d{12}$/.test(s)) {
@@ -253,9 +278,40 @@ function parseDateTime(value) {
     const dd = Number(s.slice(6, 8))
     const hh = Number(s.slice(8, 10))
     const mi = Number(s.slice(10, 12))
+    return buildDate(yyyy, mm, dd, hh, mi)
+  }
 
-    const d = new Date(yyyy, mm - 1, dd, hh, mi, 0, 0)
-    return Number.isNaN(d.getTime()) ? null : d
+  // 슬래시를 하이픈으로 통일하고, 뒤에 잘못 붙은 문자는 허용한다.
+  const normalized = s.replace(/\//g, '-').replace(/\s+/g, ' ').trim()
+
+  // YYYY-MM-DD, YYYY-MM-DD HH, YYYY-MM-DD HH:mm, YYYY-MM-DD: 등
+  let match = normalized.match(/^([12]\d{3})-(\d{1,2})(?:-(\d{1,2}))?(?:[ T](\d{1,2})(?::(\d{1,2}))?)?(?:\D.*)?$/)
+  if (match) {
+    const year = Number(match[1])
+    const month = Number(match[2])
+    const day = match[3] !== undefined ? Number(match[3]) : 1
+    const hour = match[4] !== undefined ? Number(match[4]) : 0
+    const minute = match[5] !== undefined ? Number(match[5]) : 0
+    return buildDate(year, month, day, hour, minute)
+  }
+
+  // YY/MM/DD 또는 YY-MM-DD 형식: 26/06/01 00:00
+  match = normalized.match(/^(\d{2})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2})(?::(\d{1,2}))?)?(?:\D.*)?$/)
+  if (match) {
+    const year = expandTwoDigitYear(match[1])
+    const month = Number(match[2])
+    const day = Number(match[3])
+    const hour = match[4] !== undefined ? Number(match[4]) : 0
+    const minute = match[5] !== undefined ? Number(match[5]) : 0
+    return buildDate(year, month, day, hour, minute)
+  }
+
+  // YYYY-MM, YYYY/MM 형식
+  match = normalized.match(/^([12]\d{3})-(\d{1,2})(?:\D.*)?$/)
+  if (match) {
+    const year = Number(match[1])
+    const month = Number(match[2])
+    return buildDate(year, month, 1, 0, 0)
   }
 
   const d = new Date(s)
