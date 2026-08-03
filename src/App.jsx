@@ -7019,7 +7019,7 @@ export default function App() {
     >
       <header className="header">
         <div>
-          <h1>지점별 자료관리</h1>
+          <h1>지점별 자료 관리</h1>
         </div>
         <div style={{ marginTop: '8px', fontSize: '13px', fontWeight: 600 }}>
           저장 상태: {saveStatus}
