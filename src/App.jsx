@@ -2645,9 +2645,15 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   )
 
   const stationOptions = useMemo(() => {
-    const flattened = groups.flatMap((group, groupIndex) => {
-      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-      return (group.stations || []).map((station, stationIndex) => ({
+  const flattened = groups.flatMap((group, groupIndex) => {
+    if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
+
+    return (group.stations || [])
+      .filter((station) => {
+        const classification = station.classification || '일반 지점'
+        return classificationFilter === '전체' || classification === classificationFilter
+      })
+      .map((station, stationIndex) => ({
         id: station.id,
         label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
         groupId: group.id,
@@ -2655,10 +2661,10 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         groupIndex,
         stationIndex
       }))
-    })
+  })
 
-    return ['전체', ...flattened]
-  }, [groups, groupFilter])
+  return ['전체', ...flattened]
+}, [groups, groupFilter, classificationFilter])
 
   useEffect(() => {
     if (stationFilter === '전체') return
@@ -3189,18 +3195,24 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       return a.stationIndex - b.stationIndex
     })
 }
-const buildInstrumentStationOptions = (groups, groupFilter) => {
+const buildInstrumentStationOptions = (groups, groupFilter, classificationFilter = '전체') => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) => {
       if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-      return (group.stations || []).map((station, stationIndex) => ({
-        id: station.id,
-        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
-        groupId: group.id,
-        groupName: group.name || '그룹 없음',
-        groupIndex,
-        stationIndex
-      }))
+
+      return (group.stations || [])
+        .filter((station) => {
+          const classification = station.classification || '일반 지점'
+          return classificationFilter === '전체' || classification === classificationFilter
+        })
+        .map((station, stationIndex) => ({
+          id: station.id,
+          label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+          groupId: group.id,
+          groupName: group.name || '그룹 없음',
+          groupIndex,
+          stationIndex
+        }))
     })
     : []
 
@@ -3741,9 +3753,9 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-    () => buildInstrumentStationOptions(groups, groupFilter),
-    [groups, groupFilter]
-  )
+  () => buildInstrumentStationOptions(groups, groupFilter, classificationFilter),
+  [groups, groupFilter, classificationFilter]
+)
 
   useEffect(() => {
     if (stationFilter === '전체') return
@@ -4117,9 +4129,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-    () => buildInstrumentStationOptions(groups, groupFilter).filter((item) => item !== '전체'),
-    [groups, groupFilter]
-  )
+  () => buildInstrumentStationOptions(groups, groupFilter, classificationFilter).filter((item) => item !== '전체'),
+  [groups, groupFilter, classificationFilter]
+)
 
   useEffect(() => {
     const validIds = new Set(stationOptions.map((s) => s.id))
