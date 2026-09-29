@@ -6820,8 +6820,11 @@ export default function App() {
 
       let error = null
       if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
-        const rawError = ((measuredQ - curveQ) / curveQ) * 100
-        error = Math.round((rawError + Number.EPSILON) * 100) / 100
+        // 상대오차 계산용 곡선식 유량을 소수 3자리로 반올림
+        const curveQForError = Math.round(curveQ * 1000) / 1000
+
+        // 상대오차 계산
+        error = ((measuredQ - curveQForError) / curveQForError) * 100
       }
 
       return {
