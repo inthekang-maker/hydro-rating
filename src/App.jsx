@@ -6820,7 +6820,8 @@ export default function App() {
 
       let error = null
       if (measuredQ !== null && curveQ !== null && curveQ !== 0) {
-        error = ((measuredQ - curveQ) / curveQ) * 100
+        const rawError = ((measuredQ - curveQ) / curveQ) * 100
+        error = Math.round((rawError + Number.EPSILON) * 100) / 100
       }
 
       return {
