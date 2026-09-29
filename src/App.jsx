@@ -2645,15 +2645,9 @@ function ProcessRatePage({ groups, onUpdateStation }) {
   )
 
   const stationOptions = useMemo(() => {
-  const flattened = groups.flatMap((group, groupIndex) => {
-    if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-
-    return (group.stations || [])
-      .filter((station) => {
-        const classification = station.classification || '일반 지점'
-        return classificationFilter === '전체' || classification === classificationFilter
-      })
-      .map((station, stationIndex) => ({
+    const flattened = groups.flatMap((group, groupIndex) => {
+      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
+      return (group.stations || []).map((station, stationIndex) => ({
         id: station.id,
         label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
         groupId: group.id,
@@ -2661,10 +2655,10 @@ function ProcessRatePage({ groups, onUpdateStation }) {
         groupIndex,
         stationIndex
       }))
-  })
+    })
 
-  return ['전체', ...flattened]
-}, [groups, groupFilter, classificationFilter])
+    return ['전체', ...flattened]
+  }, [groups, groupFilter])
 
   useEffect(() => {
     if (stationFilter === '전체') return
@@ -3137,12 +3131,12 @@ const getInstrumentYearStart = (referenceTime = new Date()) => {
 
 const getMonthStart = (date) => {
   const base = getInstrumentReferenceDate(date)
-  return new Date(base.getFullYear(), base.getMonth(), 1, 0, 10, 0, 0)
+  return new Date(base.getFullYear(), base.getMonth(), 1, 0, 0, 0, 0)
 }
 
 const addMonths = (date, months) => {
   const base = getInstrumentReferenceDate(date)
-  return new Date(base.getFullYear(), base.getMonth() + months, 1, 0, 10, 0, 0)
+  return new Date(base.getFullYear(), base.getMonth() + months, 1, 0, 0, 0, 0)
 }
 
 const getMonthEnd = (monthStart, referenceTime = new Date()) => {
@@ -3162,6 +3156,41 @@ const sortYmdhmList = (values, ascending = true) => {
   const unique = Array.from(new Set((values || []).filter(Boolean)))
   unique.sort((a, b) => String(a).localeCompare(String(b)))
   return ascending ? unique : unique.reverse()
+}
+
+
+const splitInstrumentHistoryRangeByMonth = (startTime, endTime) => {
+  const start = getInstrumentReferenceDate(startTime)
+  const end = getInstrumentReferenceDate(endTime)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return []
+
+  const ranges = []
+  let cursor = new Date(start.getTime())
+
+  while (cursor <= end) {
+    const nextMonthStart = new Date(
+      cursor.getFullYear(),
+      cursor.getMonth() + 1,
+      1,
+      0,
+      0,
+      0,
+      0
+    )
+
+    const monthLastSlot = new Date(nextMonthStart.getTime() - 10 * 60 * 1000)
+    const chunkEnd = monthLastSlot < end ? monthLastSlot : new Date(end.getTime())
+
+    ranges.push({
+      start: new Date(cursor.getTime()),
+      end: chunkEnd
+    })
+
+    if (chunkEnd.getTime() >= end.getTime()) break
+    cursor = nextMonthStart
+  }
+
+  return ranges
 }
 
 const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilter, stationSelection) => {
@@ -3195,24 +3224,18 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       return a.stationIndex - b.stationIndex
     })
 }
-const buildInstrumentStationOptions = (groups, groupFilter, classificationFilter = '전체') => {
+const buildInstrumentStationOptions = (groups, groupFilter) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) => {
       if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-
-      return (group.stations || [])
-        .filter((station) => {
-          const classification = station.classification || '일반 지점'
-          return classificationFilter === '전체' || classification === classificationFilter
-        })
-        .map((station, stationIndex) => ({
-          id: station.id,
-          label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
-          groupId: group.id,
-          groupName: group.name || '그룹 없음',
-          groupIndex,
-          stationIndex
-        }))
+      return (group.stations || []).map((station, stationIndex) => ({
+        id: station.id,
+        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+        groupId: group.id,
+        groupName: group.name || '그룹 없음',
+        groupIndex,
+        stationIndex
+      }))
     })
     : []
 
@@ -3753,9 +3776,9 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-  () => buildInstrumentStationOptions(groups, groupFilter, classificationFilter),
-  [groups, groupFilter, classificationFilter]
-)
+    () => buildInstrumentStationOptions(groups, groupFilter),
+    [groups, groupFilter]
+  )
 
   useEffect(() => {
     if (stationFilter === '전체') return
@@ -4129,9 +4152,9 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-  () => buildInstrumentStationOptions(groups, groupFilter, classificationFilter).filter((item) => item !== '전체'),
-  [groups, groupFilter, classificationFilter]
-)
+    () => buildInstrumentStationOptions(groups, groupFilter).filter((item) => item !== '전체'),
+    [groups, groupFilter]
+  )
 
   useEffect(() => {
     const validIds = new Set(stationOptions.map((s) => s.id))
@@ -4365,8 +4388,12 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     const yearStart = getInstrumentYearStart(referenceTime)
     const currentMonthStart = getMonthStart(referenceTime)
 
-    const monthStarts = []
-    for (let cursor = getMonthStart(yearStart); cursor <= currentMonthStart; cursor = addMonths(cursor, 1)) {
+    const monthStarts = [new Date(yearStart.getTime())]
+    for (
+      let cursor = addMonths(getMonthStart(yearStart), 1);
+      cursor <= currentMonthStart;
+      cursor = addMonths(cursor, 1)
+    ) {
       monthStarts.push(new Date(cursor.getTime()))
     }
 
@@ -4454,17 +4481,54 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       return
     }
 
+    const ranges = splitInstrumentHistoryRangeByMonth(startTime, endTime)
+    if (ranges.length === 0) {
+      window.alert('조회 기간을 월 단위로 나눌 수 없습니다.')
+      return
+    }
+
+    setHistoryLoading(true)
     setHistoryMode('period')
     setPeriodKey('custom')
     resetHistory()
-    await applyHistorySlice(
-      startTime,
-      endTime,
-      'custom',
-      false,
-      false,
-      `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
-    )
+
+    const fullLabel = `${formatDateTimeDisplay(startTime)} ~ ${formatDateTimeDisplay(endTime)} 자료`
+    setHistoryStatus('사용자 지정 기간 자료를 월별로 불러오는 중입니다...')
+
+    try {
+      const aggregatedRowsByStation = {}
+      const aggregatedTimes = []
+      let failCount = 0
+
+      for (let i = 0; i < ranges.length; i += 1) {
+        const range = ranges[i]
+        setHistoryStatus(
+          `${formatDateTimeDisplay(range.start)} ~ ${formatDateTimeDisplay(range.end)} 자료를 불러오는 중입니다...`
+        )
+
+        const result = await fetchHistorySlice(range.start, range.end, false)
+        failCount += result.failCount
+
+        Object.entries(result.rowsByStation).forEach(([stationId, rowsMap]) => {
+          aggregatedRowsByStation[stationId] = {
+            ...(aggregatedRowsByStation[stationId] || {}),
+            ...rowsMap
+          }
+        })
+        aggregatedTimes.push(...result.times)
+      }
+
+      setHistoryRowsByStation(aggregatedRowsByStation)
+      setHistoryTimes(sortYmdhmList(aggregatedTimes, false))
+      setHistoryLoadedLabel(fullLabel)
+      setHistoryStatus(
+        `사용자 지정 기간 불러오기 완료${failCount > 0 ? ` (실패 ${failCount}개 지점)` : ''}`
+      )
+    } catch (error) {
+      setHistoryStatus(error instanceof Error ? error.message : '사용자 지정 기간 조회 실패')
+    } finally {
+      setHistoryLoading(false)
+    }
   }
 
   const handleDownloadHistoryXlsx = () => {
