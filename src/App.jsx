@@ -3393,7 +3393,8 @@ const buildInstrumentWaterLevelChartOptions = (
   yMinValue,
   yMaxValue,
   yAxisTitle = '수위 h(m)',
-  tooltipValueLabel = 'h'
+  tooltipValueLabel = 'h',
+  yType = 'linear'
 ) => {
   const min = range?.start instanceof Date && !Number.isNaN(range.start.getTime())
     ? range.start.getTime()
@@ -3401,8 +3402,8 @@ const buildInstrumentWaterLevelChartOptions = (
   const max = range?.end instanceof Date && !Number.isNaN(range.end.getTime())
     ? range.end.getTime()
     : undefined
-  const yMin = safeScaleNumber(yMinValue, 'linear')
-  const yMax = safeScaleNumber(yMaxValue, 'linear')
+  const yMin = safeScaleNumber(yMinValue, yType)
+  const yMax = safeScaleNumber(yMaxValue, yType)
 
   return {
     responsive: true,
@@ -3435,7 +3436,7 @@ const buildInstrumentWaterLevelChartOptions = (
         }
       },
       y: {
-        type: 'linear',
+        type: yType,
         min: yMin,
         max: yMax,
         title: {
@@ -3488,14 +3489,23 @@ function InstrumentWaterLevelChart({
   height = 460,
   yMin,
   yMax,
+  yType = 'linear',
   yAxisTitle = '수위 h(m)',
   tooltipValueLabel = 'h',
   zoomX = 1,
   zoomY = 1
 }) {
   const options = useMemo(
-    () => buildInstrumentWaterLevelChartOptions(range, yMin, yMax, yAxisTitle, tooltipValueLabel),
-    [range, yMin, yMax, yAxisTitle, tooltipValueLabel]
+    () =>
+      buildInstrumentWaterLevelChartOptions(
+        range,
+        yMin,
+        yMax,
+        yAxisTitle,
+        tooltipValueLabel,
+        yType
+      ),
+    [range, yMin, yMax, yAxisTitle, tooltipValueLabel, yType]
   )
 
   return (
@@ -4130,6 +4140,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const [generatedFlowChartLabel, setGeneratedFlowChartLabel] = useState('')
   const [waterChartYMin, setWaterChartYMin] = useState('')
   const [waterChartYMax, setWaterChartYMax] = useState('')
+  const [flowChartYType, setFlowChartYType] = useState('linear')   // 추가
   const [flowChartYMin, setFlowChartYMin] = useState('')
   const [flowChartYMax, setFlowChartYMax] = useState('')
   const [instrumentChartZoomX, setInstrumentChartZoomX] = useState(1)
@@ -5399,6 +5410,17 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
             <h3>환산유량 그래프 축 설정</h3>
             <div className="chart-setting-grid">
               <label>
+                Y축 종류
+                <select
+                  value={flowChartYType}
+                  onChange={(e) => setFlowChartYType(e.target.value)}
+                >
+                  <option value="linear">linear</option>
+                  <option value="logarithmic">logarithmic</option>
+                </select>
+              </label>
+
+              <label>
                 Y축 최소
                 <input
                   type="number"
@@ -5407,6 +5429,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                   onChange={(e) => setFlowChartYMin(e.target.value)}
                 />
               </label>
+
               <label>
                 Y축 최대
                 <input
@@ -5493,6 +5516,7 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
                 height={chart.height}
                 yMin={flowChartYMin}
                 yMax={flowChartYMax}
+                yType={flowChartYType}
                 yAxisTitle="환산유량 Q(m³/s)"
                 tooltipValueLabel="Q"
                 zoomX={instrumentChartZoomX}
