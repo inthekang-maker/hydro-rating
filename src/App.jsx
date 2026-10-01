@@ -2646,19 +2646,31 @@ function ProcessRatePage({ groups, onUpdateStation }) {
 
   const stationOptions = useMemo(() => {
     const flattened = groups.flatMap((group, groupIndex) => {
-      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-      return (group.stations || []).map((station, stationIndex) => ({
-        id: station.id,
-        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
-        groupId: group.id,
-        groupName: group.name || '그룹 없음',
-        groupIndex,
-        stationIndex
-      }))
+      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) {
+        return []
+      }
+
+      return (group.stations || [])
+        .filter((station) => {
+          const classification = station.classification || '일반 지점'
+
+          return (
+            classificationFilter === '전체' ||
+            classification === classificationFilter
+          )
+        })
+        .map((station, stationIndex) => ({
+          id: station.id,
+          label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
+          groupId: group.id,
+          groupName: group.name || '그룹 없음',
+          groupIndex,
+          stationIndex
+        }))
     })
 
     return ['전체', ...flattened]
-  }, [groups, groupFilter])
+  }, [groups, groupFilter, classificationFilter])
 
   useEffect(() => {
     if (stationFilter === '전체') return
@@ -3224,18 +3236,39 @@ const buildInstrumentFilteredStations = (groups, groupFilter, classificationFilt
       return a.stationIndex - b.stationIndex
     })
 }
-const buildInstrumentStationOptions = (groups, groupFilter) => {
+const buildInstrumentStationOptions = (
+  groups,
+  groupFilter,
+  classificationFilter = '전체'
+) => {
   const flattened = Array.isArray(groups)
     ? groups.flatMap((group, groupIndex) => {
-      if (groupFilter !== '전체' && (group.name || '그룹 없음') !== groupFilter) return []
-      return (group.stations || []).map((station, stationIndex) => ({
-        id: station.id,
-        label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'}`,
-        groupId: group.id,
-        groupName: group.name || '그룹 없음',
-        groupIndex,
-        stationIndex
-      }))
+      if (
+        groupFilter !== '전체' &&
+        (group.name || '그룹 없음') !== groupFilter
+      ) {
+        return []
+      }
+
+      return (group.stations || [])
+        .filter((station) => {
+          const classification =
+            station.classification || '일반 지점'
+
+          return (
+            classificationFilter === '전체' ||
+            classification === classificationFilter
+          )
+        })
+        .map((station, stationIndex) => ({
+          id: station.id,
+          label: `${group.name || '그룹 없음'} / ${station.name || '지점 없음'
+            }`,
+          groupId: group.id,
+          groupName: group.name || '그룹 없음',
+          groupIndex,
+          stationIndex
+        }))
     })
     : []
 
@@ -3786,8 +3819,13 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-    () => buildInstrumentStationOptions(groups, groupFilter),
-    [groups, groupFilter]
+    () =>
+      buildInstrumentStationOptions(
+        groups,
+        groupFilter,
+        classificationFilter
+      ),
+    [groups, groupFilter, classificationFilter]
   )
 
   useEffect(() => {
@@ -4163,8 +4201,13 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
   const groupOptions = useMemo(() => ['전체', ...groups.map((group) => group.name || '그룹 없음')], [groups])
 
   const stationOptions = useMemo(
-    () => buildInstrumentStationOptions(groups, groupFilter).filter((item) => item !== '전체'),
-    [groups, groupFilter]
+    () =>
+      buildInstrumentStationOptions(
+        groups,
+        groupFilter,
+        classificationFilter
+      ).filter((item) => item !== '전체'),
+    [groups, groupFilter, classificationFilter]
   )
 
   useEffect(() => {
@@ -4628,22 +4671,22 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     }
 
     const makeMeasurementDataset = (station, stationIndex, points) => {
-  const color = chartColorPalette[stationIndex % chartColorPalette.length]
+      const color = chartColorPalette[stationIndex % chartColorPalette.length]
 
-  return {
-    label: `${station.name || '지점 없음'} 측정성과`,
-    data: points,
-    showLine: false,
-    pointRadius: 5,
-    pointHoverRadius: 6,
-    borderWidth: 1,
-    borderColor: color,
-    backgroundColor: color,
-    pointStyle: 'rectRot',
-    parsing: false,
-    order: 1
-  }
-}
+      return {
+        label: `${station.name || '지점 없음'} 측정성과`,
+        data: points,
+        showLine: false,
+        pointRadius: 5,
+        pointHoverRadius: 6,
+        borderWidth: 1,
+        borderColor: color,
+        backgroundColor: color,
+        pointStyle: 'rectRot',
+        parsing: false,
+        order: 1
+      }
+    }
 
     const buildStationPoints = (station, rowsByStation, range) => {
       const rawWaterRows = rowsByStation?.[station.id] || {}
@@ -4715,14 +4758,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-  datasets.push(
-    datasetBuilder.makeMeasurementDataset(
-      station,
-      stationIndex,
-      measurementPoints
-    )
-  )
-}
+            datasets.push(
+              datasetBuilder.makeMeasurementDataset(
+                station,
+                stationIndex,
+                measurementPoints
+              )
+            )
+          }
 
           if (datasets.length > 0) {
             charts.push({
@@ -4745,14 +4788,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-  datasets.push(
-    datasetBuilder.makeMeasurementDataset(
-      station,
-      stationIndex,
-      measurementPoints
-    )
-  )
-}
+            datasets.push(
+              datasetBuilder.makeMeasurementDataset(
+                station,
+                stationIndex,
+                measurementPoints
+              )
+            )
+          }
         })
 
         if (datasets.length > 0) {
@@ -4857,22 +4900,22 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       }
 
       const makeMeasurementDataset = (station, stationIndex, points) => {
-  const color = chartColorPalette[stationIndex % chartColorPalette.length]
+        const color = chartColorPalette[stationIndex % chartColorPalette.length]
 
-  return {
-    label: `${station.name || '지점 없음'} 측정유량`,
-    data: points,
-    showLine: false,
-    pointRadius: 5,
-    pointHoverRadius: 6,
-    borderWidth: 1,
-    borderColor: color,
-    backgroundColor: color,
-    pointStyle: 'rectRot',
-    parsing: false,
-    order: 1
-  }
-}
+        return {
+          label: `${station.name || '지점 없음'} 측정유량`,
+          data: points,
+          showLine: false,
+          pointRadius: 5,
+          pointHoverRadius: 6,
+          borderWidth: 1,
+          borderColor: color,
+          backgroundColor: color,
+          pointStyle: 'rectRot',
+          parsing: false,
+          order: 1
+        }
+      }
 
       if (chartSeparateCharts) {
         filteredStations.forEach((station, stationIndex) => {
@@ -4889,14 +4932,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-  datasets.push(
-    makeMeasurementDataset(
-      station,
-      stationIndex,
-      measurementPoints
-    )
-  )
-}
+            datasets.push(
+              makeMeasurementDataset(
+                station,
+                stationIndex,
+                measurementPoints
+              )
+            )
+          }
           if (datasets.length > 0) {
             charts.push({
               id: station.id,
@@ -4922,14 +4965,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-  datasets.push(
-    makeMeasurementDataset(
-      station,
-      stationIndex,
-      measurementPoints
-    )
-  )
-}
+            datasets.push(
+              makeMeasurementDataset(
+                station,
+                stationIndex,
+                measurementPoints
+              )
+            )
+          }
         })
 
         if (datasets.length > 0) {
