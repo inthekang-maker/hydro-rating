@@ -4609,7 +4609,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
 
   const buildInstrumentChartDatasets = useMemo(() => {
     const chartColorPalette = [...YEAR_COLORS, ...CURVE_COLORS, '#0ea5e9', '#f97316']
-    const measurementPointColor = '#d946ef'
 
     const makeLineDataset = (station, stationIndex, points) => {
       const color = chartColorPalette[stationIndex % chartColorPalette.length]
@@ -4628,19 +4627,23 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       }
     }
 
-    const makeMeasurementDataset = (station, points) => ({
-      label: `${station.name || '지점 없음'} 측정성과`,
-      data: points,
-      showLine: false,
-      pointRadius: 5,
-      pointHoverRadius: 6,
-      borderWidth: 1,
-      borderColor: measurementPointColor,
-      backgroundColor: measurementPointColor,
-      pointStyle: 'rectRot',
-      parsing: false,
-      order: 1
-    })
+    const makeMeasurementDataset = (station, stationIndex, points) => {
+  const color = chartColorPalette[stationIndex % chartColorPalette.length]
+
+  return {
+    label: `${station.name || '지점 없음'} 측정성과`,
+    data: points,
+    showLine: false,
+    pointRadius: 5,
+    pointHoverRadius: 6,
+    borderWidth: 1,
+    borderColor: color,
+    backgroundColor: color,
+    pointStyle: 'rectRot',
+    parsing: false,
+    order: 1
+  }
+}
 
     const buildStationPoints = (station, rowsByStation, range) => {
       const rawWaterRows = rowsByStation?.[station.id] || {}
@@ -4712,8 +4715,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-            datasets.push(datasetBuilder.makeMeasurementDataset(station, measurementPoints))
-          }
+  datasets.push(
+    datasetBuilder.makeMeasurementDataset(
+      station,
+      stationIndex,
+      measurementPoints
+    )
+  )
+}
 
           if (datasets.length > 0) {
             charts.push({
@@ -4736,8 +4745,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-            datasets.push(datasetBuilder.makeMeasurementDataset(station, measurementPoints))
-          }
+  datasets.push(
+    datasetBuilder.makeMeasurementDataset(
+      station,
+      stationIndex,
+      measurementPoints
+    )
+  )
+}
         })
 
         if (datasets.length > 0) {
@@ -4797,7 +4812,6 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
       const rowsByStation = result.rowsByStation || {}
       const charts = []
       const chartColorPalette = [...YEAR_COLORS, ...CURVE_COLORS, '#0ea5e9', '#f97316']
-      const measurementPointColor = '#d946ef'
 
       const buildStationPoints = (station, rowsMap, range) => {
         const flowPoints = Object.entries(rowsMap || {})
@@ -4842,19 +4856,23 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
         }
       }
 
-      const makeMeasurementDataset = (station, points) => ({
-        label: `${station.name || '지점 없음'} 측정유량`,
-        data: points,
-        showLine: false,
-        pointRadius: 5,
-        pointHoverRadius: 6,
-        borderWidth: 1,
-        borderColor: measurementPointColor,
-        backgroundColor: measurementPointColor,
-        pointStyle: 'rectRot',
-        parsing: false,
-        order: 1
-      })
+      const makeMeasurementDataset = (station, stationIndex, points) => {
+  const color = chartColorPalette[stationIndex % chartColorPalette.length]
+
+  return {
+    label: `${station.name || '지점 없음'} 측정유량`,
+    data: points,
+    showLine: false,
+    pointRadius: 5,
+    pointHoverRadius: 6,
+    borderWidth: 1,
+    borderColor: color,
+    backgroundColor: color,
+    pointStyle: 'rectRot',
+    parsing: false,
+    order: 1
+  }
+}
 
       if (chartSeparateCharts) {
         filteredStations.forEach((station, stationIndex) => {
@@ -4871,9 +4889,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-            datasets.push(makeMeasurementDataset(station, measurementPoints))
-          }
-
+  datasets.push(
+    makeMeasurementDataset(
+      station,
+      stationIndex,
+      measurementPoints
+    )
+  )
+}
           if (datasets.length > 0) {
             charts.push({
               id: station.id,
@@ -4899,8 +4922,14 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
           }
 
           if (measurementPoints.length > 0) {
-            datasets.push(makeMeasurementDataset(station, measurementPoints))
-          }
+  datasets.push(
+    makeMeasurementDataset(
+      station,
+      stationIndex,
+      measurementPoints
+    )
+  )
+}
         })
 
         if (datasets.length > 0) {
