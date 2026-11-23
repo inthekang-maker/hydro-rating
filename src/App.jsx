@@ -45,6 +45,45 @@ const CURVE_COLORS = [
   '#ff7f00'
 ]
 
+// 영향 항목은 값의 종류와 무관하게 비어 있지 않으면 활성화합니다.
+const IMPACT_STYLES = [
+  { key: 'tide', label: '배수영향', symbol: '✳', pointStyle: 'drainageAsterisk' },
+  { key: 'vegetation', label: '조위영향', symbol: '×', pointStyle: 'crossRot' },
+  { key: 'construction', label: '식생영향', symbol: '○', pointStyle: 'circle' },
+  { key: 'partialOpen', label: '공사영향', symbol: '+', pointStyle: 'cross' },
+  { key: 'weirPartialOpen', label: '보 부분개방', symbol: '□', pointStyle: 'rect' }
+]
+// 배수영향은 엑셀 예시처럼 회색 6방향 방사형 기호로 표시합니다.
+// Chart.js의 기본 star는 오각별이므로 전용 Canvas 마커를 사용합니다.
+let drainageAsteriskCanvas = null
+const getDrainageAsteriskCanvas = () => {
+  if (typeof document === 'undefined') return 'crossRot'
+  if (drainageAsteriskCanvas) return drainageAsteriskCanvas
+  const canvas = document.createElement('canvas')
+  canvas.width = 24
+  canvas.height = 24
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return 'crossRot'
+  ctx.strokeStyle = '#999999'
+  ctx.lineWidth = 2.5
+  ctx.lineCap = 'round'
+  const cx = 12, cy = 12, radius = 9
+  for (let i = 0; i < 3; i += 1) {
+    const angle = (Math.PI * i) / 3 - Math.PI / 2
+    const dx = Math.cos(angle) * radius
+    const dy = Math.sin(angle) * radius
+    ctx.beginPath()
+    ctx.moveTo(cx - dx, cy - dy)
+    ctx.lineTo(cx + dx, cy + dy)
+    ctx.stroke()
+  }
+  drainageAsteriskCanvas = canvas
+  return canvas
+}
+
+const hasImpactValue = (value) => value !== null && value !== undefined && String(value).trim() !== ''
+const getMeasurementImpact = (measurement) => IMPACT_STYLES.find((style) => hasImpactValue(measurement?.[style.key])) || null
+
 const DEVICE_STYLES = {
   ADCP: { symbol: '◆', pointStyle: 'rectRot' },
   유속계: { symbol: '●', pointStyle: 'circle' },
@@ -477,7 +516,8 @@ function buildInitialStations() {
           tide: '',
           vegetation: '',
           construction: '',
-          partialOpen: ''
+          partialOpen: '',
+    weirPartialOpen: ''
         },
         {
           id: makeId(),
@@ -489,7 +529,8 @@ function buildInitialStations() {
           tide: '',
           vegetation: '',
           construction: '',
-          partialOpen: ''
+          partialOpen: '',
+    weirPartialOpen: ''
         }
       ]
     }
@@ -524,7 +565,8 @@ function createEmptyMeasurement() {
     tide: '',
     vegetation: '',
     construction: '',
-    partialOpen: ''
+    partialOpen: '',
+    weirPartialOpen: ''
   }
 }
 
@@ -3803,11 +3845,63 @@ function VirtualizedHistoryTable({ stationColumns, times, ascending = false, sho
   )
 }
 
+function ThreeHourWaterDetail({ station, apiKey, onClose }) {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const end = getInstrumentQueryEndTime(new Date())
+        const start = new Date(end.getTime() - 3 * 60 * 60 * 1000)
+        const fetched = await fetchHrfcoWaterLevelRowsBetween(apiKey, station.name, start, end)
+        if (!cancelled) setRows(fetched.sort((a, b) => b.ymdhm.localeCompare(a.ymdhm)))
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : '조회 실패')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [station.id, station.name, apiKey])
+  return (
+    <div role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.48)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+      <div role="dialog" aria-modal="true" aria-label="최근 3시간 10분 수위자료"
+        style={{ background: '#fff', color: '#111', borderRadius: '12px', padding: '20px', width: 'min(600px, 100%)', maxHeight: '85vh', overflow: 'auto' }}>
+        <div className="section-header">
+          <h2>{station.name} ({station.code || '코드 없음'})</h2>
+          <button className="btn secondary" onClick={onClose}>닫기</button>
+        </div>
+        <p className="muted">최근 3시간 · 10분 간격 수위자료 (최신순)</p>
+        {loading ? <p>조회 중...</p> : error ? <p role="alert">{error}</p> : rows.length === 0 ? <p>해당 기간의 자료가 없습니다.</p> : (
+          <div className="table-wrap"><table className="spreadsheet" style={{ width: '100%' }}>
+            <thead><tr><th>관측일시</th><th>수위(m)</th><th>직전 대비(m)</th></tr></thead>
+            <tbody>{rows.map((row, index) => {
+              const previous = rows[index + 1]
+              const delta = previous ? Number(row.value) - Number(previous.value) : null
+              return <tr key={row.ymdhm} style={index === 0 ? { background: '#e8f1ff', fontWeight: 700 } : undefined}>
+                <td>{formatYmdhm(row.ymdhm)}</td><td>{fmt(row.value, 2)}</td>
+                <td>{delta === null ? '-' : `${delta > 0 ? '+' : ''}${fmt(delta, 2)}`}</td>
+              </tr>
+            })}</tbody>
+          </table></div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
   const [classificationFilter, setClassificationFilter] = useState('전체')
   const [groupFilter, setGroupFilter] = useState('전체')
   const [stationFilter, setStationFilter] = useState('전체')
   const [currentWaterResults, setCurrentWaterResults] = useState({})
+  const [detailStation, setDetailStation] = useState(null)
   const [isFetching, setIsFetching] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
   const [currentWaterBaseTime, setCurrentWaterBaseTime] = useState('')
@@ -3979,6 +4073,7 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
 
   return (
     <div>
+      {detailStation && <ThreeHourWaterDetail station={detailStation} apiKey={hrfcoApiKey} onClose={() => setDetailStation(null)} />}
       <section className="card">
         <h2>빈수위 찾기</h2>
         <div className="row">
@@ -4126,7 +4221,13 @@ function CurrentWaterLevelPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange }) {
                               fontWeight: isCurrent ? 700 : 400
                             }}
                           >
-                            {entry ? entry.display : ''}
+                            {entry?.isCurrent ? (
+                              <button type="button" onClick={() => setDetailStation(col.station)}
+                                title="최근 3시간 10분 수위자료 보기"
+                                style={{ border: 0, background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>
+                                {entry.display}
+                              </button>
+                            ) : (entry ? entry.display : '')}
                           </td>
                         )
                       })}
@@ -5025,7 +5126,8 @@ function InstrumentMeasurementPage({ groups, hrfcoApiKey, onHrfcoApiKeyChange })
     { key: 'tide', label: '배수영향' },
     { key: 'vegetation', label: '조위영향' },
     { key: 'construction', label: '식생영향' },
-    { key: 'partialOpen', label: '공사영향' }
+    { key: 'partialOpen', label: '공사영향' },
+    { key: 'weirPartialOpen', label: '보 부분개방' }
   ]
 
   return (
@@ -6936,9 +7038,8 @@ export default function App() {
   }, [selectedMeasurements, selectedSections])
 
   const graphMeasurementRows = useMemo(() => {
-    if (graphExcludedYears.length === 0) return relativeErrorsRaw
     const excluded = new Set(graphExcludedYears)
-    return relativeErrorsRaw.filter((row) => !excluded.has(row.measurementYear))
+    return relativeErrorsRaw.filter((row) => !hasImpactValue(row.exclude) && !excluded.has(row.measurementYear))
   }, [relativeErrorsRaw, graphExcludedYears])
 
   const graphMeasurementGroups = useMemo(() => {
@@ -7025,31 +7126,33 @@ export default function App() {
   }, [selectedSections, curveRowsBySection])
 
   const measurementDatasets = useMemo(() => {
-    return graphMeasurementGroups.map((group) => {
+    const regular = graphMeasurementGroups.map((group) => {
       const color = yearColorMap[group.year] || YEAR_COLORS[0]
       const deviceStyle = DEVICE_STYLES[group.device] || DEVICE_STYLES.기타
-
       return {
         label: `${group.year}년 ${group.device} 측정성과`,
-        data: group.items
-          .map((measurement) => ({
-            x: num(measurement.q),
-            y: num(measurement.H)
-          }))
+        data: group.items.filter((m) => !getMeasurementImpact(m))
+          .map((m) => ({ x: num(m.q), y: num(m.H) }))
           .filter((point) => point.x !== null && point.y !== null),
-        showLine: false,
-        pointRadius: 5,
-        pointHoverRadius: 6,
-        borderWidth: 1,
-        backgroundColor: color,
-        borderColor: color,
-        pointStyle: deviceStyle.pointStyle,
-        parsing: false,
-        legendSymbol: deviceStyle.symbol,
-        legendColor: color
+        showLine: false, pointRadius: 5, pointHoverRadius: 6,
+        borderWidth: 1, backgroundColor: color, borderColor: '#111',
+        pointStyle: deviceStyle.pointStyle, parsing: false,
+        legendSymbol: deviceStyle.symbol, legendColor: color
       }
-    })
-  }, [graphMeasurementGroups, yearColorMap])
+    }).filter((dataset) => dataset.data.length > 0)
+
+    const impacts = IMPACT_STYLES.map((style) => ({
+      label: `${style.label} 측정성과`,
+      data: graphMeasurementRows.filter((m) => getMeasurementImpact(m)?.key === style.key)
+        .map((m) => ({ x: num(m.q), y: num(m.H) }))
+        .filter((point) => point.x !== null && point.y !== null),
+      showLine: false, pointRadius: 6, pointHoverRadius: 8,
+      borderWidth: 1.5, borderColor: '#777', backgroundColor: '#ffffff',
+      pointStyle: style.pointStyle === 'drainageAsterisk' ? getDrainageAsteriskCanvas() : style.pointStyle, parsing: false,
+      legendSymbol: style.symbol, legendColor: '#777'
+    })).filter((dataset) => dataset.data.length > 0)
+    return [...regular, ...impacts]
+  }, [graphMeasurementGroups, graphMeasurementRows, yearColorMap])
 
   const legendItems = useMemo(() => {
     const items = []
@@ -7183,7 +7286,8 @@ export default function App() {
     { key: 'tide', label: '배수영향' },
     { key: 'vegetation', label: '조위영향' },
     { key: 'construction', label: '식생영향' },
-    { key: 'partialOpen', label: '공사영향' }
+    { key: 'partialOpen', label: '공사영향' },
+    { key: 'weirPartialOpen', label: '보 부분개방' }
   ]
 
   return (
