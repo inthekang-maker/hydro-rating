@@ -517,7 +517,7 @@ function buildInitialStations() {
           vegetation: '',
           construction: '',
           partialOpen: '',
-    weirPartialOpen: ''
+          weirPartialOpen: ''
         },
         {
           id: makeId(),
@@ -530,7 +530,7 @@ function buildInitialStations() {
           vegetation: '',
           construction: '',
           partialOpen: '',
-    weirPartialOpen: ''
+          weirPartialOpen: ''
         }
       ]
     }
@@ -3879,17 +3879,38 @@ function ThreeHourWaterDetail({ station, apiKey, onClose }) {
         </div>
         <p className="muted">최근 3시간 · 10분 간격 수위자료 (최신순)</p>
         {loading ? <p>조회 중...</p> : error ? <p role="alert">{error}</p> : rows.length === 0 ? <p>해당 기간의 자료가 없습니다.</p> : (
-          <div className="table-wrap"><table className="spreadsheet" style={{ width: '100%' }}>
-            <thead><tr><th>관측일시</th><th>수위(m)</th><th>직전 대비(m)</th></tr></thead>
-            <tbody>{rows.map((row, index) => {
-              const previous = rows[index + 1]
-              const delta = previous ? Number(row.value) - Number(previous.value) : null
-              return <tr key={row.ymdhm} style={index === 0 ? { background: '#e8f1ff', fontWeight: 700 } : undefined}>
-                <td>{formatYmdhm(row.ymdhm)}</td><td>{fmt(row.value, 2)}</td>
-                <td>{delta === null ? '-' : `${delta > 0 ? '+' : ''}${fmt(delta, 2)}`}</td>
-              </tr>
-            })}</tbody>
-          </table></div>
+
+          <div className="table-wrap" style={{ width: '100%', overflowX: 'auto' }}>
+            <table
+              className="spreadsheet"
+              style={{
+                width: '100%',
+                minWidth: 0,
+                tableLayout: 'fixed'
+              }}
+            >
+              <colgroup>
+                <col style={{ width: '50%' }} />
+                <col style={{ width: '22%' }} />
+                <col style={{ width: '28%' }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th style={{ padding: '6px 2px', whiteSpace: 'nowrap', fontSize: '12px' }}>관측일시</th>
+                  <th style={{ padding: '6px 2px', whiteSpace: 'nowrap', fontSize: '12px' }}>수위(m)</th>
+                  <th style={{ padding: '6px 2px', whiteSpace: 'nowrap', fontSize: '12px' }}>직전 대비(m)</th>
+                </tr>
+              </thead>
+
+              <tbody>{rows.map((row, index) => {
+                const previous = rows[index + 1]
+                const delta = previous ? Number(row.value) - Number(previous.value) : null
+                return <tr key={row.ymdhm} style={index === 0 ? { background: '#e8f1ff', fontWeight: 700 } : undefined}>
+                  <td>{formatYmdhm(row.ymdhm)}</td><td>{fmt(row.value, 2)}</td>
+                  <td>{delta === null ? '-' : `${delta > 0 ? '+' : ''}${fmt(delta, 2)}`}</td>
+                </tr>
+              })}</tbody>
+            </table></div>
         )}
       </div>
     </div>
