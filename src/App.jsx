@@ -2593,7 +2593,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
                       }}
                     >
                       <input
-                        className="cell-input"
+                        className="cell-input no-spinner"
                         style={inputStyle}
                         data-plan-cell={`${rowIndex}-${colIndex}`}
                         type="number"

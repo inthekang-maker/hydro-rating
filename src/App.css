@@ -411,3 +411,18 @@ table.spreadsheet.plan-matrix-table td {
     grid-template-columns: 1fr;
   }
 }
+
+/* 측정성과 공정률 - 측정 계획 입력칸 화살표 제거 */
+
+/* Chrome, Edge, Safari */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+.no-spinner {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
