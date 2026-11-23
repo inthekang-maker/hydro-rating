@@ -2228,6 +2228,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   const [isDragging, setIsDragging] = useState(false)
   const [showPlanMonths, setShowPlanMonths] = useState(true)
   const tableRef = useRef(null)
+  const dragAnchorRef = useRef(null)
 
   const tableStyle = {
     width: 'max-content',
@@ -2325,7 +2326,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       startRow: 0,
       endRow: stationRows.length - 1,
       startCol: 0,
-      endCol: 17
+      endCol: showPlanMonths ? 11 : 16
     })
   }
 
@@ -2342,8 +2343,17 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const clearSelection = () => {
-    if (showPlanMonths) return
-    return
+    const r = normalizeRange(selection)
+    if (!r || !showPlanMonths) return
+    for (let rowIndex = r.startRow; rowIndex <= r.endRow; rowIndex += 1) {
+      const row = stationRows[rowIndex]
+      if (!row) continue
+      const nextPlan = Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
+      for (let colIndex = r.startCol; colIndex <= Math.min(r.endCol, 11); colIndex += 1) {
+        nextPlan[colIndex] = ''
+      }
+      updateProcessPlanRow(row.station.id, nextPlan)
+    }
   }
 
   const copySelection = async () => {
@@ -2355,7 +2365,9 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       const row = stationRows[rowIndex]
       if (!row) continue
 
-      const cells = getVisibleCellsForCopy(row)
+      const cells = showPlanMonths
+        ? Array.from({ length: 12 }, (_, idx) => String(row.station.processPlan?.[idx] ?? ''))
+        : getVisibleCellsForCopy(row)
       const selectedCells = []
       for (let colIndex = r.startCol; colIndex <= r.endCol; colIndex += 1) {
         selectedCells.push(String(cells[colIndex] ?? ''))
@@ -2419,58 +2431,48 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   const handleKeyDown = async (e, rowIndex, colIndex) => {
-    if (!showPlanMonths) {
-      const isMod = e.ctrlKey || e.metaKey
-
-      if (isMod && e.key.toLowerCase() === 'a') {
-        e.preventDefault()
-        selectAll()
-        return
-      }
-
-      if (isMod && e.key.toLowerCase() === 'c') {
-        if (selection) {
-          e.preventDefault()
-          await copySelection()
-        }
-        return
-      }
-
-      return
-    }
-
     const isMod = e.ctrlKey || e.metaKey
-
     if (isMod && e.key.toLowerCase() === 'a') {
       e.preventDefault()
       selectAll()
       return
     }
-
-    if (isMod && e.key.toLowerCase() === 'c') {
-      if (selection) {
-        e.preventDefault()
-        await copySelection()
-      }
+    if (isMod && e.key.toLowerCase() === 'c' && selection) {
+      e.preventDefault()
+      await copySelection()
       return
     }
-
-    if (
-      (e.key === 'Delete' || e.key === 'Backspace') &&
-      selection &&
-      (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol)
-    ) {
+    if (showPlanMonths && selection && (e.key === 'Delete' || e.key === 'Backspace') &&
+        (selection.startRow !== selection.endRow || selection.startCol !== selection.endCol || e.key === 'Delete')) {
       e.preventDefault()
       clearSelection()
       return
     }
-
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && showPlanMonths) {
       e.preventDefault()
       const nextRow = Math.min(rowIndex + 1, stationRows.length - 1)
-      const nextInput = tableRef.current?.querySelector(`[data-plan-cell="${nextRow}-${colIndex}"]`)
-      if (nextInput) nextInput.focus()
+      tableRef.current?.querySelector(`[data-plan-cell="${nextRow}-${colIndex}"]`)?.focus()
     }
+  }
+
+  const beginPlanDrag = (event, rowIndex, colIndex) => {
+    if (event.button !== 0) return
+    // Prevent native text selection so dragging selects table cells instead.
+    event.preventDefault()
+    dragAnchorRef.current = { rowIndex, colIndex }
+    setIsDragging(true)
+    selectCell(rowIndex, colIndex)
+    event.currentTarget.querySelector('input')?.focus()
+  }
+
+  const extendPlanDrag = (rowIndex, colIndex) => {
+    if (!dragAnchorRef.current) return
+    setSelection({
+      startRow: dragAnchorRef.current.rowIndex,
+      startCol: dragAnchorRef.current.colIndex,
+      endRow: rowIndex,
+      endCol: colIndex
+    })
   }
 
   const handlePaste = (event, rowIndex, colIndex) => {
@@ -2481,7 +2483,7 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
   }
 
   useEffect(() => {
-    const stopDrag = () => setIsDragging(false)
+    const stopDrag = () => { setIsDragging(false); dragAnchorRef.current = null }
     window.addEventListener('mouseup', stopDrag)
     return () => window.removeEventListener('mouseup', stopDrag)
   }, [])
@@ -2508,13 +2510,13 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
       <div className="section-header">
         <h2>지점별 측정 계획 / 실적</h2>
         <div className="grid-actions">
-          <button className="btn secondary" onClick={selectAll} disabled={showPlanMonths}>
+          <button className="btn secondary" onClick={selectAll} disabled={stationRows.length === 0}>
             전체 선택
           </button>
-          <button className="btn secondary" onClick={copySelection} disabled={showPlanMonths}>
+          <button className="btn secondary" onClick={copySelection} disabled={stationRows.length === 0}>
             선택 복사
           </button>
-          <button className="btn secondary" onClick={clearSelection} disabled={showPlanMonths}>
+          <button className="btn secondary" onClick={clearSelection} disabled={!showPlanMonths || !selection}>
             선택 삭제
           </button>
           <button
@@ -2583,14 +2585,8 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
                       key={`plan-${station.id}-${colIndex}`}
                       style={monthCellStyle}
                       className={isSelected(rowIndex, colIndex) ? 'selected-cell' : ''}
-                      onMouseDown={() => {
-                        setIsDragging(true)
-                        selectCell(rowIndex, colIndex)
-                      }}
-                      onMouseEnter={() => {
-                        if (!isDragging) return
-                        extendSelection(rowIndex, colIndex)
-                      }}
+                      onMouseDown={(e) => beginPlanDrag(e, rowIndex, colIndex)}
+                      onMouseEnter={() => extendPlanDrag(rowIndex, colIndex)}
                     >
                       <input
                         className="cell-input no-spinner"
@@ -2600,7 +2596,8 @@ function ProcessPlanMatrix({ stationRows, monthLabels, onUpdateStation }) {
                         min="0"
                         step="1"
                         value={station.processPlan?.[colIndex] ?? ''}
-                        onFocus={() => selectCell(rowIndex, colIndex)}
+                        onFocus={() => { if (!dragAnchorRef.current) selectCell(rowIndex, colIndex) }}
+                        onMouseEnter={() => extendPlanDrag(rowIndex, colIndex)}
                         onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
                         onChange={(e) => updateProcessPlan(station.id, colIndex, e.target.value)}
                         onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
