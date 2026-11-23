@@ -7130,19 +7130,22 @@ export default function App() {
       const { datasets } = buildCurveSegments(section)
 
       return datasets.map((segment) => ({
-        label: section.name || `구간${idx + 1}`,
-        data: segment.rows.map((r) => ({ x: r.q, y: r.h })),
-        showLine: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-        borderWidth: 3,
-        borderColor: color,
-        borderDash: segment.dashed ? [8, 5] : [],
-        parsing: false,
-        sectionId: section.id,
-        legendColor: color,
-        legendDashed: segment.dashed
-      }))
+  label: section.name || `구간${idx + 1}`,
+  data: segment.rows.map((r) => ({ x: r.q, y: r.h })),
+  showLine: true,
+  pointRadius: 0,
+  pointHoverRadius: 0,
+  borderWidth: 3,
+  borderColor: color,
+  borderDash: segment.dashed ? [8, 5] : [],
+  parsing: false,
+
+  order: 10, // 관계곡선을 뒤쪽에 표시
+
+  sectionId: section.id,
+  legendColor: color,
+  legendDashed: segment.dashed
+}))
     })
   }, [selectedSections, curveRowsBySection])
 
@@ -7158,6 +7161,7 @@ export default function App() {
         showLine: false, pointRadius: 5, pointHoverRadius: 6,
         borderWidth: 1, backgroundColor: color, borderColor: '#111',
         pointStyle: deviceStyle.pointStyle, parsing: false,
+        order: 1, // 일반 측정성과를 관계곡선 앞에 표시
         legendSymbol: deviceStyle.symbol, legendColor: color
       }
     }).filter((dataset) => dataset.data.length > 0)
@@ -7170,6 +7174,7 @@ export default function App() {
       showLine: false, pointRadius: 6, pointHoverRadius: 8,
       borderWidth: 1.5, borderColor: '#777', backgroundColor: '#ffffff',
       pointStyle: style.pointStyle === 'drainageAsterisk' ? getDrainageAsteriskCanvas() : style.pointStyle, parsing: false,
+      order: 0, // 영향 측정성과를 가장 앞에 표시
       legendSymbol: style.symbol, legendColor: '#777'
     })).filter((dataset) => dataset.data.length > 0)
     return [...regular, ...impacts]
